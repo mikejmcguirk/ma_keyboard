@@ -1,0 +1,12 @@
+[package]
+name = "ma_keyboard"
+version = "0.0.1"
+edition = "2024"
+
+description = "Use a Memetic Algorithm + Hill Climbing to make an optimal keyboard layout"
+keywords = ["keyboard", "meme", "machine learning"]
+categories = ["keyboard layout", "machine learning"]
+repository = "https://github.com/mikejmcguirk/ma_keyboard"
+license = "MIT"
+
+[dependencies]

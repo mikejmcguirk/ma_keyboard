@@ -86,7 +86,107 @@
 #![allow(clippy::use_debug)]
 
 mod setup;
+mod utils;
 
-fn main() {
-    println!("Hello, world!");
+use {
+    core::str,
+    std::{
+        env,
+        fs::{self, File, OpenOptions},
+        path::{Path, PathBuf},
+        process::ExitCode,
+    },
+};
+
+use anyhow::{Result, anyhow};
+
+use crate::{setup::setup, utils::write_err};
+
+fn main() -> ExitCode {
+    const PROG_NAME: &str = "MA Keyboard Generator";
+    const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
+    println!();
+    println!("{NAME_DASHES}");
+    println!("{PROG_NAME}");
+    println!("{NAME_DASHES}");
+    println!();
+
+    let log_dir: PathBuf = match create_log_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            eprintln!("Unable to setup log dir: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    println!("Log Path: {}", log_dir.display());
+    println!();
+
+    let mut log_handle: File = match setup_log_handle(&log_dir) {
+        Ok(handle) => handle,
+        Err(e) => {
+            eprintln!("Unable to setup logger: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // match setup(&mut log_handle) {
+    match setup() {
+        Ok(code) => return code,
+        Err(e) => {
+            if let Err(log_err) = write_err(&mut log_handle, &e) {
+                eprintln!("{log_err}");
+            }
+
+            return ExitCode::FAILURE;
+        }
+    }
+}
+
+fn create_log_dir() -> Result<PathBuf> {
+    let log_dir_parent: PathBuf = if cfg!(debug_assertions) {
+        let cargo_root: String = env::var("CARGO_MANIFEST_DIR")?;
+        cargo_root.into()
+    } else {
+        let exe_path = env::current_exe()?;
+        if let Some(parent) = exe_path.parent() {
+            parent.into()
+        } else {
+            return Err(anyhow!("No parent for {}", exe_path.display()));
+        }
+    };
+
+    let log_dir: PathBuf = log_dir_parent.join("log");
+    fs::create_dir_all(&log_dir)?;
+
+    return Ok(log_dir);
+}
+
+fn setup_log_handle(log_dir: &Path) -> Result<File> {
+    let err_file = get_err_file(log_dir)?;
+
+    let handle: File = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&err_file)?;
+
+    return Ok(handle);
+}
+
+fn get_err_file(log_dir: &Path) -> Result<PathBuf> {
+    for i in 0_u8..=99_u8 {
+        const MAX_FILE_SIZE: u64 = 1024 * 1024;
+
+        let err_file = log_dir.join(format!("err_{i:02}.log"));
+        if !err_file.exists() {
+            return Ok(err_file);
+        }
+
+        let metadata = fs::metadata(&err_file)?;
+        if metadata.len() < MAX_FILE_SIZE {
+            return Ok(err_file);
+        }
+    }
+
+    return Ok(log_dir.join("err_00.log"));
 }

@@ -10,3 +10,5 @@ repository = "https://github.com/mikejmcguirk/ma_keyboard"
 license = "MIT"
 
 [dependencies]
+anyhow = "1.0.98"
+chrono = { version = "0.4.40" }

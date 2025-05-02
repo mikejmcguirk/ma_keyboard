@@ -56,6 +56,8 @@ pub fn setup() -> Result<ExitCode> {
     // if that's a Rust thing or a Python thing. The best and average each iteration should also be
     // saved so they can be visualized later.
     //
+    // NOTE: Make sure save files are in gitignore
+    //
     // The visualization/saving part is very feature heavy, but it lets us complete the pipeline
     // and the data will likely be helpful later for testing.
     //

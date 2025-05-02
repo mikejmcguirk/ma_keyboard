@@ -17,7 +17,6 @@
 #![allow(clippy::missing_docs_in_private_items)] // Flags crates I can't edit, and just too much
 #![allow(clippy::module_name_repetitions)] // Promotes contrived naming
 #![allow(clippy::multiple_crate_versions)] // I can't do anything about this
-#![allow(clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::needless_return)] // I like explicit returns
 #![allow(clippy::question_mark_used)] // Good for concision
 #![allow(clippy::redundant_else)] // Conflicts with else_if_without_else
@@ -29,7 +28,6 @@
 #![allow(clippy::single_call_fn)] // Good for code organization
 #![allow(clippy::struct_field_names)] // Promotes contrived naming
 #![allow(clippy::too_many_lines)] // Unneeded
-#![allow(clippy::undocumented_unsafe_blocks)]
 // Always Allow (Project Specific)
 #![allow(clippy::exhaustive_enums)] // This isn't a library
 #![allow(clippy::exhaustive_structs)] // This isn't a library
@@ -65,7 +63,9 @@
 #![allow(clippy::missing_assert_message)]
 #![allow(clippy::missing_asserts_for_indexing)]
 #![allow(clippy::missing_panics_doc)]
+#![allow(clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_range_loop)]
 #![allow(clippy::new_without_default)]
 #![allow(clippy::panic_in_result_fn)]
 #![allow(clippy::pathbuf_init_then_push)]
@@ -77,7 +77,7 @@
 #![allow(clippy::str_to_string)]
 #![allow(clippy::too_many_lines)] // Encourages premature factoring
 #![allow(clippy::type_complexity)] // Encourages premature factoring
-#![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::uninlined_format_args)] // Trips when debug formatting is used
 #![allow(clippy::unreadable_literal)] // Creates problems pasting literals
 #![allow(clippy::unused_trait_names)]
@@ -85,7 +85,11 @@
 #![allow(clippy::useless_format)]
 #![allow(clippy::use_debug)]
 
+mod constants;
+mod enums;
+mod kb_components;
 mod setup;
+mod structs;
 mod utils;
 
 use {
@@ -104,6 +108,7 @@ use crate::{setup::setup, utils::write_err};
 
 fn main() -> ExitCode {
     const PROG_NAME: &str = "MA Keyboard Generator";
+    // SAFETY: PROG_NAME is defined at compile time and assumed to be valid
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
     println!();
     println!("{NAME_DASHES}");

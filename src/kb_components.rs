@@ -15,6 +15,9 @@ impl Key {
     pub fn new(key_tuple: (char, char)) -> Self {
         // TODO: I think right now I have debug_assertions on for profiling, which in this case
         // would actually cause a significant performance hit
+        // On the other hand, if we only expect the original make keyboard method to be run once,
+        // then just having this check in production is not an issue, because this should not run
+        // in a hot loop. So better to code defensively
         debug_assert!(KEY_TUPLES.contains(&key_tuple));
 
         return Key {

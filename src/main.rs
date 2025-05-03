@@ -44,6 +44,7 @@
 #![allow(clippy::assertions_on_result_states)] // Better than unwrap
 #![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::create_dir)]
@@ -111,7 +112,7 @@ use crate::{setup::setup, utils::write_err};
 
 fn main() -> ExitCode {
     const PROG_NAME: &str = "MA Keyboard Generator";
-    // SAFETY: PROG_NAME is defined at compile time and assumed to be valid
+    // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
     println!();
     println!("{NAME_DASHES}");

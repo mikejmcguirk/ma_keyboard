@@ -1,8 +1,5 @@
 use strum::EnumIter;
 
-// TODO: Want to eventually include number keys, symbol keys, and tab/return
-// But keeping at basic keys for the sake of just getting to a minimum viable start
-
 #[derive(EnumIter, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Row {
     // Number,
@@ -19,6 +16,17 @@ pub enum Finger {
     Middle,
     Ring,
     Pinky,
+}
+
+impl Finger {
+    pub fn get_num(self) -> u8 {
+        return match self {
+            Finger::Index => 2,
+            Finger::Middle => 3,
+            Finger::Ring => 4,
+            Finger::Pinky => 5,
+        };
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -60,13 +68,13 @@ impl Col {
         };
     }
 
-    pub fn get_center_dist(self) -> u8 {
-        return match self {
-            Col::One | Col::Ten => 4,
-            Col::Two | Col::Nine => 3,
-            Col::Three | Col::Eight => 2,
-            Col::Four | Col::Seven => 1,
-            Col::Five | Col::Six => 0,
-        };
-    }
+    // pub fn get_center_dist(self) -> u8 {
+    //     return match self {
+    //         Col::One | Col::Ten => 4,
+    //         Col::Two | Col::Nine => 3,
+    //         Col::Three | Col::Eight => 2,
+    //         Col::Four | Col::Seven => 1,
+    //         Col::Five | Col::Six => 0,
+    //     };
+    // }
 }

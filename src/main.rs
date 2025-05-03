@@ -32,6 +32,7 @@
 #![allow(clippy::exhaustive_enums)] // This isn't a library
 #![allow(clippy::exhaustive_structs)] // This isn't a library
 #![allow(clippy::missing_errors_doc)] // This isn't a library
+#![allow(clippy::float_arithmetic)] // Used a lot
 #![allow(clippy::print_stderr)] // This is a terminal application
 #![allow(clippy::print_stdout)] // This is a terminal application
 
@@ -74,6 +75,7 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::std_instead_of_alloc)]
 #![allow(clippy::std_instead_of_core)]
+#![allow(clippy::string_slice)]
 #![allow(clippy::str_to_string)]
 #![allow(clippy::too_many_lines)] // Encourages premature factoring
 #![allow(clippy::type_complexity)] // Encourages premature factoring
@@ -84,6 +86,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::useless_format)]
 #![allow(clippy::use_debug)]
+#![allow(clippy::verbose_file_reads)]
 
 mod constants;
 mod enums;

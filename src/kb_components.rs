@@ -1,11 +1,11 @@
 use crate::{
     constants::KEY_TUPLES,
-    enums::{Col, Finger, Row},
+    enums::{Col, Finger, Hand, Row},
 };
 
 // In a separate module from the Keyboard struct so private fields are fully private
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Key {
     base: char,
     shift: char,
@@ -26,39 +26,57 @@ impl Key {
         };
     }
 
-    pub fn get_base(&self) -> char {
+    pub fn get_base(self) -> char {
         return self.base;
     }
 
-    pub fn get_shift(&self) -> char {
+    pub fn get_shift(self) -> char {
         return self.shift;
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct KeySlot {
     key: Key,
     row: Row,
     col: Col,
+    hand: Hand,
     finger: Finger,
     // TODO: Need to add disallowed keys
 }
 
 impl KeySlot {
-    pub fn new(key: Key, row: Row, col: Col, finger: Finger) -> Self {
+    pub fn new(key: Key, row: Row, col: Col, hand: Hand, finger: Finger) -> Self {
         return KeySlot {
             key,
             row,
             col,
+            hand,
             finger,
         };
     }
 
-    pub fn get_key(&self) -> &Key {
-        return &self.key;
+    pub fn get_key(&self) -> Key {
+        return self.key;
     }
 
     pub fn set_key(&mut self, key: Key) {
         self.key = key;
+    }
+
+    pub fn get_row(&self) -> Row {
+        return self.row;
+    }
+
+    pub fn get_col(&self) -> Col {
+        return self.col;
+    }
+
+    pub fn get_hand(&self) -> Hand {
+        return self.hand;
+    }
+
+    pub fn get_finger(&self) -> Finger {
+        return self.finger;
     }
 }

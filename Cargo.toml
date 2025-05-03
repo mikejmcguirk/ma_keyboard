@@ -12,4 +12,5 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0.98"
 chrono = { version = "0.4.40" }
+rand = { version = "0.9.1", features = ["small_rng"] }
 strum = { version = "0.27.1", features = ["derive"] }

@@ -1,0 +1,2 @@
+Single-threaded byte-by-byte character read:
+https://github.com/coravacav/AdventOfCode/blob/main/2023-02/rust/src/part2.rs

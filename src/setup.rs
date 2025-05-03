@@ -1,46 +1,152 @@
 // use std::{fs::File, process::ExitCode};
-use std::process::ExitCode;
+use std::{
+    env,
+    fs::{self, File, OpenOptions, ReadDir},
+    io::{self, Read},
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
-use anyhow::Result;
+use {
+    anyhow::{Result, anyhow},
+    rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
+};
 
 use crate::structs::Keyboard;
 
 // TODO: Come up with something to log so we can use the actual function signature/imports
 // pub fn setup(handle: &mut File) -> Result<ExitCode> {
 pub fn setup() -> Result<ExitCode> {
-    let keyboard: Keyboard = Keyboard::new()?;
-    keyboard.print_keyslots();
+    let mut keyboard: Keyboard = Keyboard::new()?;
+    keyboard.shuffle_all();
+    // keyboard.print_keyslots();
+    // keyboard.shuffle_some(2)?;
+    // keyboard.print_keyslots();
+
+    let corpus_dir: PathBuf = get_corpus_dir()?;
+    validate_corpus_dir(&corpus_dir)?;
+
+    let mut total_efficiency: f64 = 0.0;
+
+    let corpus_content: ReadDir = fs::read_dir(corpus_dir)?;
+    let corpus_entries: Vec<_> = corpus_content.collect::<io::Result<_>>()?;
+    for file_enum in &corpus_entries {
+        // Not sure what this is for now
+        let file = file_enum;
+        let path = file.path();
+
+        if path.is_file() {
+            let mut opened_file = File::open(&path)?;
+
+            let mut contents = String::new();
+
+            opened_file.read_to_string(&mut contents)?;
+
+            // println!("{}", &contents[..20]);
+
+            keyboard.clear_last_slot();
+            for c in contents.chars() {
+                total_efficiency += keyboard.get_efficiency(c);
+            }
+        }
+    }
+
+    println!("Starting total efficiency: {}", total_efficiency);
+    let mut climb_attempts: usize = 1;
+    let mut total_improvement: f64 = 0.0;
+    let mut weighted_avg_rate: f64 = 0.0;
+    let mut sum_weights: f64 = 0.0;
+    let mut last_improvement: f64 = 0.0;
+    let mut avg_improvement: f64 = 0.0;
+
+    loop {
+        let mut climb_kb: Keyboard = keyboard.clone();
+
+        let seed: [u8; 32] = rand::random();
+        let mut rng = SmallRng::from_seed(seed);
+        let climb_amt: usize = rng.random_range(1..=2);
+        climb_kb.shuffle_some(climb_amt)?;
+
+        let mut new_efficiency: f64 = 0.0;
+
+        for file_enum in &corpus_entries {
+            let file = file_enum;
+            let path = file.path();
+
+            if path.is_file() {
+                let mut opened_file = File::open(&path)?;
+
+                let mut contents = String::new();
+
+                opened_file.read_to_string(&mut contents)?;
+
+                // println!("{}", &contents[..20]);
+
+                keyboard.clear_last_slot();
+                for c in contents.chars() {
+                    new_efficiency += climb_kb.get_efficiency(c);
+                }
+            }
+        }
+
+        let this_change: f64 = total_efficiency - new_efficiency;
+        let this_improvement: f64 = this_change.max(0.0);
+        total_improvement += this_improvement;
+
+        let this_improvement_for_avg: f64 = this_improvement / (climb_attempts as f64);
+        let past_avg: f64 =
+            avg_improvement * ((climb_attempts as f64 - 1.0) / climb_attempts as f64);
+        avg_improvement = this_improvement_for_avg + past_avg;
+
+        const K: f64 = 0.01;
+        let delta = this_improvement - last_improvement;
+        let weight: f64 = if delta > 0.0 {
+            // 1.0 + K * delta.ln()
+            1.0 + K * delta.sqrt()
+        } else {
+            1.0
+        };
+
+        const DECAY_FACTOR: f64 = 0.99;
+        sum_weights *= DECAY_FACTOR;
+        sum_weights += weight;
+        weighted_avg_rate =
+            (weighted_avg_rate * (sum_weights - weight) + this_improvement * weight) / sum_weights;
+
+        last_improvement = this_improvement;
+
+        println!(
+            "Iter: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}",
+            climb_attempts, new_efficiency, total_efficiency, avg_improvement, weighted_avg_rate
+        );
+
+        if new_efficiency < total_efficiency {
+            total_efficiency = new_efficiency;
+            keyboard = climb_kb.clone();
+        }
+
+        let slow_improver: bool = weighted_avg_rate < avg_improvement;
+        const MAX_WITHOUT_IMPROVEMENT: usize = 50;
+        let not_starting: bool =
+            avg_improvement <= 0.0 && climb_attempts >= MAX_WITHOUT_IMPROVEMENT;
+
+        // if slow_improver || not_starting {
+        //     break;
+        // }
+
+        if climb_attempts >= 800 {
+            break;
+        }
+
+        climb_attempts += 1;
+    }
+
+    println!("{}", total_efficiency);
+    keyboard.display_keyboard();
 
     // TODO: Now that we have a basic keyboard, we need to read the corpus
     //
     // NOTE: Don't check clippy during these steps
-    //
-    // A dumb problem we need to solve is how to keep the test and production corpus data the same.
-    // The simplest way is to do it with an rsync script, but I'm wondering if you can make Cargo
-    // do it
-    //
-    // For reading through the input itself, just do it the most intuitive way to get the basic
-    // logic down. I'm not sure yet how I want to use async/channels for optimization, so the
-    // simpler the test logic is the easier it is to unwind
-    // For reference, here is a single-threaded byte-by-byte read. Maybe not the most relevant now,
-    // but perhaps for later:
-    // https://github.com/coravacav/AdventOfCode/blob/main/2023-02/rust/src/part2.rs
-    //
-    // Once we can read in the corpus, score it. Just use the current basic enum info. It might be
-    // a good idea to save the last key info, even if we don't use it right now, so we know roughly
-    // how that needs to be done. I suppose you could just do a basic out-to-in test like what
-    // Dvorak wanted
-    //
-    // Note - How to keep track of keyboard scoring. I guess it should be part of the struct. This
-    // could simplify things, because when you clone the keyboard, you can also make sure to wipe
-    // its score, so you only traverse corpus during the mutation phase on unscored keyboards. I
-    // would guess then that every keyboard should try to hill climb. But if we use weighted
-    // averaging, and we know they have already hit diminishing returns, maybe not. Questions
-    // questions...
-    //
-    // Then implement keyboard randomization (in this case, don't worry about any of the forbidden
-    // key logic. Too complicated for now). So we can randomize, score, then do a hill climbing to
-    // improve it. This algorithm is the hardest part so better to just get it out of the way
     //
     // Then we can add population management. First do it by just creating random keyboards, then
     // add the lambda calcs/logic for different amounts of keys
@@ -64,4 +170,27 @@ pub fn setup() -> Result<ExitCode> {
     // From there the rest of the details should be able to be filled in.
 
     return Ok(ExitCode::SUCCESS);
+}
+
+fn get_corpus_dir() -> Result<PathBuf> {
+    let corpus_dir_parent: PathBuf = if cfg!(debug_assertions) {
+        let cargo_root: String = env::var("CARGO_MANIFEST_DIR")?;
+        cargo_root.into()
+    } else {
+        let exe_path = env::current_exe()?;
+        if let Some(parent) = exe_path.parent() {
+            parent.into()
+        } else {
+            return Err(anyhow!("No parent for {}", exe_path.display()));
+        }
+    };
+
+    let corpus_dir: PathBuf = corpus_dir_parent.join("corpus");
+    return Ok(corpus_dir);
+}
+
+// TODO: This is kind of unclear. It works in the sense of, if we can't do this then we can't get
+// into the file system, but why tho
+fn validate_corpus_dir(corpus_dir: &PathBuf) -> io::Result<()> {
+    return fs::create_dir_all(corpus_dir);
 }

@@ -20,7 +20,12 @@ pub struct Keyboard {
     // Between the base and shift layer, there are enough possible keypresses to justify this
     slot_ref: HashMap<char, usize>,
     last_slot: Option<KeySlot>,
+    generation: usize,
+    id: usize,
+    lineage: String,
+    evaluated: bool,
     score: f64, // Golf scoring. Lower is better
+    is_elite: bool,
 }
 
 impl Keyboard {
@@ -52,7 +57,7 @@ impl Keyboard {
     // The idea then is that you can pull the swappable part of keyslots as a slice for the various
     // functions below, and then still use the length of the slice to assess the validity of
     // various arguments and indexes cleanly
-    pub fn new() -> Result<Self> {
+    pub fn make_origin(id: usize) -> Result<Self> {
         let mut keyslots: Vec<KeySlot> = Vec::new();
         let mut kt_idx: usize = 0;
 
@@ -85,12 +90,115 @@ impl Keyboard {
             slot_ref.insert(key.get_shift(), i);
         }
 
+        let lineage: String = format!("0.{}", id);
+
         return Ok(Keyboard {
             keyslots,
             slot_ref,
             last_slot: None,
+            generation: 0,
+            id,
+            lineage,
+            evaluated: false,
             score: 0.0,
+            is_elite: false,
         });
+    }
+
+    // TODO: It is more idiomatic to this project for the keyboard object to spawn a clone of
+    // itself, potentially with shuffling already built in. You could probably also just pass a
+    // flag to it saying whether or not to increment the generation. But would have to think about
+    // this and how to implement it. As is, while this function isn't theoretically good design, I
+    // can manually control the generation as well as how I shuffle it
+    // One issue that nags at me is, if you create using new, it sets generation to 1, which is
+    // correct for how the code is currently used, but is inflexible. Alternatively, it's too
+    // flexible, because outside of the initial 20 keyboards to get the process going, keyboards
+    // should only spawn from each other rather than being airdropped in
+    // The other is, this function requires exposing get methods that only exist for this one
+    // purpose, which hurts encapsulation
+    pub fn mutate_kb(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
+        let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
+        let slot_ref: HashMap<char, usize> = kb.get_slot_ref().clone();
+        let last_slot: Option<KeySlot> = None;
+        let generation: usize = gen_input;
+        let lineage: String = format!("{}-{}.{}", kb.get_lineage(), gen_input, id);
+
+        let evaluated: bool = kb.get_eval_status();
+        let score: f64 = kb.get_score();
+
+        return Self {
+            keyslots,
+            slot_ref,
+            last_slot,
+            generation,
+            id,
+            lineage,
+            evaluated,
+            score,
+            is_elite: false,
+        };
+    }
+
+    pub fn copy_kb(kb: &Keyboard) -> Self {
+        let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
+        let slot_ref: HashMap<char, usize> = kb.get_slot_ref().clone();
+        let last_slot: Option<KeySlot> = None;
+        let generation: usize = kb.get_generation();
+        let id: usize = kb.get_id();
+        let lineage: String = kb.get_lineage();
+
+        let evaluated: bool = kb.get_eval_status();
+        let score: f64 = kb.get_score();
+        let is_elite: bool = kb.is_elite();
+
+        return Self {
+            keyslots,
+            slot_ref,
+            last_slot,
+            generation,
+            id,
+            lineage,
+            evaluated,
+            score,
+            is_elite,
+        };
+    }
+
+    pub fn get_generation(&self) -> usize {
+        return self.generation;
+    }
+
+    pub fn get_id(&self) -> usize {
+        return self.id;
+    }
+
+    pub fn is_elite(&self) -> bool {
+        return self.is_elite;
+    }
+
+    pub fn set_elite(&mut self) {
+        self.is_elite = true;
+    }
+
+    pub fn unset_elite(&mut self) {
+        self.is_elite = false;
+    }
+
+    // TODO: Clone bad
+    pub fn get_lineage(&self) -> String {
+        return self.lineage.clone();
+    }
+
+    pub fn get_keyslots(&self) -> &[KeySlot] {
+        return &self.keyslots;
+    }
+
+    pub fn get_slot_ref(&self) -> &HashMap<char, usize> {
+        return &self.slot_ref;
+    }
+
+    pub fn get_eval_status(&self) -> bool {
+        return self.evaluated;
     }
 
     fn set_slot(&mut self, idx: usize, key: Key) -> Result<()> {
@@ -105,7 +213,10 @@ impl Keyboard {
         return Ok(());
     }
 
+    // TODO: The fact this can error is really unintuitive
     pub fn shuffle_all(&mut self, rng: &mut SmallRng) -> Result<()> {
+        self.evaluated = false;
+
         for i in 0..self.keyslots.len() {
             let j: usize = rng.random_range(i..self.keyslots.len());
 
@@ -118,6 +229,8 @@ impl Keyboard {
     }
 
     pub fn shuffle_some(&mut self, rng: &mut SmallRng, amt: usize) -> Result<()> {
+        self.evaluated = false;
+
         if amt > self.keyslots.len() {
             return Err(anyhow!("Amount is greater than valid keys"));
         }
@@ -163,6 +276,8 @@ impl Keyboard {
     // Something else that needs to be considered is the "grain" issue of the left and right hands.
     // The home row of the left hand is not more difficult to hit than the right, but any row
     // jumping is more difficult because the shape is not natural.
+    // TODO: This function is too long. Need a way to separate out, but I don't feel like the
+    // overall architecture is settled in enough yet to do that
     fn get_efficiency(&mut self, input: char) -> f64 {
         let slot_idx: &usize = match self.slot_ref.get(&input) {
             Some(slot) => slot,
@@ -273,6 +388,12 @@ impl Keyboard {
             return Err(anyhow!("No entries in corpus"));
         }
 
+        // TODO: Is there a better way to handle this? There should be some result return you can
+        // use to say "I did a new evaluation" or "I have already been evaluated"
+        if self.evaluated {
+            return Ok(());
+        }
+
         // TODO: This is fine for now, but as we add more corpus entries we might run into floating
         // point precision issues. Since we eventually want to weight the parts of the corpus
         // anyway, their efficiencies should be stored individually, weighted, then added
@@ -284,6 +405,8 @@ impl Keyboard {
                 self.score += self.get_efficiency(c);
             }
         }
+
+        self.evaluated = true;
 
         return Ok(());
     }
@@ -314,5 +437,23 @@ impl Keyboard {
         println!("{:?}", above_vec);
         println!("{:?}", home_vec);
         println!("{:?}", below_vec);
+    }
+}
+
+pub struct IdSpawner {
+    next_id: usize,
+}
+
+impl IdSpawner {
+    pub fn new() -> Self {
+        return Self { next_id: 0 };
+    }
+
+    // PERF: I want to return 0 as the first id but maybe this is an extravagance
+    pub fn get(&mut self) -> usize {
+        let to_return: usize = self.next_id;
+        self.next_id += 1;
+
+        return to_return;
     }
 }

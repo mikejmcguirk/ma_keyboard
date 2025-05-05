@@ -24,7 +24,7 @@ pub struct Keyboard {
     id: usize,
     lineage: String,
     evaluated: bool,
-    score: f64, // Golf scoring. Lower is better
+    score: f64,
     is_elite: bool,
 }
 
@@ -279,6 +279,31 @@ impl Keyboard {
     // TODO: This function is too long. Need a way to separate out, but I don't feel like the
     // overall architecture is settled in enough yet to do that
     fn get_efficiency(&mut self, input: char) -> f64 {
+        if input == ' ' {
+            self.last_slot = None;
+            // TODO: Space is an interesting key because it gets to if you score for efficiency,
+            // speed, hand pain, or some combination of the three. Space is a slow and cumbersome
+            // key, but it causes no thumb pain
+            // To some extent though, it might not matter, because I'm not sure if there's any
+            // particular key combination that's harder to hit space from
+            return 1.0;
+        }
+
+        if input == '\n' {
+            if let Some(last_slot) = self.last_slot {
+                let last_hand = last_slot.get_hand();
+                // TODO: This is not correct because it's easier to hit another key with your left
+                // hand after return than your left
+                self.last_slot = None;
+                if last_hand == Hand::Left {
+                    return 0.9;
+                }
+            }
+
+            self.last_slot = None;
+            return 0.8;
+        }
+
         let slot_idx: &usize = match self.slot_ref.get(&input) {
             Some(slot) => slot,
             None => return 0.0, // Not a valid key, don't affect score
@@ -291,36 +316,37 @@ impl Keyboard {
         let row: Row = slot.get_row();
         // I agree with Dvorak. The top row is easier to hit than the bottom
         if row == Row::Above {
-            efficiency *= 1.08;
+            efficiency *= 0.92;
         }
         if row == Row::Below {
-            efficiency *= 1.16;
+            efficiency *= 0.84;
         }
 
         // Penalize index finger extensions
         let col: Col = slot.get_col();
         if col == Col::Five || col == Col::Six {
-            efficiency *= 1.1;
+            efficiency *= 0.9;
         }
 
         // These extensions are especially bad
         if (col == Col::Five && row == Row::Below) || (col == Col::Six && row == Row::Above) {
-            efficiency *= 1.1;
+            efficiency *= 0.9;
         }
 
         let hand: Hand = slot.get_hand();
         // Because the keyboard columns slope down-right, this goes against the grain of the left
         // hand, so we penalize it here. But, only slightly because left-handed typists are out
         // there and people have different preferences
-        // if hand == Hand::Left {
-        //     efficiency *= 1.05;
-        // }
+        // TODO: This is a bit of a cheat
+        if hand == Hand::Left {
+            efficiency *= 0.95;
+        }
 
         // The ring and pinky fingers are penalized evenly due to variance in personal preference.
         // Neither the index nor middle finger are preferenced for the same reason
         let finger: Finger = slot.get_finger();
         if finger == Finger::Ring || finger == Finger::Pinky {
-            efficiency *= 1.1;
+            efficiency *= 0.9;
         }
 
         if let Some(last_slot) = self.last_slot {
@@ -336,35 +362,35 @@ impl Keyboard {
                 && ((last_row == Row::Above && row == Row::Below)
                     || (last_row == Row::Below && row == Row::Above))
             {
-                efficiency *= 1.25;
+                efficiency *= 0.75;
 
                 //Scissor
                 let distance_i8 = last_finger.get_num() as i8 - finger.get_num() as i8;
                 if distance_i8.abs() == 1 {
-                    efficiency *= 1.25;
+                    efficiency *= 0.75;
                 }
             }
 
             // Any row jump is not preferred
             if hand == last_hand && last_row != row {
-                efficiency *= 1.10;
+                efficiency *= 0.9;
             }
 
             // Left handed row jumps are especially bad
             if hand == last_hand && hand == Hand::Left && row != last_row {
-                efficiency *= 1.15;
+                efficiency *= 0.85;
             }
 
             if hand == last_hand
                 && ((finger == Finger::Pinky && last_finger == Finger::Ring)
                     || (finger == Finger::Ring && last_finger == Finger::Pinky))
             {
-                efficiency *= 1.25;
+                efficiency *= 0.75;
             }
 
             // Slow, causes pain
             if finger == last_finger && hand == last_hand {
-                efficiency *= 1.15;
+                efficiency *= 0.75;
             }
 
             // let last_col: Col = last_slot.get_col();
@@ -374,7 +400,7 @@ impl Keyboard {
             // overtuning to individual typing preferences
             // For now, we simply go with Dvorak's notion that the typing motion should go in
             if hand == last_hand && last_finger.get_num() < finger.get_num() {
-                efficiency *= 1.15;
+                efficiency *= 0.85;
             }
         }
 

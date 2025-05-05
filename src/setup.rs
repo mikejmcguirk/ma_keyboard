@@ -50,24 +50,46 @@ pub fn setup() -> Result<ExitCode> {
         starting_pop.push(keyboard);
     }
 
-    println!("Initial starting pop length: {}", starting_pop.len());
+    // println!("Initial starting pop length: {}", starting_pop.len());
+
+    let decay_start: f64 = 30.0;
+    let small_decay_target: f64 = 2.0;
+    let med_decay_target: f64 = 3.0;
+    let large_decay_target: f64 = 4.0;
 
     // TODO: Right now, all of the logic for how the population is managed is based on hard coded
     // assumptions. It should be possible to change the populaion size and have the reproduction of
     // the keyboards algorithmically flow from that
-    for iter in 1..=20 {
+    for iter in 1..=500 {
         println!();
         println!("Iteration {}", iter);
         println!();
 
+        let iter_decay: f64 = iter as f64 - 1.0;
+        let small_decay: f64 = decay_value(decay_start, iter_decay, small_decay_target);
+        let small_decay_usize: usize = small_decay as usize;
+        let med_decay: f64 = decay_value(decay_start, iter_decay, med_decay_target);
+        let med_decay_usize: usize = med_decay as usize;
+        let large_decay: f64 = decay_value(decay_start, iter_decay, large_decay_target);
+        let large_decay_usize: usize = large_decay as usize;
+        println!("Current small decay: {}", small_decay);
+        println!("Current med decay: {}", med_decay);
+        println!("Current large decay: {}", large_decay);
+        // println!("Current decay: {}", decay_usize);
+
         // TODO: Test if len updates as the loop runs. Storing it separately is extra
+        // TODO: Fix variable naming once I have a method dialed in
         let cur_starting_pop = starting_pop.len();
         for i in 0..cur_starting_pop {
             // TODO: These should all be lambda ranges
-            let small_amt: usize = rng.random_range(3..=9);
-            let med_amt: usize = rng.random_range(10..=16);
-            let large_amt: usize = rng.random_range(17..=23);
-            let huge_amt: usize = rng.random_range(24..=30);
+            let small_amt: usize = rng.random_range(small_decay_usize..=small_decay_usize);
+            let med_amt: usize = rng.random_range(small_decay_usize..=small_decay_usize);
+            let large_amt: usize = rng.random_range(med_decay_usize..=med_decay_usize);
+            let huge_amt: usize = rng.random_range(large_decay_usize..=large_decay_usize);
+            // let small_amt: usize = rng.random_range(3..=9);
+            // let med_amt: usize = rng.random_range(10..=16);
+            // let large_amt: usize = rng.random_range(17..=23);
+            // let huge_amt: usize = rng.random_range(24..=30);
 
             let mut small_kb: Keyboard = Keyboard::mutate_kb(&starting_pop[i], iter, id.get());
             // TODO: Similar to the origin keyboard, this should also be integrated into the mutate
@@ -88,32 +110,72 @@ pub fn setup() -> Result<ExitCode> {
             starting_pop.push(huge_kb);
         }
 
-        println!(
-            "Starting pop length after new additions: {}",
-            starting_pop.len()
-        );
+        // println!(
+        //     "Starting pop length after new additions: {}",
+        //     starting_pop.len()
+        // );
 
-        println!();
+        // println!();
 
         for i in 0..starting_pop.len() {
             print!("Evaluating Keyboard {:03}\r", i + 1);
             stdout().flush()?;
-
-            // TODO: add_generation should be tied to some other thing
             starting_pop[i].evaluate(&corpus)?;
         }
 
-        println!();
+        // println!();
 
         starting_pop.sort_by(|a, b| {
-            return a
+            return b
                 .get_score()
-                .partial_cmp(&b.get_score())
+                .partial_cmp(&a.get_score())
                 .unwrap_or(std::cmp::Ordering::Equal);
         });
 
         let mut selections: Vec<Keyboard> =
             starting_pop.drain(..4.min(starting_pop.len())).collect();
+
+        let mut duplicates: Vec<usize> = Vec::new();
+        // TODO: horrible hard codes
+        // ALso, this is not principled logic
+        for i in 0..3 {
+            for j in i + 1..4 {
+                if duplicates.contains(&j) {
+                    continue;
+                }
+
+                let slots_i = selections[i].get_keyslots();
+                let slots_j = selections[j].get_keyslots();
+
+                let mut unique_found: bool = false;
+                for k in 0..slots_i.len() {
+                    let i_base = slots_i[k].get_key().get_base();
+                    let j_base = slots_j[k].get_key().get_base();
+                    if i_base != j_base {
+                        unique_found = true;
+                        break;
+                    }
+                }
+
+                if unique_found {
+                    continue;
+                }
+
+                duplicates.push(j);
+            }
+        }
+
+        if duplicates.len() > 0 {
+            duplicates.sort_by(|a, b| {
+                return b.cmp(a);
+            });
+
+            for &i in duplicates.iter() {
+                selections.drain(i..=i);
+            }
+
+            selections.extend(starting_pop.drain(..duplicates.len().min(starting_pop.len())));
+        }
 
         for selection in selections.iter_mut() {
             selection.set_elite();
@@ -121,55 +183,52 @@ pub fn setup() -> Result<ExitCode> {
 
         starting_pop.drain(starting_pop.len().saturating_sub(4)..);
 
-        println!();
-        println!(
-            "Starting pop length after removing top and bottom 4: {}",
-            starting_pop.len()
-        );
+        // println!();
+        // println!(
+        //     "Starting pop length after removing top and bottom 4: {}",
+        //     starting_pop.len()
+        // );
 
+        let mut pop_score: f64 = 0.0;
+        for member in &starting_pop {
+            pop_score += member.get_score();
+        }
+
+        // TODO: An example of how hard codes can kill us - if we subtract more than the
+        // population, we get a bad index because we're trying to work with empty starting
+        // population
+        // Another edge case example - Population score less than zero breaking the rng. Should not
+        // happen with current hard codes, but not impossible either
         for _ in 0..16 {
-            // TODO: The idea here is, if we pull 19, we're basically guaranteeing getting the top
-            // quintille. You could improve this by dividing the remaining population by 5 each
-            // iteration in order to get a more accurate tournament size. But I'm still not sure how
-            // much I like this given that tournaments are usually smaller
-            // We should also have a check to make sure the tournament size is not bigger than the
-            // remaining starting population
-            let tournament_size: usize = rng.random_range(2..=18);
-            let mut found_idx: Vec<usize> = Vec::new();
-            loop {
-                let this_idx: usize = rng.random_range(0..starting_pop.len());
-                if found_idx.contains(&this_idx) {
-                    continue;
-                }
+            let mut winner: usize = 0;
+            let mut checked_score: f64 = 0.0;
+            let r: f64 = rng.random_range(0.0..=pop_score);
 
-                found_idx.push(this_idx);
-
-                if found_idx.len() == tournament_size {
+            for i in 0..starting_pop.len() {
+                checked_score += starting_pop[i].get_score();
+                if checked_score >= r {
+                    winner = i;
                     break;
                 }
             }
 
-            let winner: usize = match found_idx.iter().min() {
-                Some(min) => *min,
-                None => {
-                    return Err(anyhow!("Tournament vector is empy"));
-                }
-            };
-
+            pop_score -= starting_pop[winner].get_score();
+            // TODO: Instead of drain, perhaps swap and pop
+            // Is this bad though because it doesn't preserve ordering?
             selections.extend(starting_pop.drain(winner..=winner));
         }
 
-        println!(
-            "Starting pop length after removing next 15: {}",
-            starting_pop.len()
-        );
-        println!("Selection count: {}", selections.len());
+        // println!(
+        //     "Starting pop length after removing next 15: {}",
+        //     starting_pop.len()
+        // );
+        // println!("Selection count: {}", selections.len());
 
         // TODO: Right now this is just for aesthetic purposes
         selections.sort_by(|a, b| {
-            return a
+            return b
                 .get_score()
-                .partial_cmp(&b.get_score())
+                .partial_cmp(&a.get_score())
                 .unwrap_or(std::cmp::Ordering::Equal);
         });
 
@@ -195,7 +254,7 @@ pub fn setup() -> Result<ExitCode> {
                 selections[i].get_id(),
                 selections[i].get_lineage()
             );
-            selections[i] = hill_climb(&mut rng, &selections[i], &corpus)?;
+            selections[i] = hill_climb(&mut rng, &selections[i], &corpus, iter)?;
         }
 
         starting_pop.clear();
@@ -204,13 +263,13 @@ pub fn setup() -> Result<ExitCode> {
             starting_pop.push(selection.clone());
         }
 
-        println!("Starting pop after climbing: {}", starting_pop.len());
+        // println!("Starting pop after climbing: {}", starting_pop.len());
     }
 
     starting_pop.sort_by(|a, b| {
-        return a
+        return b
             .get_score()
-            .partial_cmp(&b.get_score())
+            .partial_cmp(&a.get_score())
             .unwrap_or(std::cmp::Ordering::Equal);
     });
 
@@ -310,9 +369,30 @@ fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
 // TODO: Function too long
 // You could, in theory, have keyboard do this as a method on itself, but having that object store
 // its own state + a hypothetical future state feels contrived
-fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Result<Keyboard> {
-    const DECAY_FACTOR: f64 = 0.99;
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 60;
+fn hill_climb(
+    rng: &mut SmallRng,
+    keyboard: &Keyboard,
+    corpus: &[String],
+    iter: usize,
+) -> Result<Keyboard> {
+    // const DECAY_FACTOR: f64 = 0.999;
+    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
+    // TODO: This should be a hard code
+    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
+    decay_factor = decay_factor.min(clamp_value);
+    if keyboard.is_elite() {
+        decay_factor *= decay_factor.powf(4.0);
+    }
+    println!("Climb Decay: {}", decay_factor);
+
+    if keyboard.is_elite() {
+        let r: f64 = rng.random_range(0.0..=1.0);
+        if r >= decay_factor {
+            return Ok(keyboard.clone());
+        }
+    }
+
+    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 30;
 
     // TODO: I'm not sure if this is actually better than cloning, though the intention is more
     // explicit
@@ -328,7 +408,7 @@ fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Res
     // println!();
 
     // One indexed for averaging math and display
-    for i in 1..=1000 {
+    for i in 1..=10000 {
         let kb_score: f64 = kb.get_score();
 
         // Doing steps of one change works best. If you change two keys, the algorithm will find
@@ -340,7 +420,7 @@ fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Res
         climb_kb.evaluate(corpus)?;
         let climb_kb_score: f64 = climb_kb.get_score();
 
-        let this_change = kb_score - climb_kb_score;
+        let this_change = climb_kb_score - kb_score;
         let this_improvement: f64 = (this_change).max(0.0);
 
         avg = get_new_avg(this_improvement, avg, i);
@@ -349,7 +429,7 @@ fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Res
         last_improvement = this_improvement;
         let weight: f64 = get_weight(delta, kb.is_elite());
 
-        sum_weights *= DECAY_FACTOR;
+        sum_weights *= decay_factor;
         let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
         sum_weights += weight;
         weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
@@ -361,17 +441,17 @@ fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Res
         );
         stdout().flush()?;
 
-        if climb_kb_score < kb_score {
+        if climb_kb_score > kb_score {
             kb = climb_kb;
         }
 
         // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
         // the weighted average can be smaller than the unweighted due to floating point
         // imprecision
-        // We get around this by doing a minimum of 20 iterations, but it does paste over the
-        // underlying issue
+        // We get around this with an iteration minimum, but it does paste over the underlying
+        // issue
         // TODO: Is there a better solution?
-        let plateauing: bool = weighted_avg < avg && i > 20;
+        let plateauing: bool = weighted_avg < avg && i > 1;
         let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
         if plateauing || not_starting {
             break;
@@ -380,6 +460,9 @@ fn hill_climb(rng: &mut SmallRng, keyboard: &Keyboard, corpus: &[String]) -> Res
 
     // TODO: For debugging
     println!();
+    if kb.is_elite() {
+        kb.display_keyboard();
+    }
 
     return Ok(kb);
 }
@@ -400,8 +483,15 @@ fn get_weight(delta: f64, is_old: bool) -> f64 {
 
     if is_old {
         // return 1.0 + K * delta.ln(); // Less scaling for positive values
-        return 1.0 + K * delta.powf(0.3); // Even less scaling for positive values
+        // return 1.0 + K * delta.powf(0.3); // Even less scaling for positive values
+        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
     }
 
     return 1.0 + K * delta.sqrt();
+}
+
+fn decay_value(start: f64, iter: f64, target: f64) -> f64 {
+    const K: f64 = 0.1;
+    let z = target + (start - target) * (-K * iter).exp();
+    return z.max(target); // Clamp to ensure z >= z_min
 }

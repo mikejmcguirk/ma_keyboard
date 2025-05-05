@@ -12,6 +12,7 @@ use crate::{
     kb_components::{Key, KeySlot},
 };
 
+// TODO: This should just be keyboard.rs
 #[derive(Clone)]
 // NOTE: Don't store RNG in the keyboard. Otherwise, if a keyboard is cloned then discarded, the
 // original will not have an updated rng state
@@ -463,23 +464,5 @@ impl Keyboard {
         println!("{:?}", above_vec);
         println!("{:?}", home_vec);
         println!("{:?}", below_vec);
-    }
-}
-
-pub struct IdSpawner {
-    next_id: usize,
-}
-
-impl IdSpawner {
-    pub fn new() -> Self {
-        return Self { next_id: 0 };
-    }
-
-    // PERF: I want to return 0 as the first id but maybe this is an extravagance
-    pub fn get(&mut self) -> usize {
-        let to_return: usize = self.next_id;
-        self.next_id += 1;
-
-        return to_return;
     }
 }

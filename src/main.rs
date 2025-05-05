@@ -92,6 +92,7 @@
 mod constants;
 mod enums;
 mod kb_components;
+mod population;
 mod setup;
 mod structs;
 mod utils;

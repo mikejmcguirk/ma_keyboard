@@ -15,7 +15,7 @@ use {
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::structs::{IdSpawner, Keyboard};
+use crate::{population::IdSpawner, structs::Keyboard};
 
 // TODO: Come up with something to log so we can use the actual function signature/imports
 // pub fn setup(handle: &mut File) -> Result<ExitCode> {

@@ -1,3 +1,8 @@
+use std::error::Error;
+use std::fmt;
+use std::fs::File;
+use std::io;
+
 use strum::EnumIter;
 
 #[derive(EnumIter, Copy, Clone, Debug, Eq, PartialEq)]
@@ -77,4 +82,34 @@ impl Col {
     //         Col::Five | Col::Six => 0,
     //     };
     // }
+}
+
+#[derive(Debug)]
+pub enum MyError {
+    EmptyCorpus,
+    Io(io::Error),
+}
+
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MyError::EmptyCorpus => return write!(f, "No files in corpus"),
+            MyError::Io(e) => return write!(f, "IO error: {}", e,),
+        }
+    }
+}
+
+impl Error for MyError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            MyError::EmptyCorpus => return None,
+            MyError::Io(e) => return Some(e),
+        }
+    }
+}
+
+impl From<io::Error> for MyError {
+    fn from(error: io::Error) -> Self {
+        return MyError::Io(error);
+    }
 }

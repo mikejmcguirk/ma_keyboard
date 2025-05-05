@@ -14,12 +14,20 @@ use crate::{
 
 // TODO: This should just be keyboard.rs
 #[derive(Clone)]
-// NOTE: Don't store RNG in the keyboard. Otherwise, if a keyboard is cloned then discarded, the
-// original will not have an updated rng state
+// NOTE: Storing RNG in the keyboard is risky because, if you clone it, you have now also cloned
+// the RNG state
+// NOTE: The keyboard and its components use u8 to represent characters. This makes the code a bit
+// less straight forward, but results in an order of magnitude+ improvement in speed when reading
+// through the long corpus strings
+// TODO: Instead of a HashMap, store an ASCII table. When you read a byte, use that as the ASCII
+// table index to get the Slot
+// PERF: When we get to multithreading stage, I think trying to process multiple keyboards at once
+// is too much nonsense. I think we're better off handing the corpus strings off to worker threads
+// or using Rayon or Tokio for parallel processing
 pub struct Keyboard {
     keyslots: Vec<KeySlot>,
     // Between the base and shift layer, there are enough possible keypresses to justify this
-    slot_ref: HashMap<char, usize>,
+    slot_ref: HashMap<u8, usize>,
     last_slot: Option<KeySlot>,
     generation: usize,
     id: usize,
@@ -69,7 +77,7 @@ impl Keyboard {
         // pieces of code
         for row in Row::iter() {
             for col in Col::iter() {
-                let Some(key_tuple): Option<&(char, char)> = KEY_TUPLES.get(kt_idx) else {
+                let Some(key_tuple): Option<&(u8, u8)> = KEY_TUPLES.get(kt_idx) else {
                     return Err(anyhow!("Out of bounds read from KEY_TUPLES"));
                 };
 
@@ -83,7 +91,7 @@ impl Keyboard {
             }
         }
 
-        let mut slot_ref: HashMap<char, usize> = HashMap::new();
+        let mut slot_ref: HashMap<u8, usize> = HashMap::new();
         for i in 0..keyslots.len() {
             let key: Key = keyslots[i].get_key();
 
@@ -119,7 +127,7 @@ impl Keyboard {
     // purpose, which hurts encapsulation
     pub fn mutate_kb(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
-        let slot_ref: HashMap<char, usize> = kb.get_slot_ref().clone();
+        let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
         let last_slot: Option<KeySlot> = None;
         let generation: usize = gen_input;
         let lineage: String = format!("{}-{}.{}", kb.get_lineage(), gen_input, id);
@@ -142,7 +150,7 @@ impl Keyboard {
 
     pub fn copy_kb(kb: &Keyboard) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
-        let slot_ref: HashMap<char, usize> = kb.get_slot_ref().clone();
+        let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
         let last_slot: Option<KeySlot> = None;
         let generation: usize = kb.get_generation();
         let id: usize = kb.get_id();
@@ -194,7 +202,7 @@ impl Keyboard {
         return &self.keyslots;
     }
 
-    pub fn get_slot_ref(&self) -> &HashMap<char, usize> {
+    pub fn get_slot_ref(&self) -> &HashMap<u8, usize> {
         return &self.slot_ref;
     }
 
@@ -236,6 +244,7 @@ impl Keyboard {
             return Err(anyhow!("Amount is greater than valid keys"));
         }
 
+        // TODO: This does not produce erroneous behavior at runtime. Should be a debug assertion
         if amt == 0 {
             return Err(anyhow!("Shuffle amount at shuffle_some is zero"));
         }
@@ -279,8 +288,9 @@ impl Keyboard {
     // jumping is more difficult because the shape is not natural.
     // TODO: This function is too long. Need a way to separate out, but I don't feel like the
     // overall architecture is settled in enough yet to do that
-    fn get_efficiency(&mut self, input: char) -> f64 {
-        if input == ' ' {
+    // PERF: Might be faster to dereference input before sending it here
+    fn get_efficiency(&mut self, input: &u8) -> f64 {
+        if *input == b' ' {
             self.last_slot = None;
             // TODO: Space is an interesting key because it gets to if you score for efficiency,
             // speed, hand pain, or some combination of the three. Space is a slow and cumbersome
@@ -290,7 +300,7 @@ impl Keyboard {
             return 1.0;
         }
 
-        if input == '\n' {
+        if *input == b'\n' {
             if let Some(last_slot) = self.last_slot {
                 let last_hand = last_slot.get_hand();
                 // TODO: This is not correct because it's easier to hit another key with your left
@@ -410,15 +420,11 @@ impl Keyboard {
         return efficiency;
     }
 
-    pub fn evaluate(&mut self, corpus: &[String]) -> Result<()> {
-        if corpus.len() < 1 {
-            return Err(anyhow!("No entries in corpus"));
-        }
-
+    pub fn eval(&mut self, corpus: &[String]) {
         // TODO: Is there a better way to handle this? There should be some result return you can
         // use to say "I did a new evaluation" or "I have already been evaluated"
         if self.evaluated {
-            return Ok(());
+            return;
         }
 
         // TODO: This is fine for now, but as we add more corpus entries we might run into floating
@@ -428,14 +434,15 @@ impl Keyboard {
         self.clear_last_slot();
 
         for entry in corpus {
-            for c in entry.chars() {
-                self.score += self.get_efficiency(c);
+            // TODO: Optimization ideas:
+            // - Do this as_bytes rather than chars. Would maybe need to use byte literals but
+            // would be faster because of not UTF-8 decoding
+            for b in entry.as_bytes() {
+                self.score += self.get_efficiency(b);
             }
         }
 
         self.evaluated = true;
-
-        return Ok(());
     }
 
     pub fn get_score(&self) -> f64 {
@@ -450,7 +457,7 @@ impl Keyboard {
 
         for slot in &self.keyslots {
             let this_row = slot.get_row();
-            let this_key = slot.get_key().get_base();
+            let this_key = slot.get_key().get_base() as char;
 
             if this_row == Row::Above {
                 above_vec.push(this_key);

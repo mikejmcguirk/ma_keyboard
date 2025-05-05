@@ -65,6 +65,7 @@
 #![allow(clippy::missing_assert_message)]
 #![allow(clippy::missing_asserts_for_indexing)]
 #![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_trait_methods)]
 #![allow(clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::needless_range_loop)]

@@ -15,7 +15,10 @@ use {
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::{population::IdSpawner, structs::Keyboard};
+use crate::{
+    population::{IdSpawner, Population},
+    structs::Keyboard,
+};
 
 // TODO: Come up with something to log so we can use the actual function signature/imports
 // pub fn setup(handle: &mut File) -> Result<ExitCode> {
@@ -30,41 +33,45 @@ use crate::{population::IdSpawner, structs::Keyboard};
 // when creating it, which reduces the argument for global or thread local rng. In theory,
 // re-seeding is a cost, but it would make rng state easier to track and potentially less
 // convoluted than a thread local rng
+// TODO: Run qwerty and dvorak controls for scoring
+// TODO: Args:
+// - Population size
+// - Layout to rate
+// - Save file to load
 pub fn setup() -> Result<ExitCode> {
+    // POP: Added to pop
     let seed: [u8; 32] = rand::random();
     let mut rng = SmallRng::from_seed(seed);
 
+    // POP: Don't put corpus in population, at least for now
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;
 
+    // POP: This has been added to population
     let mut id: IdSpawner = IdSpawner::new();
 
+    // POP: Added to pop
     let mut starting_pop: Vec<Keyboard> = Vec::new();
     for _ in 0..20 {
         let mut keyboard: Keyboard = Keyboard::make_origin(id.get())?;
-        // TODO: This should be a part of make_origin. But I want to let the architecture of how we
-        // restrict key movements settle in more before doing this. The obvious answer to how this
-        // is done is to place the keys into random slots from the beginning, but I don't know what
-        // the final key/slot logic will be yet
         keyboard.shuffle_all(&mut rng)?;
         starting_pop.push(keyboard);
     }
 
-    // println!("Initial starting pop length: {}", starting_pop.len());
-
+    // POP: Because decay is tied to iterations, it should not be something population is
+    // responsible for handling
     let decay_start: f64 = 30.0;
     let small_decay_target: f64 = 2.0;
     let med_decay_target: f64 = 3.0;
     let large_decay_target: f64 = 4.0;
 
-    // TODO: Right now, all of the logic for how the population is managed is based on hard coded
-    // assumptions. It should be possible to change the populaion size and have the reproduction of
-    // the keyboards algorithmically flow from that
     for iter in 1..=500 {
         println!();
         println!("Iteration {}", iter);
         println!();
 
+        // POP: Because decay is tied to iterations, it should not be something population is
+        // responsible for handling
         let iter_decay: f64 = iter as f64 - 1.0;
         let small_decay: f64 = decay_value(decay_start, iter_decay, small_decay_target);
         let small_decay_usize: usize = small_decay as usize;
@@ -72,28 +79,22 @@ pub fn setup() -> Result<ExitCode> {
         let med_decay_usize: usize = med_decay as usize;
         let large_decay: f64 = decay_value(decay_start, iter_decay, large_decay_target);
         let large_decay_usize: usize = large_decay as usize;
-        println!("Current small decay: {}", small_decay);
-        println!("Current med decay: {}", med_decay);
-        println!("Current large decay: {}", large_decay);
+        // println!("Current small decay: {}", small_decay);
+        // println!("Current med decay: {}", med_decay);
+        // println!("Current large decay: {}", large_decay);
         // println!("Current decay: {}", decay_usize);
 
-        // TODO: Test if len updates as the loop runs. Storing it separately is extra
-        // TODO: Fix variable naming once I have a method dialed in
+        // POP: cur_starting_pop not needed in fixed pop struct logic
         let cur_starting_pop = starting_pop.len();
         for i in 0..cur_starting_pop {
-            // TODO: These should all be lambda ranges
+            // POP: This should not be in pop
             let small_amt: usize = rng.random_range(small_decay_usize..=small_decay_usize);
             let med_amt: usize = rng.random_range(small_decay_usize..=small_decay_usize);
             let large_amt: usize = rng.random_range(med_decay_usize..=med_decay_usize);
             let huge_amt: usize = rng.random_range(large_decay_usize..=large_decay_usize);
-            // let small_amt: usize = rng.random_range(3..=9);
-            // let med_amt: usize = rng.random_range(10..=16);
-            // let large_amt: usize = rng.random_range(17..=23);
-            // let huge_amt: usize = rng.random_range(24..=30);
 
+            // POP: This part is in pop
             let mut small_kb: Keyboard = Keyboard::mutate_kb(&starting_pop[i], iter, id.get());
-            // TODO: Similar to the origin keyboard, this should also be integrated into the mutate
-            // function, but holding off for the same reasons
             small_kb.shuffle_some(&mut rng, small_amt)?;
             starting_pop.push(small_kb);
 
@@ -110,20 +111,12 @@ pub fn setup() -> Result<ExitCode> {
             starting_pop.push(huge_kb);
         }
 
-        // println!(
-        //     "Starting pop length after new additions: {}",
-        //     starting_pop.len()
-        // );
-
-        // println!();
-
+        // POP: In pop
         for i in 0..starting_pop.len() {
             print!("Evaluating Keyboard {:03}\r", i + 1);
             stdout().flush()?;
-            starting_pop[i].evaluate(&corpus)?;
+            starting_pop[i].eval(&corpus);
         }
-
-        // println!();
 
         starting_pop.sort_by(|a, b| {
             return b
@@ -165,6 +158,7 @@ pub fn setup() -> Result<ExitCode> {
             }
         }
 
+        // TODO: A complication here is, it's hard to follow what sorts are doing what
         if duplicates.len() > 0 {
             duplicates.sort_by(|a, b| {
                 return b.cmp(a);
@@ -174,6 +168,7 @@ pub fn setup() -> Result<ExitCode> {
                 selections.drain(i..=i);
             }
 
+            // TODO: This should, instead, be a probabalistic selection to promote diversity
             selections.extend(starting_pop.drain(..duplicates.len().min(starting_pop.len())));
         }
 
@@ -381,7 +376,7 @@ fn hill_climb(
     let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
     decay_factor = decay_factor.min(clamp_value);
     if keyboard.is_elite() {
-        decay_factor *= decay_factor.powf(4.0);
+        decay_factor *= decay_factor.powf(3.0);
     }
     println!("Climb Decay: {}", decay_factor);
 
@@ -392,7 +387,7 @@ fn hill_climb(
         }
     }
 
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 30;
+    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
 
     // TODO: I'm not sure if this is actually better than cloning, though the intention is more
     // explicit
@@ -417,7 +412,7 @@ fn hill_climb(
         // causing the improvement at the end of the hill climbing step to be lower
         let mut climb_kb: Keyboard = Keyboard::copy_kb(&kb);
         climb_kb.shuffle_some(rng, 1)?;
-        climb_kb.evaluate(corpus)?;
+        climb_kb.eval(corpus);
         let climb_kb_score: f64 = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;

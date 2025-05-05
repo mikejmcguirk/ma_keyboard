@@ -9,12 +9,12 @@ use crate::{
 
 #[derive(Debug, Clone, Copy)]
 pub struct Key {
-    base: char,
-    shift: char,
+    base: u8,
+    shift: u8,
 }
 
 impl Key {
-    pub fn new(key_tuple: (char, char)) -> Result<Self> {
+    pub fn new(key_tuple: (u8, u8)) -> Result<Self> {
         if !KEY_TUPLES.contains(&key_tuple) {
             return Err(anyhow!("Key not contained in KEY_TUPLES"));
         }
@@ -25,11 +25,11 @@ impl Key {
         });
     }
 
-    pub fn get_base(self) -> char {
+    pub fn get_base(self) -> u8 {
         return self.base;
     }
 
-    pub fn get_shift(self) -> char {
+    pub fn get_shift(self) -> u8 {
         return self.shift;
     }
 }
@@ -47,7 +47,7 @@ pub struct KeySlot {
 impl KeySlot {
     pub fn new(key: Key, row: Row, col: Col, hand: Hand, finger: Finger) -> Result<Self> {
         // PERF: If this is slow, turn into a debug assertion
-        let key_check: (char, char) = (key.get_base(), key.get_shift());
+        let key_check: (u8, u8) = (key.get_base(), key.get_shift());
         if !KEY_TUPLES.contains(&key_check) {
             return Err(anyhow!("Invalid key"));
         }
@@ -67,7 +67,7 @@ impl KeySlot {
 
     pub fn set_key(&mut self, key: Key) -> Result<()> {
         // PERF: If this is slow, turn into a debug assertion
-        let key_check: (char, char) = (key.get_base(), key.get_shift());
+        let key_check: (u8, u8) = (key.get_base(), key.get_shift());
         if !KEY_TUPLES.contains(&key_check) {
             return Err(anyhow!("Invalid key"));
         }

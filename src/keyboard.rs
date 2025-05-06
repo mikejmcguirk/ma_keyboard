@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    io::{Write as _, stdout},
+};
 
 use {
     anyhow::{Result, anyhow},
@@ -12,22 +15,19 @@ use crate::{
     kb_components::{Key, KeySlot},
 };
 
-// TODO: This should just be keyboard.rs
 #[derive(Clone)]
-// NOTE: Storing RNG in the keyboard is risky because, if you clone it, you have now also cloned
-// the RNG state
+// NOTE: RNG is not stored in the keyboards because, whenever the keyboards are cloned or mutated,
+// the RNG in either the clone or the original needs to be re-seeded. This makes logging the
+// original seed pointless
 // NOTE: The keyboard and its components use u8 to represent characters. This makes the code a bit
 // less straight forward, but results in an order of magnitude+ improvement in speed when reading
 // through the long corpus strings
 // TODO: Instead of a HashMap, store an ASCII table. When you read a byte, use that as the ASCII
 // table index to get the Slot
-// PERF: When we get to multithreading stage, I think trying to process multiple keyboards at once
-// is too much nonsense. I think we're better off handing the corpus strings off to worker threads
-// or using Rayon or Tokio for parallel processing
 pub struct Keyboard {
     keyslots: Vec<KeySlot>,
-    // Between the base and shift layer, there are enough possible keypresses to justify this
     slot_ref: HashMap<u8, usize>,
+    base_keys: Vec<u8>,
     last_slot: Option<KeySlot>,
     generation: usize,
     id: usize,
@@ -38,21 +38,14 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    // TODO: I'm not actually sure if new() needs to be run more than once. Even for creating the
-    // initial keyboards, it's probably faster to just run clone(). And then for subsequent
-    // keyboards, we know we are cloning pre-existing ones. So I think any performance optimization
-    // here at the expense of safety and clarity might be an unnecessary flex
     // PERF: This can be optimized by pre-allocating keyslots and unsafely writing to it
     // TODO: At some point this logic will need to handle keys that are not totally randomized. As
     // much of this logic as possible should be tied to the enums. The key though is it needs to
     // flow intuitively. Right now, col.get_finger() intuitively makes sense because we know each
     // keyboard column has a finger mapped to it. You don't really need to jump to definition to
     // understand it
-    // TODO: Too early right now, but the slot logic in new should be common with set_slot. The
-    // problem at the moment is that we are pushing into the slot Vec rather than setting indexes,
-    // which makes the logic incompatible. You could allocate the Vec and write unsafely, but is
-    // that less contrived than just repeating some code? Maybe when you're getting super deep into
-    // polishing, but not at this stage
+    // TODO: The logic to insert a key into a lot in make_origin should be common with the shuffle
+    // logic. Too early right now, but do this eventually
     // TODO: Broad idea for key/slot rules is - There should be some kind of menu for which keys
     // are allowed in which slots that the various functions can check. This could create a
     // challenge in terms of tying it together, but separating the pieces of how this is managed
@@ -66,6 +59,11 @@ impl Keyboard {
     // The idea then is that you can pull the swappable part of keyslots as a slice for the various
     // functions below, and then still use the length of the slice to assess the validity of
     // various arguments and indexes cleanly
+    // TODO: After the population refactor is finished, it should be possible to make get_keyslots
+    // private again
+    // TODO: This should not error. It takes no external input
+    // TODO: shuffle_all should be run automatically when making an original keyboard, but
+    // want to wait on the architecture to settle in before doing this
     pub fn make_origin(id: usize) -> Result<Self> {
         let mut keyslots: Vec<KeySlot> = Vec::new();
         let mut kt_idx: usize = 0;
@@ -82,21 +80,24 @@ impl Keyboard {
                 };
 
                 kt_idx += 1;
-                let key: Key = Key::new(*key_tuple)?;
+                let key: Key = Key::new(*key_tuple);
                 let hand: Hand = col.get_hand();
                 let finger: Finger = col.get_finger();
 
-                let slot: KeySlot = KeySlot::new(key, row, col, hand, finger)?;
+                let slot: KeySlot = KeySlot::new(key, row, col, hand, finger);
                 keyslots.push(slot);
             }
         }
 
         let mut slot_ref: HashMap<u8, usize> = HashMap::new();
+        let mut base_keys: Vec<u8> = Vec::new();
         for i in 0..keyslots.len() {
             let key: Key = keyslots[i].get_key();
 
             slot_ref.insert(key.get_base(), i);
             slot_ref.insert(key.get_shift(), i);
+
+            base_keys.push(key.get_base());
         }
 
         let lineage: String = format!("0.{}", id);
@@ -104,6 +105,7 @@ impl Keyboard {
         return Ok(Keyboard {
             keyslots,
             slot_ref,
+            base_keys,
             last_slot: None,
             generation: 0,
             id,
@@ -125,9 +127,10 @@ impl Keyboard {
     // should only spawn from each other rather than being airdropped in
     // The other is, this function requires exposing get methods that only exist for this one
     // purpose, which hurts encapsulation
-    pub fn mutate_kb(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
+    pub fn mutate(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
         let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
+        let base_keys: Vec<u8> = kb.get_base_keys().to_vec();
         let last_slot: Option<KeySlot> = None;
         let generation: usize = gen_input;
         let lineage: String = format!("{}-{}.{}", kb.get_lineage(), gen_input, id);
@@ -138,6 +141,7 @@ impl Keyboard {
         return Self {
             keyslots,
             slot_ref,
+            base_keys,
             last_slot,
             generation,
             id,
@@ -151,6 +155,7 @@ impl Keyboard {
     pub fn copy_kb(kb: &Keyboard) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
         let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
+        let base_keys: Vec<u8> = kb.get_base_keys().to_vec();
         let last_slot: Option<KeySlot> = None;
         let generation: usize = kb.get_generation();
         let id: usize = kb.get_id();
@@ -163,6 +168,7 @@ impl Keyboard {
         return Self {
             keyslots,
             slot_ref,
+            base_keys,
             last_slot,
             generation,
             id,
@@ -179,6 +185,10 @@ impl Keyboard {
 
     pub fn get_id(&self) -> usize {
         return self.id;
+    }
+
+    pub fn get_base_keys(&self) -> &[u8] {
+        return &self.base_keys;
     }
 
     pub fn is_elite(&self) -> bool {
@@ -202,7 +212,7 @@ impl Keyboard {
         return &self.keyslots;
     }
 
-    pub fn get_slot_ref(&self) -> &HashMap<u8, usize> {
+    fn get_slot_ref(&self) -> &HashMap<u8, usize> {
         return &self.slot_ref;
     }
 
@@ -218,6 +228,7 @@ impl Keyboard {
         self.keyslots[idx].set_key(key)?;
         self.slot_ref.insert(key.get_base(), idx);
         self.slot_ref.insert(key.get_shift(), idx);
+        self.base_keys[idx] = key.get_base();
 
         return Ok(());
     }
@@ -289,8 +300,8 @@ impl Keyboard {
     // TODO: This function is too long. Need a way to separate out, but I don't feel like the
     // overall architecture is settled in enough yet to do that
     // PERF: Might be faster to dereference input before sending it here
-    fn get_efficiency(&mut self, input: &u8) -> f64 {
-        if *input == b' ' {
+    fn get_efficiency(&mut self, input: u8) -> f64 {
+        if input == b' ' {
             self.last_slot = None;
             // TODO: Space is an interesting key because it gets to if you score for efficiency,
             // speed, hand pain, or some combination of the three. Space is a slow and cumbersome
@@ -300,7 +311,7 @@ impl Keyboard {
             return 1.0;
         }
 
-        if *input == b'\n' {
+        if input == b'\n' {
             if let Some(last_slot) = self.last_slot {
                 let last_hand = last_slot.get_hand();
                 // TODO: This is not correct because it's easier to hit another key with your left
@@ -438,7 +449,7 @@ impl Keyboard {
             // - Do this as_bytes rather than chars. Would maybe need to use byte literals but
             // would be faster because of not UTF-8 decoding
             for b in entry.as_bytes() {
-                self.score += self.get_efficiency(b);
+                self.score += self.get_efficiency(*b);
             }
         }
 
@@ -472,4 +483,124 @@ impl Keyboard {
         println!("{:?}", home_vec);
         println!("{:?}", below_vec);
     }
+}
+
+// TODO: Function too long
+// TODO: Logically, this is indeed something the keyboard needs to be able to do to itself
+pub fn hill_climb(
+    rng: &mut SmallRng,
+    keyboard: &Keyboard,
+    corpus: &[String],
+    iter: usize,
+) -> Result<Keyboard> {
+    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
+    // TODO: This should be a hard code
+    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
+    decay_factor = decay_factor.min(clamp_value);
+    if keyboard.is_elite() {
+        decay_factor *= decay_factor.powf(3.0);
+    }
+    println!("Climb Decay: {}", decay_factor);
+
+    if keyboard.is_elite() {
+        let r: f64 = rng.random_range(0.0..=1.0);
+        if r >= decay_factor {
+            println!("Score: {}", keyboard.get_score());
+            keyboard.display_keyboard();
+            return Ok(keyboard.clone());
+        }
+    }
+
+    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
+
+    // TODO: I'm not sure if this is actually better than cloning, though the intention is more
+    // explicit
+    let mut kb: Keyboard = Keyboard::copy_kb(keyboard);
+    let start: f64 = kb.get_score();
+
+    let mut last_improvement: f64 = 0.0;
+    let mut avg: f64 = 0.0;
+    let mut weighted_avg: f64 = 0.0;
+    let mut sum_weights: f64 = 0.0;
+
+    // One indexed for averaging math and display
+    for i in 1..=10000 {
+        let kb_score: f64 = kb.get_score();
+
+        // Doing steps of one change works best. If you change two keys, the algorithm will find
+        // bigger changes less frequently. This causes the decay to continue for about as many
+        // iterations as it would if doing only one step, but fewer improvements will be found,
+        // causing the improvement at the end of the hill climbing step to be lower
+        let mut climb_kb: Keyboard = Keyboard::copy_kb(&kb);
+        climb_kb.shuffle_some(rng, 1)?;
+        climb_kb.eval(corpus);
+        let climb_kb_score: f64 = climb_kb.get_score();
+
+        let this_change = climb_kb_score - kb_score;
+        let this_improvement: f64 = (this_change).max(0.0);
+
+        avg = get_new_avg(this_improvement, avg, i);
+
+        let delta = this_improvement - last_improvement;
+        last_improvement = this_improvement;
+        let weight: f64 = get_weight(delta, kb.is_elite());
+
+        sum_weights *= decay_factor;
+        let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
+        sum_weights += weight;
+        weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
+
+        // TODO: Debug only
+        print!(
+            "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
+            i, start, climb_kb_score, kb_score, avg, weighted_avg
+        );
+        stdout().flush()?;
+
+        if climb_kb_score > kb_score {
+            kb = climb_kb;
+        }
+
+        // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
+        // the weighted average can be smaller than the unweighted due to floating point
+        // imprecision
+        // We get around this with an iteration minimum, but it does paste over the underlying
+        // issue
+        // TODO: Is there a better solution?
+        let plateauing: bool = weighted_avg < avg && i > 1;
+        let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
+        if plateauing || not_starting {
+            break;
+        }
+    }
+
+    // TODO: For debugging
+    println!();
+    if kb.is_elite() {
+        kb.display_keyboard();
+    }
+
+    return Ok(kb);
+}
+
+fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
+    let new_value_for_new_avg: f64 = new_value / (new_count as f64);
+    let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);
+
+    return new_value_for_new_avg + old_avg_for_new_avg;
+}
+
+fn get_weight(delta: f64, is_old: bool) -> f64 {
+    const K: f64 = 0.01;
+
+    if delta <= 0.0 {
+        return 1.0;
+    }
+
+    if is_old {
+        // return 1.0 + K * delta.ln(); // Less scaling for positive values
+        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
+    }
+
+    return 1.0 + K * delta.sqrt();
 }

@@ -83,6 +83,7 @@
 #![allow(clippy::type_complexity)] // Encourages premature factoring
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::uninlined_format_args)] // Trips when debug formatting is used
+#![allow(clippy::unnecessary_wraps)] // Lights up diags when trying to change code
 #![allow(clippy::unreadable_literal)] // Creates problems pasting literals
 #![allow(clippy::unused_trait_names)]
 #![allow(clippy::unwrap_used)]
@@ -93,9 +94,9 @@
 mod constants;
 mod enums;
 mod kb_components;
+mod keyboard;
 mod population;
 mod setup;
-mod structs;
 mod utils;
 
 use {
@@ -141,8 +142,8 @@ fn main() -> ExitCode {
         }
     };
 
-    // match setup(&mut log_handle) {
-    match setup() {
+    match setup(&mut log_handle) {
+        // match setup() {
         Ok(code) => return code,
         Err(e) => {
             if let Err(log_err) = write_err(&mut log_handle, &e) {

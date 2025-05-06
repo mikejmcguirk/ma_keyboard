@@ -1,7 +1,4 @@
-use std::error::Error;
-use std::fmt;
-use std::fs::File;
-use std::io;
+use std::{error::Error, fmt, io};
 
 use strum::EnumIter;
 

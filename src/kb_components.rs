@@ -1,4 +1,7 @@
-use crate::enums::{Col, Finger, Hand, KeySetError, KeyTemplate, ListType, Row};
+use crate::{
+    custom_err::KeySetError,
+    enums::{Col, Finger, Hand, KeyTemplate, ListType, Row},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Key {

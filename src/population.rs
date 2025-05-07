@@ -9,7 +9,7 @@ use {
 };
 
 use crate::{
-    enums::CorpusErr,
+    custom_err::CorpusErr,
     kb_components::Key,
     keyboard::{Keyboard, hill_climb},
     utils::write_err,

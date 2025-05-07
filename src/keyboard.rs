@@ -4,12 +4,13 @@ use std::{
 };
 
 use {
-    anyhow::{Result, anyhow},
+    anyhow::Result,
     rand::{Rng as _, rngs::SmallRng},
 };
 
 use crate::{
-    enums::{Col, CorpusErr, Finger, Hand, KeySetError, KeyTemplate, ListType, Row},
+    custom_err::KeySetError,
+    enums::{Col, Finger, Hand, KeyTemplate, ListType, Row},
     kb_components::{HandInfo, Key, KeyList, KeySlot, LocInfo},
 };
 

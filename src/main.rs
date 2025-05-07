@@ -94,6 +94,7 @@
 #![allow(clippy::use_debug)]
 #![allow(clippy::verbose_file_reads)]
 
+mod custom_err;
 mod enums;
 mod kb_components;
 mod keyboard;

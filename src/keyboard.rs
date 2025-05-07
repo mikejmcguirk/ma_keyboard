@@ -191,6 +191,11 @@ impl Keyboard {
     }
 
     // contains panic
+    // NOTE: This function assumes that no slots contain invalid keys
+    // Example edge case that can occur: Only two keys remain to shuffle. Key i is in an invalid
+    // slot, and also cannot move to key j. We are now stuck with an invalid keyboard
+    // Additional issue: Swaps would have to be pre-checked instead of started and reverted if they
+    // are invalid
     pub fn shuffle_all(&mut self, rng: &mut SmallRng) {
         self.evaluated = false;
 
@@ -203,13 +208,14 @@ impl Keyboard {
 
             match self.keyslots[i].set_key(key_j) {
                 Ok(()) => {}
-                Err(KeySetError::SingleKeySlot) => {
+                Err(KeySetError::HasOnlyValid) => {
                     i += 1;
                     continue;
                 }
-                Err(KeySetError::InvalidKey) => {
-                    continue;
+                Err(KeySetError::HasInvalid) => {
+                    panic!("Slot in shuffle_some has invalid key");
                 }
+                Err(KeySetError::InvalidInput) => continue,
             }
 
             if let Ok(()) = self.keyslots[j].set_key(key_i) {
@@ -222,6 +228,11 @@ impl Keyboard {
                 continue;
             }
 
+            assert!(
+                self.keyslots[i].set_key(key_j).is_ok(),
+                "i to j swap failed even though it was already checked"
+            );
+
             self.slot_ref.insert(key_i.get_base(), j);
             self.slot_ref.insert(key_j.get_shift(), i);
 
@@ -233,6 +244,7 @@ impl Keyboard {
     // have a debug assert for now, but that issue needs to be handled somewhere more logical. A
     // good idea would probably be to return an error type for it, and then the caller can handle.
     // Not sure how you wrap that up with the keyslot errors
+    // TODO: panics redundantly
     pub fn shuffle_some(&mut self, rng: &mut SmallRng, amt: usize) {
         self.evaluated = false;
 
@@ -254,8 +266,14 @@ impl Keyboard {
             let key_i: Key = self.keyslots[i].get_key();
             let key_j: Key = self.keyslots[j].get_key();
 
-            if self.keyslots[i].set_key(key_j).is_err() {
-                continue;
+            match self.keyslots[i].set_key(key_j) {
+                Ok(()) => {}
+                Err(KeySetError::HasOnlyValid | KeySetError::InvalidInput) => {
+                    continue;
+                }
+                Err(KeySetError::HasInvalid) => {
+                    panic!("Slot has invalid key after shuffle all");
+                }
             }
 
             if let Ok(()) = self.keyslots[j].set_key(key_i) {
@@ -380,6 +398,16 @@ impl Keyboard {
         let this_finger: Finger = slot.get_hand_info().get_finger();
         if this_finger == Finger::Ring || this_finger == Finger::Pinky {
             efficiency *= 0.9;
+        }
+
+        if col == Col::Eleven || col == Col::Twelve {
+            efficiency *= 0.9;
+
+            if this_row == Row::Above {
+                efficiency *= 0.82;
+            } else if this_row == Row::Num {
+                efficiency *= 0.75;
+            }
         }
 
         if let Some(last_slot) = last_slot_checked {
@@ -700,6 +728,20 @@ fn get_qwerty_slots() -> Vec<KeySlot> {
 
         slots.push(build_slot(key, row, col));
     }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Minus);
+        let row: Row = Row::Num;
+        let col: Col = Col::Eleven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Plus);
+        let row: Row = Row::Num;
+        let col: Col = Col::Twelve;
+
+        slots.push(build_slot(key, row, col));
+    }
 
     {
         let key: Key = Key::from_template(KeyTemplate::Q);
@@ -771,6 +813,20 @@ fn get_qwerty_slots() -> Vec<KeySlot> {
 
         slots.push(build_slot(key, row, col));
     }
+    {
+        let key: Key = Key::from_template(KeyTemplate::LBracket);
+        let row: Row = Row::Above;
+        let col: Col = Col::Eleven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::RBracket);
+        let row: Row = Row::Above;
+        let col: Col = Col::Twelve;
+
+        slots.push(build_slot(key, row, col));
+    }
 
     {
         let key: Key = Key::from_template(KeyTemplate::A);
@@ -839,6 +895,13 @@ fn get_qwerty_slots() -> Vec<KeySlot> {
         let key: Key = Key::from_template(KeyTemplate::SemiColon);
         let row: Row = Row::Home;
         let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Quote);
+        let row: Row = Row::Home;
+        let col: Col = Col::Eleven;
 
         slots.push(build_slot(key, row, col));
     }

@@ -3,3 +3,5 @@
 /corpus*
 /log
 build-timestamp.txt
+perf.data
+flamegraph.svg

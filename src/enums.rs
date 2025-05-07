@@ -56,14 +56,14 @@ pub enum Col {
     Eight,
     Nine,
     Ten,
-    // Eleven,
-    // Twelve,
+    Eleven,
+    Twelve,
 }
 
 impl Col {
     pub fn get_finger(self) -> Finger {
         return match self {
-            Col::One | Col::Ten => Finger::Pinky,
+            Col::One | Col::Ten | Col::Eleven | Col::Twelve => Finger::Pinky,
             Col::Two | Col::Nine => Finger::Ring,
             Col::Three | Col::Eight => Finger::Middle,
             Col::Four | Col::Seven | Col::Five | Col::Six => Finger::Index,
@@ -73,7 +73,13 @@ impl Col {
     pub fn get_hand(self) -> Hand {
         return match self {
             Col::One | Col::Two | Col::Three | Col::Four | Col::Five => Hand::Left,
-            Col::Six | Col::Seven | Col::Eight | Col::Nine | Col::Ten => Hand::Right,
+            Col::Six
+            | Col::Seven
+            | Col::Eight
+            | Col::Nine
+            | Col::Ten
+            | Col::Eleven
+            | Col::Twelve => Hand::Right,
         };
     }
 
@@ -132,7 +138,11 @@ pub enum KeyTemplate {
     Eight,
     Nine,
     Zero,
-    // Quote,
+    Minus,
+    Plus,
+    LBracket,
+    RBracket,
+    Quote,
 }
 
 impl KeyTemplate {
@@ -178,7 +188,11 @@ impl KeyTemplate {
             KeyTemplate::Eight => b'8',
             KeyTemplate::Nine => b'9',
             KeyTemplate::Zero => b'0',
-            // KeyTemplate::Quote => b'\'',
+            KeyTemplate::Minus => b'-',
+            KeyTemplate::Plus => b'+',
+            KeyTemplate::LBracket => b'[',
+            KeyTemplate::RBracket => b']',
+            KeyTemplate::Quote => b'\'',
         };
     }
 
@@ -224,7 +238,11 @@ impl KeyTemplate {
             KeyTemplate::Eight => b'*',
             KeyTemplate::Nine => b'(',
             KeyTemplate::Zero => b')',
-            // KeyTemplate::Quote => b'"',
+            KeyTemplate::Minus => b'_',
+            KeyTemplate::Plus => b'+',
+            KeyTemplate::LBracket => b'{',
+            KeyTemplate::RBracket => b'}',
+            KeyTemplate::Quote => b'"',
         };
     }
 }

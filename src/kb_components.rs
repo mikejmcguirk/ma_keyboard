@@ -155,20 +155,28 @@ impl KeySlot {
         return self.key;
     }
 
-    // TODO: Panic/assert
-    pub fn set_key(&mut self, key: Key) -> Result<(), KeySetError> {
-        if self.key_list.contains_one_valid_key() {
-            assert!(self.key_list.is_valid_key(self.key), "assertion failed");
-
-            return Err(KeySetError::SingleKeySlot);
+    pub fn check_key(&self, key: Key) -> Result<(), KeySetError> {
+        if self.key_list.is_valid_key(key) {
+            return Ok(());
         }
 
-        if !self.key_list.is_valid_key(key) {
-            return Err(KeySetError::InvalidKey);
+        if !self.key_list.is_valid_key(self.key) {
+            return Err(KeySetError::HasInvalid);
+        }
+
+        if self.key_list.contains_one_valid_key() {
+            return Err(KeySetError::HasOnlyValid);
+        }
+
+        return Err(KeySetError::InvalidInput);
+    }
+
+    pub fn set_key(&mut self, key: Key) -> Result<(), KeySetError> {
+        if let Err(e) = self.check_key(key) {
+            return Err(e);
         }
 
         self.key = key;
-
         return Ok(());
     }
 }

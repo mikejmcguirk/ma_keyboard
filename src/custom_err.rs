@@ -2,15 +2,17 @@ use std::{error::Error, fmt, io};
 
 #[derive(Debug)]
 pub enum KeySetError {
-    InvalidKey,
-    SingleKeySlot,
+    InvalidInput,
+    HasOnlyValid,
+    HasInvalid,
 }
 
 impl fmt::Display for KeySetError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            KeySetError::InvalidKey => return write!(f, "Invalid key"),
-            KeySetError::SingleKeySlot => return write!(f, "Single Key Slot"),
+            KeySetError::InvalidInput => return write!(f, "Invalid key"),
+            KeySetError::HasOnlyValid => return write!(f, "Single Key Slot"),
+            KeySetError::HasInvalid => return write!(f, "Contains Invalid Key"),
         }
     }
 }
@@ -19,7 +21,9 @@ impl fmt::Display for KeySetError {
 impl Error for KeySetError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         return match self {
-            KeySetError::InvalidKey | KeySetError::SingleKeySlot => None,
+            KeySetError::InvalidInput | KeySetError::HasOnlyValid | KeySetError::HasInvalid => {
+                None
+            }
         };
     }
 }

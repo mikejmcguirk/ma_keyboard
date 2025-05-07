@@ -143,6 +143,7 @@ impl KeySlot {
     //     self.key = key;
     // }
 
+    // TODO: This should just be get row and get col with LocInfo as a hidden thing
     pub fn get_loc_info(&self) -> LocInfo {
         return self.loc_info;
     }

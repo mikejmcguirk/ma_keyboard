@@ -24,7 +24,7 @@ use crate::{keyboard::Keyboard, population::Population};
 // - Amount of elites
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 10;
+    const ITERATIONS: usize = 500;
 
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;

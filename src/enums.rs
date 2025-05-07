@@ -83,6 +83,23 @@ impl Col {
         };
     }
 
+    // pub fn get_num(self) -> usize {
+    //     return match self {
+    //         Col::One => 1,
+    //         Col::Two => 2,
+    //         Col::Three => 3,
+    //         Col::Four => 4,
+    //         Col::Five => 5,
+    //         Col::Six => 6,
+    //         Col::Seven => 7,
+    //         Col::Eight => 8,
+    //         Col::Nine => 9,
+    //         Col::Ten => 10,
+    //         Col::Eleven => 11,
+    //         Col::Twelve => 12,
+    //     };
+    // }
+
     // pub fn get_center_dist(self) -> u8 {
     //     return match self {
     //         Col::One | Col::Ten => 4,

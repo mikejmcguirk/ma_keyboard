@@ -123,8 +123,8 @@ impl Population {
         // transition into the main loop logic without creating a special case for the first
         // iteration
         for _ in 0..climber_cnt {
-            let mut keyboard: Keyboard = Keyboard::make_qwerty(id.get());
-            keyboard.shuffle_all(&mut rng);
+            let mut keyboard: Keyboard = Keyboard::spawn_origin(id.get());
+            keyboard.shuffle_some(&mut rng, keyboard.get_slot_cnt());
             // For probabalistic selection when they are mutated to fill out the population. The
             // keyboards are able to store if they have evaluated since they were last changed
             keyboard.eval(corpus);

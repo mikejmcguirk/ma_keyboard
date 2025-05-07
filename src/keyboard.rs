@@ -64,6 +64,40 @@ impl Keyboard {
     // TODO: This should not error. It takes no external input
     // TODO: shuffle_all should be run automatically when making an original keyboard, but
     // want to wait on the architecture to settle in before doing this
+    pub fn spawn_origin(id: usize) -> Self {
+        let mut keyslots: Vec<KeySlot> = Vec::new();
+        let origin_slots: Vec<KeySlot> = get_origin_slots();
+
+        for slot in &origin_slots {
+            keyslots.push(slot.clone());
+        }
+
+        let mut slot_ref: HashMap<u8, usize> = HashMap::new();
+        let mut base_keys: Vec<u8> = Vec::new();
+        for i in 0..keyslots.len() {
+            let key: Key = keyslots[i].get_key();
+
+            slot_ref.insert(key.get_base(), i);
+            slot_ref.insert(key.get_shift(), i);
+
+            base_keys.push(key.get_base());
+        }
+
+        let lineage: String = format!("0.{}", id);
+
+        return Keyboard {
+            keyslots,
+            slot_ref,
+            last_slot_idx: None,
+            generation: 0,
+            id,
+            lineage,
+            evaluated: false,
+            score: 0.0,
+            is_elite: false,
+        };
+    }
+
     pub fn make_qwerty(id: usize) -> Self {
         let mut keyslots: Vec<KeySlot> = Vec::new();
         let qwerty_slots: Vec<KeySlot> = get_qwerty_slots();
@@ -190,56 +224,6 @@ impl Keyboard {
         return self.evaluated;
     }
 
-    // contains panic
-    // NOTE: This function assumes that no slots contain invalid keys
-    // Example edge case that can occur: Only two keys remain to shuffle. Key i is in an invalid
-    // slot, and also cannot move to key j. We are now stuck with an invalid keyboard
-    // Additional issue: Swaps would have to be pre-checked instead of started and reverted if they
-    // are invalid
-    pub fn shuffle_all(&mut self, rng: &mut SmallRng) {
-        self.evaluated = false;
-
-        let mut i: usize = 0;
-        while i < (self.keyslots.len() - 1) {
-            let j: usize = rng.random_range((i + 1)..self.keyslots.len());
-
-            let key_i: Key = self.keyslots[i].get_key();
-            let key_j: Key = self.keyslots[j].get_key();
-
-            match self.keyslots[i].set_key(key_j) {
-                Ok(()) => {}
-                Err(KeySetError::HasOnlyValid) => {
-                    i += 1;
-                    continue;
-                }
-                Err(KeySetError::HasInvalid) => {
-                    panic!("Slot in shuffle_some has invalid key");
-                }
-                Err(KeySetError::InvalidInput) => continue,
-            }
-
-            if let Ok(()) = self.keyslots[j].set_key(key_i) {
-            } else {
-                assert!(
-                    self.keyslots[i].set_key(key_i).is_ok(),
-                    "Key started in invalid slot"
-                );
-
-                continue;
-            }
-
-            assert!(
-                self.keyslots[i].set_key(key_j).is_ok(),
-                "i to j swap failed even though it was already checked"
-            );
-
-            self.slot_ref.insert(key_i.get_base(), j);
-            self.slot_ref.insert(key_j.get_shift(), i);
-
-            i += 1;
-        }
-    }
-
     // TODO: A shuffle amount of zero does not produce invalid behavior, so it is not an error. I
     // have a debug assert for now, but that issue needs to be handled somewhere more logical. A
     // good idea would probably be to return an error type for it, and then the caller can handle.
@@ -317,6 +301,8 @@ impl Keyboard {
     // overall architecture is settled in enough yet to do that
     // PERF: Might be faster to dereference input before sending it here
     fn get_efficiency(&mut self, input: u8) -> f64 {
+        const DEFAULT_EFFICIENCY: f64 = 0.0;
+
         let last_slot_checked: Option<&KeySlot> = match self.last_slot_idx {
             Some(idx) => Some(&self.keyslots[idx]),
             None => None,
@@ -329,7 +315,7 @@ impl Keyboard {
             // key, but it causes no thumb pain
             // To some extent though, it might not matter, because I'm not sure if there's any
             // particular key combination that's harder to hit space from
-            return 1.0;
+            return DEFAULT_EFFICIENCY;
         }
 
         if input == b'\n' {
@@ -338,13 +324,13 @@ impl Keyboard {
                 // TODO: This is not correct because it's easier to hit another key with your left
                 // hand after return than your left
                 self.last_slot_idx = None;
-                if last_hand == Hand::Left {
-                    return 0.9;
+                if last_hand == Hand::Right {
+                    return 0.0;
                 }
             }
 
             self.last_slot_idx = None;
-            return 0.8;
+            return 1.0;
         }
 
         let slot_idx: &usize = match self.slot_ref.get(&input) {
@@ -356,118 +342,25 @@ impl Keyboard {
         };
 
         let slot: &KeySlot = &self.keyslots[*slot_idx];
-        const DEFAULT_EFFICIENCY: f64 = 1.0;
         let mut efficiency: f64 = DEFAULT_EFFICIENCY;
 
+        // Hand Rules
+        let this_hand: Hand = slot.get_hand_info().get_hand();
         let this_row: Row = slot.get_loc_info().get_row();
-        // I agree with Dvorak. The top row is easier to hit than the bottom
-        if this_row == Row::Above {
-            efficiency *= 0.92;
-        }
-        if this_row == Row::Below {
-            efficiency *= 0.84;
-        }
-        if this_row == Row::Num {
-            efficiency *= 0.75;
-        }
 
-        // Penalize index finger extensions
-        let col: Col = slot.get_loc_info().get_col();
-        if col == Col::Five || col == Col::Six {
-            efficiency *= 0.9;
-        }
+        // Column Rules
+        let this_col: Col = slot.get_loc_info().get_col();
 
-        // These extensions are especially bad
-        if (col == Col::Five && this_row == Row::Below)
-            || (col == Col::Six && this_row == Row::Above)
-        {
-            efficiency *= 0.9;
-        }
+        // Finger Rules
 
-        let hand: Hand = slot.get_hand_info().get_hand();
-        // Because the keyboard columns slope down-right, this goes against the grain of the left
-        // hand, so we penalize it here. But, only slightly because left-handed typists are out
-        // there and people have different preferences
-        // TODO: This is a bit of a cheat
-        if hand == Hand::Left {
-            efficiency *= 0.95;
-        }
-
-        // The ring and pinky fingers are penalized evenly due to variance in personal preference.
-        // Neither the index nor middle finger are preferenced for the same reason
         let this_finger: Finger = slot.get_hand_info().get_finger();
-        if this_finger == Finger::Ring || this_finger == Finger::Pinky {
-            efficiency *= 0.9;
-        }
-
-        if col == Col::Eleven || col == Col::Twelve {
-            efficiency *= 0.9;
-
-            if this_row == Row::Above {
-                efficiency *= 0.82;
-            } else if this_row == Row::Num {
-                efficiency *= 0.75;
-            }
-        }
 
         if let Some(last_slot) = last_slot_checked {
             let last_row: Row = last_slot.get_loc_info().get_row();
             let last_hand: Hand = last_slot.get_hand_info().get_hand();
 
-            // TODO: This is sloppy, but don't want to over-dial in because at some point the eval
-            // function is going to be more fundamentally re-written I'm sure
-            // TODO: Need a way to handle these types of conditions
-            // Two row jumps are not good
             let last_finger: Finger = last_slot.get_hand_info().get_finger();
             let row_distance: u8 = this_row.get_num().abs_diff(last_row.get_num());
-            if hand == last_hand && row_distance > 1 {
-                efficiency *= 0.75;
-
-                if row_distance == 3 {
-                    efficiency *= 0.75;
-                }
-
-                //Scissor
-                if this_finger.get_num().abs_diff(last_finger.get_num()) == 1 {
-                    efficiency *= 0.75;
-                }
-
-                // Big jumps on the left hand are worse
-                if hand == Hand::Left {
-                    efficiency *= 0.8;
-                }
-            }
-
-            // Any row jump is not preferred
-            if hand == last_hand && last_row != this_row {
-                efficiency *= 0.9;
-            }
-
-            if hand == last_hand
-                && ((this_finger == Finger::Pinky && last_finger == Finger::Ring)
-                    || (this_finger == Finger::Ring && last_finger == Finger::Pinky))
-            {
-                efficiency *= 0.80;
-            }
-
-            // Slow, causes pain
-            if this_finger == last_finger && hand == last_hand {
-                efficiency *= 0.75;
-            }
-
-            // let last_col: Col = last_slot.get_col();
-
-            // TODO: This in particular needs refining. In general, rolls are good, but not all
-            // rolls are created equal. Need to find general principles that work without
-            // overtuning to individual typing preferences
-            // For now, we simply go with Dvorak's notion that the typing motion should go in
-            if hand == last_hand && last_finger.get_num() < this_finger.get_num() {
-                efficiency *= 0.85;
-            }
-
-            if hand == last_hand && last_row.get_num() < last_row.get_num() {
-                efficiency *= 0.85;
-            }
         }
 
         self.last_slot_idx = Some(*slot_idx);
@@ -589,7 +482,7 @@ pub fn hill_climb(
 
         avg = get_new_avg(this_improvement, avg, i);
 
-        let delta = this_improvement - last_improvement;
+        let delta: f64 = this_improvement - last_improvement;
         last_improvement = this_improvement;
         let weight: f64 = get_weight(delta, kb.is_elite);
 
@@ -631,6 +524,7 @@ pub fn hill_climb(
     return Ok(kb);
 }
 
+// TODO: How do make the division work with f64. Do we try to fix the truncating behavior?
 fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     let new_value_for_new_avg: f64 = new_value / (new_count as f64);
     let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);
@@ -655,6 +549,331 @@ fn get_weight(delta: f64, is_old: bool) -> f64 {
 
 // FUTURE: It would be better if this could be done with iteration, but I'm not sure how to do that
 // in a way that isn't more contrived than building it manually
+fn get_origin_slots() -> Vec<KeySlot> {
+    let mut slots: Vec<KeySlot> = Vec::new();
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::One);
+        let row: Row = Row::Num;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Two);
+        let row: Row = Row::Num;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Three);
+        let row: Row = Row::Num;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Four);
+        let row: Row = Row::Num;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Five);
+        let row: Row = Row::Num;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Six);
+        let row: Row = Row::Num;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Seven);
+        let row: Row = Row::Num;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Eight);
+        let row: Row = Row::Num;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Nine);
+        let row: Row = Row::Num;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Zero);
+        let row: Row = Row::Num;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::LBracket);
+        let row: Row = Row::Num;
+        let col: Col = Col::Eleven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::RBracket);
+        let row: Row = Row::Num;
+        let col: Col = Col::Twelve;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::A);
+        let row: Row = Row::Above;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::B);
+        let row: Row = Row::Above;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::C);
+        let row: Row = Row::Above;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::D);
+        let row: Row = Row::Above;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::E);
+        let row: Row = Row::Above;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::F);
+        let row: Row = Row::Above;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::G);
+        let row: Row = Row::Above;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::H);
+        let row: Row = Row::Above;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::I);
+        let row: Row = Row::Above;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::J);
+        let row: Row = Row::Above;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Minus);
+        let row: Row = Row::Above;
+        let col: Col = Col::Eleven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Plus);
+        let row: Row = Row::Above;
+        let col: Col = Col::Twelve;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::K);
+        let row: Row = Row::Home;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::L);
+        let row: Row = Row::Home;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::M);
+        let row: Row = Row::Home;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::N);
+        let row: Row = Row::Home;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::O);
+        let row: Row = Row::Home;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::P);
+        let row: Row = Row::Home;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Q);
+        let row: Row = Row::Home;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::R);
+        let row: Row = Row::Home;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::S);
+        let row: Row = Row::Home;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::T);
+        let row: Row = Row::Home;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::SemiColon);
+        let row: Row = Row::Home;
+        let col: Col = Col::Eleven;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::Comma);
+        let row: Row = Row::Below;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Period);
+        let row: Row = Row::Below;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::ForwardSlash);
+        let row: Row = Row::Below;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Quote);
+        let row: Row = Row::Below;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::U);
+        let row: Row = Row::Below;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::V);
+        let row: Row = Row::Below;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::W);
+        let row: Row = Row::Below;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::X);
+        let row: Row = Row::Below;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Y);
+        let row: Row = Row::Below;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Z);
+        let row: Row = Row::Below;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    return slots;
+}
+
 fn get_qwerty_slots() -> Vec<KeySlot> {
     let mut slots: Vec<KeySlot> = Vec::new();
 
@@ -999,6 +1218,61 @@ fn get_key_restrictions(loc_info: LocInfo) -> (Vec<Key>, ListType) {
     let this_loc: (Row, Col) = (loc_info.get_row(), loc_info.get_col());
 
     return match this_loc {
+        (Row::Num, Col::Eleven) => (
+            vec![Key::from_template(KeyTemplate::LBracket)],
+            ListType::Allow,
+        ),
+        (Row::Num, Col::Twelve) => (
+            vec![Key::from_template(KeyTemplate::RBracket)],
+            ListType::Allow,
+        ),
+        (Row::Above, Col::One) => (vec![Key::from_template(KeyTemplate::Q)], ListType::Deny),
+        (Row::Above, Col::Two) => (vec![Key::from_template(KeyTemplate::W)], ListType::Deny),
+        (Row::Above, Col::Three) => (vec![Key::from_template(KeyTemplate::E)], ListType::Deny),
+        (Row::Above, Col::Four) => (vec![Key::from_template(KeyTemplate::R)], ListType::Deny),
+        (Row::Above, Col::Five) => (vec![Key::from_template(KeyTemplate::T)], ListType::Deny),
+        (Row::Above, Col::Six) => (vec![Key::from_template(KeyTemplate::Y)], ListType::Deny),
+        (Row::Above, Col::Seven) => (vec![Key::from_template(KeyTemplate::U)], ListType::Deny),
+        (Row::Above, Col::Eight) => (vec![Key::from_template(KeyTemplate::I)], ListType::Deny),
+        (Row::Above, Col::Nine) => (vec![Key::from_template(KeyTemplate::O)], ListType::Deny),
+        (Row::Above, Col::Ten) => (vec![Key::from_template(KeyTemplate::P)], ListType::Deny),
+        (Row::Above, Col::Eleven) => (
+            vec![Key::from_template(KeyTemplate::LBracket)],
+            ListType::Deny,
+        ),
+        (Row::Above, Col::Twelve) => {
+            (vec![Key::from_template(KeyTemplate::Plus)], ListType::Allow)
+        }
+        (Row::Home, Col::One) => (vec![Key::from_template(KeyTemplate::A)], ListType::Deny),
+        (Row::Home, Col::Two) => (vec![Key::from_template(KeyTemplate::S)], ListType::Deny),
+        (Row::Home, Col::Three) => (vec![Key::from_template(KeyTemplate::D)], ListType::Deny),
+        (Row::Home, Col::Four) => (vec![Key::from_template(KeyTemplate::F)], ListType::Deny),
+        (Row::Home, Col::Five) => (vec![Key::from_template(KeyTemplate::G)], ListType::Deny),
+        (Row::Home, Col::Six) => (vec![Key::from_template(KeyTemplate::H)], ListType::Deny),
+        (Row::Home, Col::Seven) => (vec![Key::from_template(KeyTemplate::J)], ListType::Deny),
+        (Row::Home, Col::Eight) => (vec![Key::from_template(KeyTemplate::K)], ListType::Deny),
+        (Row::Home, Col::Nine) => (vec![Key::from_template(KeyTemplate::L)], ListType::Deny),
+        (Row::Home, Col::Ten) => (
+            vec![Key::from_template(KeyTemplate::SemiColon)],
+            ListType::Deny,
+        ),
+        (Row::Home, Col::Eleven) => (vec![Key::from_template(KeyTemplate::Quote)], ListType::Deny),
+        (Row::Below, Col::One) => (vec![Key::from_template(KeyTemplate::Z)], ListType::Deny),
+        (Row::Below, Col::Two) => (vec![Key::from_template(KeyTemplate::X)], ListType::Deny),
+        (Row::Below, Col::Three) => (vec![Key::from_template(KeyTemplate::C)], ListType::Deny),
+        (Row::Below, Col::Four) => (vec![Key::from_template(KeyTemplate::V)], ListType::Deny),
+        (Row::Below, Col::Five) => (vec![Key::from_template(KeyTemplate::B)], ListType::Deny),
+        (Row::Below, Col::Six) => (vec![Key::from_template(KeyTemplate::N)], ListType::Deny),
+        (Row::Below, Col::Seven) => (vec![Key::from_template(KeyTemplate::M)], ListType::Deny),
+        (Row::Below, Col::Eight) => (vec![Key::from_template(KeyTemplate::Comma)], ListType::Deny),
+        (Row::Below, Col::Nine) => (
+            vec![Key::from_template(KeyTemplate::Period)],
+            ListType::Deny,
+        ),
+        (Row::Below, Col::Ten) => (
+            vec![Key::from_template(KeyTemplate::ForwardSlash)],
+            ListType::Deny,
+        ),
         (Row::Num, Col::One) => (vec![Key::from_template(KeyTemplate::One)], ListType::Allow),
         (Row::Num, Col::Two) => (vec![Key::from_template(KeyTemplate::Two)], ListType::Allow),
         (Row::Num, Col::Three) => (

@@ -18,6 +18,7 @@
 #![allow(clippy::module_name_repetitions)] // Promotes contrived naming
 #![allow(clippy::multiple_crate_versions)] // I can't do anything about this
 #![allow(clippy::needless_return)] // I like explicit returns
+#![allow(clippy::partial_pub_fields)] // This is fine
 #![allow(clippy::question_mark_used)] // Good for concision
 #![allow(clippy::redundant_else)] // Conflicts with else_if_without_else
 #![allow(clippy::redundant_type_annotations)] // I like explicit types
@@ -68,8 +69,10 @@
 #![allow(clippy::missing_trait_methods)]
 #![allow(clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::needless_continue)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::new_without_default)]
+#![allow(clippy::panic)]
 #![allow(clippy::panic_in_result_fn)]
 #![allow(clippy::pathbuf_init_then_push)]
 #![allow(clippy::pattern_type_mismatch)]
@@ -91,7 +94,6 @@
 #![allow(clippy::use_debug)]
 #![allow(clippy::verbose_file_reads)]
 
-mod constants;
 mod enums;
 mod kb_components;
 mod keyboard;

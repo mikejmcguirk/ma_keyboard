@@ -6,13 +6,11 @@ use std::{
 use {
     anyhow::{Result, anyhow},
     rand::{Rng as _, rngs::SmallRng},
-    strum::IntoEnumIterator as _,
 };
 
 use crate::{
-    constants::KEY_TUPLES,
-    enums::{Col, Finger, Hand, Row},
-    kb_components::{Key, KeySlot},
+    enums::{Col, CorpusErr, Finger, Hand, KeySetError, KeyTemplate, ListType, Row},
+    kb_components::{HandInfo, Key, KeyList, KeySlot, LocInfo},
 };
 
 #[derive(Clone)]
@@ -22,19 +20,20 @@ use crate::{
 // NOTE: The keyboard and its components use u8 to represent characters. This makes the code a bit
 // less straight forward, but results in an order of magnitude+ improvement in speed when reading
 // through the long corpus strings
+// TODO: Elite can just be a public field. It is read and set directly
 // TODO: Instead of a HashMap, store an ASCII table. When you read a byte, use that as the ASCII
 // table index to get the Slot
+// TODO: FUlly blocked keys like the number row should not be considered for shuffling
 pub struct Keyboard {
     keyslots: Vec<KeySlot>,
     slot_ref: HashMap<u8, usize>,
-    base_keys: Vec<u8>,
-    last_slot: Option<KeySlot>,
+    last_slot_idx: Option<usize>,
     generation: usize,
     id: usize,
     lineage: String,
     evaluated: bool,
     score: f64,
-    is_elite: bool,
+    pub is_elite: bool,
 }
 
 impl Keyboard {
@@ -64,29 +63,12 @@ impl Keyboard {
     // TODO: This should not error. It takes no external input
     // TODO: shuffle_all should be run automatically when making an original keyboard, but
     // want to wait on the architecture to settle in before doing this
-    pub fn make_origin(id: usize) -> Result<Self> {
+    pub fn make_qwerty(id: usize) -> Self {
         let mut keyslots: Vec<KeySlot> = Vec::new();
-        let mut kt_idx: usize = 0;
+        let qwerty_slots: Vec<KeySlot> = get_qwerty_slots();
 
-        // TODO: Do some kind of checked index access for key_tuple_idx
-        // TODO: Add a check or debug_assert that key_tuple_idx matches the len of
-        // KEY_TUPLES. We need the number of keys to match exactly the amount of slots to fill
-        // Add documentation for this behavior as well, since it corrolates a couple different
-        // pieces of code
-        for row in Row::iter() {
-            for col in Col::iter() {
-                let Some(key_tuple): Option<&(u8, u8)> = KEY_TUPLES.get(kt_idx) else {
-                    return Err(anyhow!("Out of bounds read from KEY_TUPLES"));
-                };
-
-                kt_idx += 1;
-                let key: Key = Key::new(*key_tuple);
-                let hand: Hand = col.get_hand();
-                let finger: Finger = col.get_finger();
-
-                let slot: KeySlot = KeySlot::new(key, row, col, hand, finger);
-                keyslots.push(slot);
-            }
+        for slot in &qwerty_slots {
+            keyslots.push(slot.clone());
         }
 
         let mut slot_ref: HashMap<u8, usize> = HashMap::new();
@@ -102,18 +84,17 @@ impl Keyboard {
 
         let lineage: String = format!("0.{}", id);
 
-        return Ok(Keyboard {
+        return Keyboard {
             keyslots,
             slot_ref,
-            base_keys,
-            last_slot: None,
+            last_slot_idx: None,
             generation: 0,
             id,
             lineage,
             evaluated: false,
             score: 0.0,
             is_elite: false,
-        });
+        };
     }
 
     // TODO: It is more idiomatic to this project for the keyboard object to spawn a clone of
@@ -130,8 +111,7 @@ impl Keyboard {
     pub fn mutate(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
         let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
-        let base_keys: Vec<u8> = kb.get_base_keys().to_vec();
-        let last_slot: Option<KeySlot> = None;
+        let last_slot_idx: Option<usize> = None;
         let generation: usize = gen_input;
         let lineage: String = format!("{}-{}.{}", kb.get_lineage(), gen_input, id);
 
@@ -141,8 +121,7 @@ impl Keyboard {
         return Self {
             keyslots,
             slot_ref,
-            base_keys,
-            last_slot,
+            last_slot_idx,
             generation,
             id,
             lineage,
@@ -155,21 +134,19 @@ impl Keyboard {
     pub fn copy_kb(kb: &Keyboard) -> Self {
         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
         let slot_ref: HashMap<u8, usize> = kb.get_slot_ref().clone();
-        let base_keys: Vec<u8> = kb.get_base_keys().to_vec();
-        let last_slot: Option<KeySlot> = None;
+        let last_slot_idx: Option<usize> = None;
         let generation: usize = kb.get_generation();
         let id: usize = kb.get_id();
         let lineage: String = kb.get_lineage();
 
         let evaluated: bool = kb.get_eval_status();
         let score: f64 = kb.get_score();
-        let is_elite: bool = kb.is_elite();
+        let is_elite: bool = kb.is_elite;
 
         return Self {
             keyslots,
             slot_ref,
-            base_keys,
-            last_slot,
+            last_slot_idx,
             generation,
             id,
             lineage,
@@ -187,20 +164,12 @@ impl Keyboard {
         return self.id;
     }
 
-    pub fn get_base_keys(&self) -> &[u8] {
-        return &self.base_keys;
+    pub fn get_key_at_idx(&self, idx: usize) -> Key {
+        return self.keyslots[idx].get_key();
     }
 
-    pub fn is_elite(&self) -> bool {
-        return self.is_elite;
-    }
-
-    pub fn set_elite(&mut self) {
-        self.is_elite = true;
-    }
-
-    pub fn unset_elite(&mut self) {
-        self.is_elite = false;
+    pub fn get_slot_cnt(&self) -> usize {
+        return self.keyslots.len();
     }
 
     // TODO: Clone bad
@@ -220,67 +189,95 @@ impl Keyboard {
         return self.evaluated;
     }
 
-    fn set_slot(&mut self, idx: usize, key: Key) -> Result<()> {
-        if idx > self.keyslots.len() {
-            return Err(anyhow!("Invalid keyslot index"));
-        }
-
-        self.keyslots[idx].set_key(key)?;
-        self.slot_ref.insert(key.get_base(), idx);
-        self.slot_ref.insert(key.get_shift(), idx);
-        self.base_keys[idx] = key.get_base();
-
-        return Ok(());
-    }
-
-    // TODO: The fact this can error is really unintuitive
-    pub fn shuffle_all(&mut self, rng: &mut SmallRng) -> Result<()> {
+    // contains panic
+    pub fn shuffle_all(&mut self, rng: &mut SmallRng) {
         self.evaluated = false;
 
-        for i in 0..self.keyslots.len() {
-            let j: usize = rng.random_range(i..self.keyslots.len());
+        let mut i: usize = 0;
+        while i < (self.keyslots.len() - 1) {
+            let j: usize = rng.random_range((i + 1)..self.keyslots.len());
 
             let key_i: Key = self.keyslots[i].get_key();
-            self.set_slot(i, self.keyslots[j].get_key())?;
-            self.set_slot(j, key_i)?;
-        }
+            let key_j: Key = self.keyslots[j].get_key();
 
-        return Ok(());
+            match self.keyslots[i].set_key(key_j) {
+                Ok(()) => {}
+                Err(KeySetError::SingleKeySlot) => {
+                    i += 1;
+                    continue;
+                }
+                Err(KeySetError::InvalidKey) => {
+                    continue;
+                }
+            }
+
+            if let Ok(()) = self.keyslots[j].set_key(key_i) {
+            } else {
+                assert!(
+                    self.keyslots[i].set_key(key_i).is_ok(),
+                    "Key started in invalid slot"
+                );
+
+                continue;
+            }
+
+            self.slot_ref.insert(key_i.get_base(), j);
+            self.slot_ref.insert(key_j.get_shift(), i);
+
+            i += 1;
+        }
     }
 
-    pub fn shuffle_some(&mut self, rng: &mut SmallRng, amt: usize) -> Result<()> {
+    // TODO: A shuffle amount of zero does not produce invalid behavior, so it is not an error. I
+    // have a debug assert for now, but that issue needs to be handled somewhere more logical. A
+    // good idea would probably be to return an error type for it, and then the caller can handle.
+    // Not sure how you wrap that up with the keyslot errors
+    pub fn shuffle_some(&mut self, rng: &mut SmallRng, amt: usize) {
         self.evaluated = false;
 
-        if amt > self.keyslots.len() {
-            return Err(anyhow!("Amount is greater than valid keys"));
-        }
+        debug_assert!(amt > 0);
 
-        // TODO: This does not produce erroneous behavior at runtime. Should be a debug assertion
-        if amt == 0 {
-            return Err(anyhow!("Shuffle amount at shuffle_some is zero"));
-        }
-
-        // TODO: I removed any checks from this code because it's going to be re-written anyway.
-        // The biggest issue is any swapping rules that are put in. The other issue is, how much do
-        // we want to allow for "wrong" swaps. Swapping a > b, b > c, c > a is fine. But do we want
-        // to allow non-swaps? Is that acceptable randomness or does that miss the point of a
-        // particular swapping step?
-        for _ in 0..amt {
+        let mut swaps: usize = 0;
+        while swaps < amt {
             let i: usize = rng.random_range(0..self.keyslots.len());
-            let j: usize = rng.random_range(0..self.keyslots.len());
+            let mut j: usize = rng.random_range(0..self.keyslots.len());
+
+            loop {
+                if j != i {
+                    break;
+                }
+
+                j = rng.random_range(0..self.keyslots.len());
+            }
 
             let key_i: Key = self.keyslots[i].get_key();
-            self.set_slot(i, self.keyslots[j].get_key())?;
-            self.set_slot(j, key_i)?;
-        }
+            let key_j: Key = self.keyslots[j].get_key();
 
-        return Ok(());
+            if self.keyslots[i].set_key(key_j).is_err() {
+                continue;
+            }
+
+            if let Ok(()) = self.keyslots[j].set_key(key_i) {
+            } else {
+                assert!(
+                    self.keyslots[i].set_key(key_i).is_ok(),
+                    "Key started in invalid slot"
+                );
+
+                continue;
+            }
+
+            self.slot_ref.insert(key_i.get_base(), j);
+            self.slot_ref.insert(key_j.get_shift(), i);
+
+            swaps += 1;
+        }
     }
 
     // TODO: The evaluation should be setup in such a manner that this is a private function. This
     // kind of internal state management should not be publicly exposed
     fn clear_last_slot(&mut self) {
-        self.last_slot = None;
+        self.last_slot_idx = None;
     }
 
     // TODO: Something to keep in mind is - There are certain kinds of bad moves that are more
@@ -301,8 +298,13 @@ impl Keyboard {
     // overall architecture is settled in enough yet to do that
     // PERF: Might be faster to dereference input before sending it here
     fn get_efficiency(&mut self, input: u8) -> f64 {
+        let last_slot_checked: Option<&KeySlot> = match self.last_slot_idx {
+            Some(idx) => Some(&self.keyslots[idx]),
+            None => None,
+        };
+
         if input == b' ' {
-            self.last_slot = None;
+            self.last_slot_idx = None;
             // TODO: Space is an interesting key because it gets to if you score for efficiency,
             // speed, hand pain, or some combination of the three. Space is a slow and cumbersome
             // key, but it causes no thumb pain
@@ -312,50 +314,58 @@ impl Keyboard {
         }
 
         if input == b'\n' {
-            if let Some(last_slot) = self.last_slot {
-                let last_hand = last_slot.get_hand();
+            if let Some(last_slot) = last_slot_checked {
+                let last_hand = last_slot.get_hand_info().get_hand();
                 // TODO: This is not correct because it's easier to hit another key with your left
                 // hand after return than your left
-                self.last_slot = None;
+                self.last_slot_idx = None;
                 if last_hand == Hand::Left {
                     return 0.9;
                 }
             }
 
-            self.last_slot = None;
+            self.last_slot_idx = None;
             return 0.8;
         }
 
         let slot_idx: &usize = match self.slot_ref.get(&input) {
             Some(slot) => slot,
-            None => return 0.0, // Not a valid key, don't affect score
+            None => {
+                self.last_slot_idx = None;
+                return 0.0;
+            } // Not a valid key, don't affect score
         };
 
-        let slot = self.keyslots[*slot_idx];
+        let slot: &KeySlot = &self.keyslots[*slot_idx];
         const DEFAULT_EFFICIENCY: f64 = 1.0;
         let mut efficiency: f64 = DEFAULT_EFFICIENCY;
 
-        let row: Row = slot.get_row();
+        let this_row: Row = slot.get_loc_info().get_row();
         // I agree with Dvorak. The top row is easier to hit than the bottom
-        if row == Row::Above {
+        if this_row == Row::Above {
             efficiency *= 0.92;
         }
-        if row == Row::Below {
+        if this_row == Row::Below {
             efficiency *= 0.84;
+        }
+        if this_row == Row::Num {
+            efficiency *= 0.75;
         }
 
         // Penalize index finger extensions
-        let col: Col = slot.get_col();
+        let col: Col = slot.get_loc_info().get_col();
         if col == Col::Five || col == Col::Six {
             efficiency *= 0.9;
         }
 
         // These extensions are especially bad
-        if (col == Col::Five && row == Row::Below) || (col == Col::Six && row == Row::Above) {
+        if (col == Col::Five && this_row == Row::Below)
+            || (col == Col::Six && this_row == Row::Above)
+        {
             efficiency *= 0.9;
         }
 
-        let hand: Hand = slot.get_hand();
+        let hand: Hand = slot.get_hand_info().get_hand();
         // Because the keyboard columns slope down-right, this goes against the grain of the left
         // hand, so we penalize it here. But, only slightly because left-handed typists are out
         // there and people have different preferences
@@ -366,52 +376,53 @@ impl Keyboard {
 
         // The ring and pinky fingers are penalized evenly due to variance in personal preference.
         // Neither the index nor middle finger are preferenced for the same reason
-        let finger: Finger = slot.get_finger();
-        if finger == Finger::Ring || finger == Finger::Pinky {
+        let this_finger: Finger = slot.get_hand_info().get_finger();
+        if this_finger == Finger::Ring || this_finger == Finger::Pinky {
             efficiency *= 0.9;
         }
 
-        if let Some(last_slot) = self.last_slot {
-            let last_row: Row = last_slot.get_row();
-            let last_hand: Hand = last_slot.get_hand();
+        if let Some(last_slot) = last_slot_checked {
+            let last_row: Row = last_slot.get_loc_info().get_row();
+            let last_hand: Hand = last_slot.get_hand_info().get_hand();
 
             // TODO: This is sloppy, but don't want to over-dial in because at some point the eval
             // function is going to be more fundamentally re-written I'm sure
             // TODO: Need a way to handle these types of conditions
             // Two row jumps are not good
-            let last_finger: Finger = last_slot.get_finger();
-            if hand == last_hand
-                && ((last_row == Row::Above && row == Row::Below)
-                    || (last_row == Row::Below && row == Row::Above))
-            {
+            let last_finger: Finger = last_slot.get_hand_info().get_finger();
+            let row_distance: u8 = this_row.get_num().abs_diff(last_row.get_num());
+            if hand == last_hand && row_distance > 1 {
                 efficiency *= 0.75;
 
-                //Scissor
-                let distance_i8 = last_finger.get_num() as i8 - finger.get_num() as i8;
-                if distance_i8.abs() == 1 {
+                if row_distance == 3 {
                     efficiency *= 0.75;
+                }
+
+                //Scissor
+                if this_finger.get_num().abs_diff(last_finger.get_num()) == 1 {
+                    efficiency *= 0.75;
+                }
+
+                // Big jumps on the left hand are worse
+                if hand == Hand::Left {
+                    efficiency *= 0.8;
                 }
             }
 
             // Any row jump is not preferred
-            if hand == last_hand && last_row != row {
+            if hand == last_hand && last_row != this_row {
                 efficiency *= 0.9;
             }
 
-            // Left handed row jumps are especially bad
-            if hand == last_hand && hand == Hand::Left && row != last_row {
-                efficiency *= 0.85;
-            }
-
             if hand == last_hand
-                && ((finger == Finger::Pinky && last_finger == Finger::Ring)
-                    || (finger == Finger::Ring && last_finger == Finger::Pinky))
+                && ((this_finger == Finger::Pinky && last_finger == Finger::Ring)
+                    || (this_finger == Finger::Ring && last_finger == Finger::Pinky))
             {
-                efficiency *= 0.75;
+                efficiency *= 0.80;
             }
 
             // Slow, causes pain
-            if finger == last_finger && hand == last_hand {
+            if this_finger == last_finger && hand == last_hand {
                 efficiency *= 0.75;
             }
 
@@ -421,12 +432,16 @@ impl Keyboard {
             // rolls are created equal. Need to find general principles that work without
             // overtuning to individual typing preferences
             // For now, we simply go with Dvorak's notion that the typing motion should go in
-            if hand == last_hand && last_finger.get_num() < finger.get_num() {
+            if hand == last_hand && last_finger.get_num() < this_finger.get_num() {
+                efficiency *= 0.85;
+            }
+
+            if hand == last_hand && last_row.get_num() < last_row.get_num() {
                 efficiency *= 0.85;
             }
         }
 
-        self.last_slot = Some(slot);
+        self.last_slot_idx = Some(*slot_idx);
 
         return efficiency;
     }
@@ -462,15 +477,18 @@ impl Keyboard {
 
     // TODO: This is fine for drafting but needs a rework for more serious use
     pub fn display_keyboard(&self) {
+        let mut number_vec: Vec<char> = Vec::new();
         let mut above_vec: Vec<char> = Vec::new();
         let mut home_vec: Vec<char> = Vec::new();
         let mut below_vec: Vec<char> = Vec::new();
 
         for slot in &self.keyslots {
-            let this_row = slot.get_row();
+            let this_row = slot.get_loc_info().get_row();
             let this_key = slot.get_key().get_base() as char;
 
-            if this_row == Row::Above {
+            if this_row == Row::Num {
+                number_vec.push(this_key);
+            } else if this_row == Row::Above {
                 above_vec.push(this_key);
             } else if this_row == Row::Home {
                 home_vec.push(this_key);
@@ -479,6 +497,7 @@ impl Keyboard {
             }
         }
 
+        println!("{:?}", number_vec);
         println!("{:?}", above_vec);
         println!("{:?}", home_vec);
         println!("{:?}", below_vec);
@@ -497,12 +516,12 @@ pub fn hill_climb(
     // TODO: This should be a hard code
     let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
     decay_factor = decay_factor.min(clamp_value);
-    if keyboard.is_elite() {
+    if keyboard.is_elite {
         decay_factor *= decay_factor.powf(3.0);
     }
     println!("Climb Decay: {}", decay_factor);
 
-    if keyboard.is_elite() {
+    if keyboard.is_elite {
         let r: f64 = rng.random_range(0.0..=1.0);
         if r >= decay_factor {
             println!("Score: {}", keyboard.get_score());
@@ -532,7 +551,7 @@ pub fn hill_climb(
         // iterations as it would if doing only one step, but fewer improvements will be found,
         // causing the improvement at the end of the hill climbing step to be lower
         let mut climb_kb: Keyboard = Keyboard::copy_kb(&kb);
-        climb_kb.shuffle_some(rng, 1)?;
+        climb_kb.shuffle_some(rng, 1);
         climb_kb.eval(corpus);
         let climb_kb_score: f64 = climb_kb.get_score();
 
@@ -543,7 +562,7 @@ pub fn hill_climb(
 
         let delta = this_improvement - last_improvement;
         last_improvement = this_improvement;
-        let weight: f64 = get_weight(delta, kb.is_elite());
+        let weight: f64 = get_weight(delta, kb.is_elite);
 
         sum_weights *= decay_factor;
         let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
@@ -576,7 +595,7 @@ pub fn hill_climb(
 
     // TODO: For debugging
     println!();
-    if kb.is_elite() {
+    if kb.is_elite {
         kb.display_keyboard();
     }
 
@@ -603,4 +622,338 @@ fn get_weight(delta: f64, is_old: bool) -> f64 {
     }
 
     return 1.0 + K * delta.sqrt();
+}
+
+// FUTURE: It would be better if this could be done with iteration, but I'm not sure how to do that
+// in a way that isn't more contrived than building it manually
+fn get_qwerty_slots() -> Vec<KeySlot> {
+    let mut slots: Vec<KeySlot> = Vec::new();
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::One);
+        let row: Row = Row::Num;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Two);
+        let row: Row = Row::Num;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Three);
+        let row: Row = Row::Num;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Four);
+        let row: Row = Row::Num;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Five);
+        let row: Row = Row::Num;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Six);
+        let row: Row = Row::Num;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Seven);
+        let row: Row = Row::Num;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Eight);
+        let row: Row = Row::Num;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Nine);
+        let row: Row = Row::Num;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Zero);
+        let row: Row = Row::Num;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::Q);
+        let row: Row = Row::Above;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::W);
+        let row: Row = Row::Above;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::E);
+        let row: Row = Row::Above;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::R);
+        let row: Row = Row::Above;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::T);
+        let row: Row = Row::Above;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Y);
+        let row: Row = Row::Above;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::U);
+        let row: Row = Row::Above;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::I);
+        let row: Row = Row::Above;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::O);
+        let row: Row = Row::Above;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::P);
+        let row: Row = Row::Above;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::A);
+        let row: Row = Row::Home;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::S);
+        let row: Row = Row::Home;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::D);
+        let row: Row = Row::Home;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::F);
+        let row: Row = Row::Home;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::G);
+        let row: Row = Row::Home;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::H);
+        let row: Row = Row::Home;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::J);
+        let row: Row = Row::Home;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::K);
+        let row: Row = Row::Home;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::L);
+        let row: Row = Row::Home;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::SemiColon);
+        let row: Row = Row::Home;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    {
+        let key: Key = Key::from_template(KeyTemplate::Z);
+        let row: Row = Row::Below;
+        let col: Col = Col::One;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::X);
+        let row: Row = Row::Below;
+        let col: Col = Col::Two;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::C);
+        let row: Row = Row::Below;
+        let col: Col = Col::Three;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::V);
+        let row: Row = Row::Below;
+        let col: Col = Col::Four;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::B);
+        let row: Row = Row::Below;
+        let col: Col = Col::Five;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::N);
+        let row: Row = Row::Below;
+        let col: Col = Col::Six;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::M);
+        let row: Row = Row::Below;
+        let col: Col = Col::Seven;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Comma);
+        let row: Row = Row::Below;
+        let col: Col = Col::Eight;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::Period);
+        let row: Row = Row::Below;
+        let col: Col = Col::Nine;
+
+        slots.push(build_slot(key, row, col));
+    }
+    {
+        let key: Key = Key::from_template(KeyTemplate::ForwardSlash);
+        let row: Row = Row::Below;
+        let col: Col = Col::Ten;
+
+        slots.push(build_slot(key, row, col));
+    }
+
+    return slots;
+}
+
+fn build_slot(key: Key, row: Row, col: Col) -> KeySlot {
+    let loc_info: LocInfo = LocInfo::from_row_col(row, col);
+
+    let hand: Hand = col.get_hand();
+    let finger: Finger = col.get_finger();
+    let hand_info: HandInfo = HandInfo::from_hand_finger(hand, finger);
+
+    let restrictions = get_key_restrictions(loc_info);
+    let key_list: KeyList = KeyList::from_vec(restrictions.0, restrictions.1);
+
+    return KeySlot::new(key, loc_info, hand_info, key_list);
+}
+
+// ****NOTE**** : Both qwerty and dvorak initialize with keys that would be disallowed in a final
+// build. Need to handle
+fn get_key_restrictions(loc_info: LocInfo) -> (Vec<Key>, ListType) {
+    let this_loc: (Row, Col) = (loc_info.get_row(), loc_info.get_col());
+
+    return match this_loc {
+        (Row::Num, Col::One) => (vec![Key::from_template(KeyTemplate::One)], ListType::Allow),
+        (Row::Num, Col::Two) => (vec![Key::from_template(KeyTemplate::Two)], ListType::Allow),
+        (Row::Num, Col::Three) => (
+            vec![Key::from_template(KeyTemplate::Three)],
+            ListType::Allow,
+        ),
+        (Row::Num, Col::Four) => (vec![Key::from_template(KeyTemplate::Four)], ListType::Allow),
+        (Row::Num, Col::Five) => (vec![Key::from_template(KeyTemplate::Five)], ListType::Allow),
+        (Row::Num, Col::Six) => (vec![Key::from_template(KeyTemplate::Six)], ListType::Allow),
+        (Row::Num, Col::Seven) => (
+            vec![Key::from_template(KeyTemplate::Seven)],
+            ListType::Allow,
+        ),
+        (Row::Num, Col::Eight) => (
+            vec![Key::from_template(KeyTemplate::Eight)],
+            ListType::Allow,
+        ),
+        (Row::Num, Col::Nine) => (vec![Key::from_template(KeyTemplate::Nine)], ListType::Allow),
+        (Row::Num, Col::Ten) => (vec![Key::from_template(KeyTemplate::Zero)], ListType::Allow),
+        _ => (Vec::new(), ListType::Deny),
+    };
 }

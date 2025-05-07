@@ -9,7 +9,8 @@ use {
 };
 
 use crate::{
-    enums::MyError,
+    enums::CorpusErr,
+    kb_components::Key,
     keyboard::{Keyboard, hill_climb},
     utils::write_err,
 };
@@ -122,8 +123,8 @@ impl Population {
         // transition into the main loop logic without creating a special case for the first
         // iteration
         for _ in 0..climber_cnt {
-            let mut keyboard: Keyboard = Keyboard::make_origin(id.get())?;
-            keyboard.shuffle_all(&mut rng)?;
+            let mut keyboard: Keyboard = Keyboard::make_qwerty(id.get());
+            keyboard.shuffle_all(&mut rng);
             // For probabalistic selection when they are mutated to fill out the population. The
             // keyboards are able to store if they have evaluated since they were last changed
             keyboard.eval(corpus);
@@ -194,7 +195,7 @@ impl Population {
             let this_amt: usize = amts[this_amt_idx];
             let mut new_kb: Keyboard =
                 Keyboard::mutate(&self.climbers[idx], self.generation, self.id.get());
-            new_kb.shuffle_some(&mut self.rng, this_amt)?;
+            new_kb.shuffle_some(&mut self.rng, this_amt);
 
             self.population.push(new_kb);
         }
@@ -210,9 +211,9 @@ impl Population {
         return Ok(());
     }
 
-    pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), MyError> {
+    pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), CorpusErr> {
         if corpus.is_empty() {
-            return Err(MyError::EmptyCorpus);
+            return Err(CorpusErr::EmptyCorpus);
         }
 
         for i in 0..self.population.len() {
@@ -230,11 +231,13 @@ impl Population {
     // TODO: Long function
     // TODO: The saturating sub is extra
     // TODO: The score averages are only useful for debugging
+    // TODO: Duplicates are not being removed. I guess just do the manual comparison. To test, use
+    // a small corpus and high iterations
     // NOTE: Removing duplicates can cause the amount of available climbers to be below what is
     // intended. This is allowed to happen without error because the population is replenished
     // during the mutation phase
     // NOTE: This method assumes that the amount of elites, culls, and climbers is properly setup
-    pub fn setup_climbers(&mut self) {
+    pub fn setup_climbers(&mut self) -> Result<()> {
         self.population.sort_by(|a, b| {
             return b
                 .get_score()
@@ -252,23 +255,34 @@ impl Population {
         // Add elites deterministically
         let mut dup_elites: usize = 0;
         for _ in 0..self.elite_cnt - 1 {
-            let mut dup_found: bool = true;
-            let keys_candidate: &[u8] = self.population[0].get_base_keys();
-
+            let mut diff_found: bool = false;
             for climber in &self.climbers {
-                let keys_climber: &[u8] = climber.get_base_keys();
+                let climber_slots: usize = climber.get_slot_cnt();
+                let candidate_slots: usize = self.population[0].get_slot_cnt();
+                if climber_slots != candidate_slots {
+                    return Err(anyhow!(
+                        "Climber slots {} does not match candidate slots {}",
+                        climber_slots,
+                        candidate_slots
+                    ));
+                }
 
-                if keys_candidate != keys_climber {
-                    dup_found = false;
-                    break;
+                for i in 0..climber_slots {
+                    let climber_key: Key = climber.get_key_at_idx(i);
+                    let candidate_key: Key = self.population[0].get_key_at_idx(i);
+
+                    if climber_key != candidate_key {
+                        diff_found = true;
+                        break;
+                    }
                 }
             }
 
-            if dup_found {
+            if diff_found {
+                self.climbers.extend(self.population.drain(..1));
+            } else {
                 self.population.drain(..1);
                 dup_elites += 1;
-            } else {
-                self.climbers.extend(self.population.drain(..1));
             }
         }
 
@@ -292,23 +306,35 @@ impl Population {
             }
 
             population_score -= self.population[selection].get_score();
-            let mut dup_found: bool = true;
-            let keys_candidate: &[u8] = self.population[selection].get_base_keys();
 
+            let mut diff_found: bool = false;
             for climber in &self.climbers {
-                let keys_climber: &[u8] = climber.get_base_keys();
+                let climber_slots: usize = climber.get_slot_cnt();
+                let candidate_slots: usize = self.population[selection].get_slot_cnt();
+                if climber_slots != candidate_slots {
+                    return Err(anyhow!(
+                        "Climber slots {} does not match candidate slots {}",
+                        climber_slots,
+                        candidate_slots
+                    ));
+                }
 
-                if keys_candidate != keys_climber {
-                    dup_found = false;
-                    break;
+                for i in 0..climber_slots {
+                    let climber_key: Key = climber.get_key_at_idx(i);
+                    let candidate_key: Key = self.population[selection].get_key_at_idx(i);
+
+                    if climber_key != candidate_key {
+                        diff_found = true;
+                        break;
+                    }
                 }
             }
 
-            if dup_found {
-                self.population.drain(selection..=selection);
-            } else {
+            if diff_found {
                 self.climbers
                     .extend(self.population.drain(selection..=selection));
+            } else {
+                self.population.drain(selection..=selection);
             }
         }
 
@@ -316,10 +342,10 @@ impl Population {
         let mut elites_set: usize = 0;
         for climber in self.climbers.iter_mut() {
             if elites_set < this_elite_cnt {
-                climber.set_elite();
+                climber.is_elite = true;
                 elites_set += 1;
             } else {
-                climber.unset_elite();
+                climber.is_elite = false;
             }
         }
 
@@ -336,6 +362,8 @@ impl Population {
         }
         let avg_selection_score = selection_score / self.climbers.len() as f64;
         println!("Average Score: {}", avg_selection_score);
+
+        return Ok(());
     }
 
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {

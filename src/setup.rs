@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::population::Population;
+use crate::{keyboard::Keyboard, population::Population};
 
 // TODO: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its
@@ -28,6 +28,11 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
 
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;
+
+    let mut qwerty: Keyboard = Keyboard::make_qwerty(0);
+    qwerty.eval(&corpus);
+    qwerty.display_keyboard();
+    println!("Qwerty score: {}", qwerty.get_score());
 
     let mut population: Population = Population::create(None, &corpus, log_handle)?;
 
@@ -57,10 +62,11 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         ])?;
 
         population.eval_gen_pop(&corpus)?;
-        population.setup_climbers();
+        population.setup_climbers()?;
         population.climb_kbs(&corpus, iter)?;
     }
 
+    println!("Qwerty score: {}", qwerty.get_score());
     population.print_results();
 
     return Ok(ExitCode::SUCCESS);

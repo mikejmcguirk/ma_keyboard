@@ -29,10 +29,10 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;
 
-    let mut qwerty: Keyboard = Keyboard::make_qwerty(0);
-    qwerty.eval(&corpus);
-    qwerty.display_keyboard();
-    println!("Qwerty score: {}", qwerty.get_score());
+    // let mut qwerty: Keyboard = Keyboard::make_qwerty(0);
+    // qwerty.eval(&corpus);
+    // qwerty.display_keyboard();
+    // println!("Qwerty score: {}", qwerty.get_score());
 
     let mut population: Population = Population::create(None, &corpus, log_handle)?;
 
@@ -66,7 +66,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         population.climb_kbs(&corpus, iter)?;
     }
 
-    println!("Qwerty score: {}", qwerty.get_score());
+    // println!("Qwerty score: {}", qwerty.get_score());
     population.print_results();
 
     return Ok(ExitCode::SUCCESS);

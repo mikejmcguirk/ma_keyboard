@@ -123,8 +123,8 @@ impl Population {
         // transition into the main loop logic without creating a special case for the first
         // iteration
         for _ in 0..climber_cnt {
-            let mut keyboard: Keyboard = Keyboard::spawn_origin(id.get());
-            keyboard.shuffle_some(&mut rng, keyboard.get_slot_cnt());
+            let mut keyboard: Keyboard = Keyboard::create_origin(id.get());
+            keyboard.shuffle(&mut rng, keyboard.get_key_cnt());
             // For probabalistic selection when they are mutated to fill out the population. The
             // keyboards are able to store if they have evaluated since they were last changed
             keyboard.eval(corpus);
@@ -194,8 +194,8 @@ impl Population {
             let this_amt_idx: usize = self.rng.random_range(0..amts.len());
             let this_amt: usize = amts[this_amt_idx];
             let mut new_kb: Keyboard =
-                Keyboard::mutate(&self.climbers[idx], self.generation, self.id.get());
-            new_kb.shuffle_some(&mut self.rng, this_amt);
+                Keyboard::mutate_from(&self.climbers[idx], self.generation, self.id.get());
+            new_kb.shuffle(&mut self.rng, this_amt);
 
             self.population.push(new_kb);
         }
@@ -257,8 +257,8 @@ impl Population {
         for _ in 0..self.elite_cnt - 1 {
             let mut diff_found: bool = false;
             for climber in &self.climbers {
-                let climber_slots: usize = climber.get_slot_cnt();
-                let candidate_slots: usize = self.population[0].get_slot_cnt();
+                let climber_slots: usize = climber.get_key_cnt();
+                let candidate_slots: usize = self.population[0].get_key_cnt();
                 if climber_slots != candidate_slots {
                     return Err(anyhow!(
                         "Climber slots {} does not match candidate slots {}",
@@ -268,8 +268,8 @@ impl Population {
                 }
 
                 for i in 0..climber_slots {
-                    let climber_key: Key = climber.get_key_at_idx(i);
-                    let candidate_key: Key = self.population[0].get_key_at_idx(i);
+                    let climber_key: u8 = climber.get_base_at_idx(i);
+                    let candidate_key: u8 = self.population[0].get_base_at_idx(i);
 
                     if climber_key != candidate_key {
                         diff_found = true;
@@ -309,8 +309,8 @@ impl Population {
 
             let mut diff_found: bool = false;
             for climber in &self.climbers {
-                let climber_slots: usize = climber.get_slot_cnt();
-                let candidate_slots: usize = self.population[selection].get_slot_cnt();
+                let climber_slots: usize = climber.get_key_cnt();
+                let candidate_slots: usize = self.population[selection].get_key_cnt();
                 if climber_slots != candidate_slots {
                     return Err(anyhow!(
                         "Climber slots {} does not match candidate slots {}",
@@ -320,8 +320,8 @@ impl Population {
                 }
 
                 for i in 0..climber_slots {
-                    let climber_key: Key = climber.get_key_at_idx(i);
-                    let candidate_key: Key = self.population[selection].get_key_at_idx(i);
+                    let climber_key: u8 = climber.get_base_at_idx(i);
+                    let candidate_key: u8 = self.population[selection].get_base_at_idx(i);
 
                     if climber_key != candidate_key {
                         diff_found = true;
@@ -342,10 +342,10 @@ impl Population {
         let mut elites_set: usize = 0;
         for climber in self.climbers.iter_mut() {
             if elites_set < this_elite_cnt {
-                climber.is_elite = true;
+                climber.set_elite();
                 elites_set += 1;
             } else {
-                climber.is_elite = false;
+                climber.unset_elite();
             }
         }
 

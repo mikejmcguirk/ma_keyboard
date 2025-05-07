@@ -63,6 +63,7 @@
 #![allow(clippy::let_underscore_untyped)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::manual_string_new)]
+#![allow(clippy::match_on_vec_items)]
 #![allow(clippy::missing_assert_message)]
 #![allow(clippy::missing_asserts_for_indexing)]
 #![allow(clippy::missing_panics_doc)]
@@ -97,7 +98,9 @@
 mod custom_err;
 mod enums;
 mod kb_components;
+mod key_template;
 mod keyboard;
+mod layouts;
 mod population;
 mod setup;
 mod utils;

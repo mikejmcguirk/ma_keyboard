@@ -1,34 +1,6 @@
 use std::{error::Error, fmt, io};
 
 #[derive(Debug)]
-pub enum KeySetError {
-    InvalidInput,
-    HasOnlyValid,
-    HasInvalid,
-}
-
-impl fmt::Display for KeySetError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            KeySetError::InvalidInput => return write!(f, "Invalid key"),
-            KeySetError::HasOnlyValid => return write!(f, "Single Key Slot"),
-            KeySetError::HasInvalid => return write!(f, "Contains Invalid Key"),
-        }
-    }
-}
-
-// TODO: Should these return info on why they tripped?
-impl Error for KeySetError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        return match self {
-            KeySetError::InvalidInput | KeySetError::HasOnlyValid | KeySetError::HasInvalid => {
-                None
-            }
-        };
-    }
-}
-
-#[derive(Debug)]
 pub enum CorpusErr {
     EmptyCorpus,
     Io(io::Error),

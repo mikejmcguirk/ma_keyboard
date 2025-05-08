@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use std::io::{Write as _, stdout};
+use std::ptr;
 
 use {
     anyhow::Result,
@@ -11,17 +11,15 @@ use crate::{
     // custom_err::KeySetError,
     // enums::{Col, Finger, Hand, Row},
     // kb_components::{Key, KeySlot, UpdatedKey},
-    kb_components::UpdatedKey,
+    key::Key,
     key_template::KeyTemplate,
     // layouts::{get_origin_slots, get_qwerty_slots},
 };
 
 #[derive(Clone)]
 pub struct Keyboard {
-    keys: Vec<UpdatedKey>,
-    cnt_static_keys: usize,
-    location_ref: HashMap<(usize, usize), usize>,
-    slot_ascii: Vec<Option<usize>>,
+    kb_vec: Vec<Vec<Key>>,
+    slot_ascii: Vec<Option<(usize, usize)>>,
     last_key_idx: Option<usize>,
     generation: usize,
     id: usize,
@@ -32,35 +30,51 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
+    // TODO: Turn hard code values into some kind of constant
     pub fn create_origin(id_in: usize) -> Self {
-        let mut keys: Vec<UpdatedKey> = Vec::new();
+        const NUM_ROW_CAPACITY: usize = 12;
+        const TOP_ROW_CAPACITY: usize = 12;
+        const HOME_ROW_CAPACITY: usize = 11;
+        const BOT_ROW_CAPACITY: usize = 10;
+
+        let mut kb_vec: Vec<Vec<Key>> = vec![
+            Vec::with_capacity(NUM_ROW_CAPACITY),
+            Vec::with_capacity(TOP_ROW_CAPACITY),
+            Vec::with_capacity(HOME_ROW_CAPACITY),
+            Vec::with_capacity(BOT_ROW_CAPACITY),
+        ];
+
+        let ptr: *mut Vec<Key> = kb_vec.as_mut_ptr();
 
         for template in KeyTemplate::iter() {
-            keys.push(UpdatedKey::from_template(template));
+            let location: (usize, usize) = template.get_starting_location();
+            let this_key = Key::from_template(template);
+            println!("{}, {}", location.0, location.1);
+
+            // SAFETY: The indexes to write come from the KeyTemplate structs, with methods built
+            // at compile time
+            unsafe {
+                let row_ptr: *mut Vec<Key> = ptr.add(location.0);
+                let inner_vec: &mut Vec<Key> = &mut *row_ptr;
+                let elem_ptr: *mut Key = inner_vec.as_mut_ptr();
+                elem_ptr.add(location.1).write(this_key);
+            }
         }
 
-        keys.sort_by(|a, b| {
-            return a
-                .get_cnt_valid_locations()
-                .partial_cmp(&b.get_cnt_valid_locations())
-                .unwrap_or(std::cmp::Ordering::Equal);
-        });
+        // SAFETY: Compile time values
+        unsafe {
+            kb_vec[0].set_len(NUM_ROW_CAPACITY);
+            kb_vec[1].set_len(TOP_ROW_CAPACITY);
+            kb_vec[2].set_len(HOME_ROW_CAPACITY);
+            kb_vec[3].set_len(BOT_ROW_CAPACITY);
+        }
 
-        let cnt_static_keys = keys.iter().fold(0, |acc, item| {
-            if item.is_static() {
-                return acc + 1;
-            } else {
-                return acc;
+        let mut slot_ascii: Vec<Option<(usize, usize)>> = vec![None; 128];
+        for i in 0..kb_vec.len() {
+            for j in 0..kb_vec[i].len() {
+                slot_ascii[kb_vec[i][j].get_base() as usize] = Some((i, j));
+                slot_ascii[kb_vec[i][j].get_shift() as usize] = Some((i, j));
             }
-        });
-
-        let mut slot_ascii: Vec<Option<usize>> = vec![None; 128];
-        let mut location_ref: HashMap<(usize, usize), usize> = HashMap::new();
-        for i in 0..keys.len() {
-            slot_ascii[keys[i].get_base() as usize] = Some(i);
-            slot_ascii[keys[i].get_shift() as usize] = Some(i);
-
-            location_ref.insert(keys[i].get_current_location(), i);
         }
 
         let generation = 0;
@@ -68,9 +82,7 @@ impl Keyboard {
         let lineage: String = format!("{}.{}", generation, id);
 
         return Self {
-            keys,
-            cnt_static_keys,
-            location_ref,
+            kb_vec,
             slot_ascii,
             last_key_idx: None,
             generation,
@@ -83,10 +95,8 @@ impl Keyboard {
     }
 
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
-        let keys: Vec<UpdatedKey> = kb.get_keys().to_vec();
-        let cnt_static_keys: usize = kb.get_cnt_static_keys();
-        let location_ref: HashMap<(usize, usize), usize> = kb.get_location_ref().clone();
-        let slot_ascii: Vec<Option<usize>> = kb.get_slot_ascii().to_vec();
+        let kb_vec: Vec<Vec<Key>> = kb.get_kb_vec().to_vec();
+        let slot_ascii: Vec<Option<(usize, usize)>> = kb.get_slot_ascii().to_vec();
         let last_slot_idx: Option<usize> = None;
 
         let generation: usize = gen_input;
@@ -98,9 +108,7 @@ impl Keyboard {
         let is_elite: bool = kb.is_elite();
 
         return Self {
-            keys,
-            cnt_static_keys,
-            location_ref,
+            kb_vec,
             slot_ascii,
             last_key_idx: last_slot_idx,
             generation,
@@ -112,105 +120,54 @@ impl Keyboard {
         };
     }
 
-    fn get_keys(&self) -> &[UpdatedKey] {
-        return &self.keys;
-    }
-
-    fn get_cnt_static_keys(&self) -> usize {
-        return self.cnt_static_keys;
-    }
-
-    pub fn get_key_cnt(&self) -> usize {
-        return self.keys.len() - self.cnt_static_keys;
-    }
-
-    fn get_location_ref(&self) -> &HashMap<(usize, usize), usize> {
-        return &self.location_ref;
-    }
-
-    fn get_slot_ascii(&self) -> &[Option<usize>] {
-        return &self.slot_ascii;
-    }
-
-    pub fn get_lineage(&self) -> &str {
-        return &self.lineage;
-    }
-
-    pub fn get_eval_status(&self) -> bool {
-        return self.evaluated;
-    }
-
-    pub fn get_score(&self) -> f64 {
-        return self.score;
-    }
-
-    pub fn get_generation(&self) -> usize {
-        return self.generation;
-    }
-
-    pub fn get_id(&self) -> usize {
-        return self.id;
-    }
-
-    pub fn get_base_at_idx(&self, idx: usize) -> u8 {
-        return self.keys[idx].get_base();
-    }
-
-    pub fn is_elite(&self) -> bool {
-        return self.is_elite;
-    }
-
-    pub fn set_elite(&mut self) {
-        self.is_elite = true;
-    }
-
-    pub fn unset_elite(&mut self) {
-        self.is_elite = false;
-    }
-
+    // NOTE: This function assumes the keys are properly setup such that there is always at least
+    // one valid option to shuffle to
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
         self.evaluated = false;
 
         let mut shuffled: usize = 0;
         while shuffled < amt {
-            let start: usize = rng.random_range(self.cnt_static_keys..self.keys.len());
-            debug_assert!(!self.keys[start].is_static());
+            // The top row and the side symbol keys are purposefully avoided
+            let row = rng.random_range(1..4);
+            let col = rng.random_range(0..10);
+            if self.kb_vec[row][col].is_static() {
+                continue;
+            }
 
-            self.keys[start].shuffle_valid_locations(rng);
-            let start_cur_location: (usize, usize) = self.keys[start].get_current_location();
-            let cnt_valid_locations = self.keys[start].get_cnt_valid_locations();
+            self.kb_vec[row][col].shuffle_valid_locations(rng);
+            let cnt_valid = self.kb_vec[row][col].get_cnt_valid_locations();
 
-            for i in 0..cnt_valid_locations {
-                let this_location = self.keys[start].get_valid_location_at_idx(i);
-                if this_location == start_cur_location {
+            for i in 0..cnt_valid {
+                let test = self.kb_vec[row][col].get_valid_location_at_idx(i);
+                if test.0 == row && test.1 == col {
                     continue;
                 }
-                let candidate_idx = self.location_ref[&this_location];
 
-                if self.keys[candidate_idx]
+                if self.kb_vec[test.0][test.1]
                     .get_valid_locations()
-                    .contains(&start_cur_location)
+                    .contains(&(row, col))
                 {
-                    self.keys[start].set_cur_location(this_location);
-                    self.location_ref.insert(this_location, start);
+                    // mem::swap(&mut self.kb_vec[row][col], &mut self.kb_vec[test.0][test.1]);
 
-                    self.keys[candidate_idx].set_cur_location(start_cur_location);
-                    self.location_ref.insert(start_cur_location, candidate_idx);
+                    unsafe {
+                        let ptr = self.kb_vec.as_mut_ptr();
+                        let row1_ptr = ptr.add(row);
+                        let row2_ptr = ptr.add(test.0);
+                        let elem1_ptr = (*row1_ptr).as_mut_ptr().add(col);
+                        let elem2_ptr = (*row2_ptr).as_mut_ptr().add(test.1);
+
+                        ptr::swap(elem1_ptr, elem2_ptr);
+                    }
 
                     shuffled += 1;
                     break;
                 }
             }
-
-            debug_assert!(
-                self.keys[start].get_current_location() != start_cur_location,
-                "failed to shuffle"
-            );
         }
     }
 
-    // fn get_efficiency(&mut self, input: u8) -> f64 {
-    fn get_efficiency(&mut self, input: u8) -> f64 {
+    // TODO: Fix unused variable
+    fn get_efficiency(&mut self, _input: u8) -> f64 {
         const DEFAULT_EFFICIENCY: f64 = 1.0;
 
         // let key_idx: usize = if let Some(&Some(slot)) = self.slot_ascii.get(input as usize) {
@@ -258,30 +215,190 @@ impl Keyboard {
 
     // TODO: Currently incorrect. Needs fixed
     pub fn display_keyboard(&self) {
-        let mut number_vec: Vec<char> = Vec::new();
-        let mut above_vec: Vec<char> = Vec::new();
-        let mut home_vec: Vec<char> = Vec::new();
-        let mut below_vec: Vec<char> = Vec::new();
-
-        for key in &self.keys {
-            let location = key.get_current_location();
-
-            if location.1 == 0 {
-                number_vec.push(key.get_base() as char);
-            } else if location.1 == 1 {
-                above_vec.push(key.get_base() as char);
-            } else if location.1 == 2 {
-                home_vec.push(key.get_base() as char);
-            } else if location.1 == 3 {
-                below_vec.push(key.get_base() as char);
+        for row in &self.kb_vec {
+            let mut chars: Vec<char> = Vec::new();
+            for element in row {
+                let char = element.get_base() as char;
+                chars.push(char);
             }
+            println!("{:?}", chars);
+        }
+    }
+
+    fn get_kb_vec(&self) -> &[Vec<Key>] {
+        return &self.kb_vec;
+    }
+
+    // TODO: This should not need this much computation
+    pub fn get_key_cnt(&self) -> usize {
+        let mut total: usize = 0;
+        for row in &self.kb_vec {
+            total += row.len();
         }
 
-        println!("{:?}", number_vec);
-        println!("{:?}", above_vec);
-        println!("{:?}", home_vec);
-        println!("{:?}", below_vec);
+        return total;
     }
+
+    fn get_slot_ascii(&self) -> &[Option<(usize, usize)>] {
+        return &self.slot_ascii;
+    }
+
+    pub fn get_lineage(&self) -> &str {
+        return &self.lineage;
+    }
+
+    pub fn get_eval_status(&self) -> bool {
+        return self.evaluated;
+    }
+
+    pub fn get_score(&self) -> f64 {
+        return self.score;
+    }
+
+    pub fn get_generation(&self) -> usize {
+        return self.generation;
+    }
+
+    pub fn get_id(&self) -> usize {
+        return self.id;
+    }
+
+    pub fn get_vec_ref(&self) -> &[Vec<Key>] {
+        return &self.kb_vec;
+    }
+
+    pub fn is_elite(&self) -> bool {
+        return self.is_elite;
+    }
+
+    pub fn set_elite(&mut self) {
+        self.is_elite = true;
+    }
+
+    pub fn unset_elite(&mut self) {
+        self.is_elite = false;
+    }
+}
+
+// TODO: Function too long
+// TODO: Logically, this is indeed something the keyboard needs to be able to do to itself
+pub fn hill_climb(
+    rng: &mut SmallRng,
+    keyboard: &Keyboard,
+    corpus: &[String],
+    iter: usize,
+) -> Result<Keyboard> {
+    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
+    // TODO: This should be a hard code
+    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
+    decay_factor = decay_factor.min(clamp_value);
+    if keyboard.is_elite {
+        decay_factor *= decay_factor.powf(3.0);
+    }
+    println!("Climb Decay: {}", decay_factor);
+
+    if keyboard.is_elite {
+        let r: f64 = rng.random_range(0.0..=1.0);
+        if r >= decay_factor {
+            println!("Score: {}", keyboard.get_score());
+            keyboard.display_keyboard();
+            return Ok(keyboard.clone());
+        }
+    }
+
+    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
+
+    // TODO: I'm not sure if this is actually better than cloning, though the intention is more
+    // explicit
+    let mut kb: Keyboard = keyboard.clone();
+    let start: f64 = kb.get_score();
+
+    let mut last_improvement: f64 = 0.0;
+    let mut avg: f64 = 0.0;
+    let mut weighted_avg: f64 = 0.0;
+    let mut sum_weights: f64 = 0.0;
+
+    // One indexed for averaging math and display
+    for i in 1..=10000 {
+        let kb_score: f64 = kb.get_score();
+
+        // Doing steps of one change works best. If you change two keys, the algorithm will find
+        // bigger changes less frequently. This causes the decay to continue for about as many
+        // iterations as it would if doing only one step, but fewer improvements will be found,
+        // causing the improvement at the end of the hill climbing step to be lower
+        let mut climb_kb: Keyboard = kb.clone();
+        climb_kb.shuffle(rng, 1);
+        climb_kb.eval(corpus);
+        let climb_kb_score: f64 = climb_kb.get_score();
+
+        let this_change = climb_kb_score - kb_score;
+        let this_improvement: f64 = (this_change).max(0.0);
+
+        avg = get_new_avg(this_improvement, avg, i);
+
+        let delta: f64 = this_improvement - last_improvement;
+        last_improvement = this_improvement;
+        let weight: f64 = get_weight(delta, kb.is_elite);
+
+        sum_weights *= decay_factor;
+        let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
+        sum_weights += weight;
+        weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
+
+        // TODO: Debug only
+        print!(
+            "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
+            i, start, climb_kb_score, kb_score, avg, weighted_avg
+        );
+        stdout().flush()?;
+
+        if climb_kb_score > kb_score {
+            kb = climb_kb;
+        }
+
+        // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
+        // the weighted average can be smaller than the unweighted due to floating point
+        // imprecision
+        // We get around this with an iteration minimum, but it does paste over the underlying
+        // issue
+        // TODO: Is there a better solution?
+        let plateauing: bool = weighted_avg < avg && i > 1;
+        let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
+        if plateauing || not_starting {
+            break;
+        }
+    }
+
+    // TODO: For debugging
+    println!();
+    if kb.is_elite {
+        kb.display_keyboard();
+    }
+
+    return Ok(kb);
+}
+
+// TODO: How do make the division work with f64. Do we try to fix the truncating behavior?
+fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
+    let new_value_for_new_avg: f64 = new_value / (new_count as f64);
+    let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);
+
+    return new_value_for_new_avg + old_avg_for_new_avg;
+}
+
+fn get_weight(delta: f64, is_old: bool) -> f64 {
+    const K: f64 = 0.01;
+
+    if delta <= 0.0 {
+        return 1.0;
+    }
+
+    if is_old {
+        // return 1.0 + K * delta.ln(); // Less scaling for positive values
+        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
+    }
+
+    return 1.0 + K * delta.sqrt();
 }
 
 // #[derive(Clone)]
@@ -717,124 +834,3 @@ impl Keyboard {
 //         println!("{:?}", below_vec);
 //     }
 // }
-
-// TODO: Function too long
-// TODO: Logically, this is indeed something the keyboard needs to be able to do to itself
-pub fn hill_climb(
-    rng: &mut SmallRng,
-    keyboard: &Keyboard,
-    corpus: &[String],
-    iter: usize,
-) -> Result<Keyboard> {
-    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
-    // TODO: This should be a hard code
-    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
-    decay_factor = decay_factor.min(clamp_value);
-    if keyboard.is_elite {
-        decay_factor *= decay_factor.powf(3.0);
-    }
-    println!("Climb Decay: {}", decay_factor);
-
-    if keyboard.is_elite {
-        let r: f64 = rng.random_range(0.0..=1.0);
-        if r >= decay_factor {
-            println!("Score: {}", keyboard.get_score());
-            keyboard.display_keyboard();
-            return Ok(keyboard.clone());
-        }
-    }
-
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
-
-    // TODO: I'm not sure if this is actually better than cloning, though the intention is more
-    // explicit
-    let mut kb: Keyboard = keyboard.clone();
-    let start: f64 = kb.get_score();
-
-    let mut last_improvement: f64 = 0.0;
-    let mut avg: f64 = 0.0;
-    let mut weighted_avg: f64 = 0.0;
-    let mut sum_weights: f64 = 0.0;
-
-    // One indexed for averaging math and display
-    for i in 1..=10000 {
-        let kb_score: f64 = kb.get_score();
-
-        // Doing steps of one change works best. If you change two keys, the algorithm will find
-        // bigger changes less frequently. This causes the decay to continue for about as many
-        // iterations as it would if doing only one step, but fewer improvements will be found,
-        // causing the improvement at the end of the hill climbing step to be lower
-        let mut climb_kb: Keyboard = kb.clone();
-        climb_kb.shuffle(rng, 1);
-        climb_kb.eval(corpus);
-        let climb_kb_score: f64 = climb_kb.get_score();
-
-        let this_change = climb_kb_score - kb_score;
-        let this_improvement: f64 = (this_change).max(0.0);
-
-        avg = get_new_avg(this_improvement, avg, i);
-
-        let delta: f64 = this_improvement - last_improvement;
-        last_improvement = this_improvement;
-        let weight: f64 = get_weight(delta, kb.is_elite);
-
-        sum_weights *= decay_factor;
-        let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
-        sum_weights += weight;
-        weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
-
-        // TODO: Debug only
-        print!(
-            "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
-            i, start, climb_kb_score, kb_score, avg, weighted_avg
-        );
-        stdout().flush()?;
-
-        if climb_kb_score > kb_score {
-            kb = climb_kb;
-        }
-
-        // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
-        // the weighted average can be smaller than the unweighted due to floating point
-        // imprecision
-        // We get around this with an iteration minimum, but it does paste over the underlying
-        // issue
-        // TODO: Is there a better solution?
-        let plateauing: bool = weighted_avg < avg && i > 1;
-        let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
-        if plateauing || not_starting {
-            break;
-        }
-    }
-
-    // TODO: For debugging
-    println!();
-    if kb.is_elite {
-        kb.display_keyboard();
-    }
-
-    return Ok(kb);
-}
-
-// TODO: How do make the division work with f64. Do we try to fix the truncating behavior?
-fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
-    let new_value_for_new_avg: f64 = new_value / (new_count as f64);
-    let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);
-
-    return new_value_for_new_avg + old_avg_for_new_avg;
-}
-
-fn get_weight(delta: f64, is_old: bool) -> f64 {
-    const K: f64 = 0.01;
-
-    if delta <= 0.0 {
-        return 1.0;
-    }
-
-    if is_old {
-        // return 1.0 + K * delta.ln(); // Less scaling for positive values
-        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
-    }
-
-    return 1.0 + K * delta.sqrt();
-}

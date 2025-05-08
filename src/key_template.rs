@@ -267,7 +267,7 @@ impl KeyTemplate {
 // A counter to this though - The layout should be easy to learn and immediately feel comfortable.
 // R and L being pinky and ring top row on Dvorak is... a choice
 
-fn alpha_slots(exclusions: &Vec<(usize, usize)>) -> Vec<(usize, usize)> {
+fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
     let slot_groups: Vec<Vec<(usize, usize)>> =
         vec![top_row_alpha(), home_row_alpha(), bottom_row_alpha()];
 

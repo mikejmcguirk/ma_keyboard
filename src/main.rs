@@ -61,6 +61,7 @@
 #![allow(clippy::len_zero)]
 #![allow(clippy::let_underscore_must_use)]
 #![allow(clippy::let_underscore_untyped)]
+#![allow(clippy::manual_assert)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::manual_string_new)]
 #![allow(clippy::match_on_vec_items)]
@@ -89,15 +90,17 @@
 #![allow(clippy::uninlined_format_args)] // Trips when debug formatting is used
 #![allow(clippy::unnecessary_wraps)] // Lights up diags when trying to change code
 #![allow(clippy::unreadable_literal)] // Creates problems pasting literals
+#![allow(clippy::unused_self)]
 #![allow(clippy::unused_trait_names)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::useless_format)]
+#![allow(clippy::useless_vec)]
 #![allow(clippy::use_debug)]
+#![allow(clippy::vec_init_then_push)]
 #![allow(clippy::verbose_file_reads)]
 
 mod custom_err;
-mod enums;
-mod kb_components;
+mod key;
 mod key_template;
 mod keyboard;
 mod layouts;

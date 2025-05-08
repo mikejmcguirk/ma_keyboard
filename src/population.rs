@@ -10,7 +10,7 @@ use {
 
 use crate::{
     custom_err::CorpusErr,
-    kb_components::Key,
+    key::Key,
     keyboard::{Keyboard, hill_climb},
     utils::write_err,
 };
@@ -256,22 +256,17 @@ impl Population {
         let mut dup_elites: usize = 0;
         for _ in 0..self.elite_cnt - 1 {
             let mut diff_found: bool = false;
+            let candidate_vec: &[Vec<Key>] = self.population[0].get_vec_ref();
+            let flat_candidate: Vec<&Key> = candidate_vec.iter().flatten().collect();
+
             for climber in &self.climbers {
-                let climber_slots: usize = climber.get_key_cnt();
-                let candidate_slots: usize = self.population[0].get_key_cnt();
-                if climber_slots != candidate_slots {
-                    return Err(anyhow!(
-                        "Climber slots {} does not match candidate slots {}",
-                        climber_slots,
-                        candidate_slots
-                    ));
-                }
+                let climber_vec: &[Vec<Key>] = climber.get_vec_ref();
+                let flat_climber: Vec<&Key> = climber_vec.iter().flatten().collect();
 
-                for i in 0..climber_slots {
-                    let climber_key: u8 = climber.get_base_at_idx(i);
-                    let candidate_key: u8 = self.population[0].get_base_at_idx(i);
+                debug_assert_eq!(flat_candidate.len(), flat_climber.len());
 
-                    if climber_key != candidate_key {
+                for i in 0..flat_climber.len() {
+                    if flat_climber[i].get_base() != flat_candidate[i].get_base() {
                         diff_found = true;
                         break;
                     }
@@ -308,22 +303,17 @@ impl Population {
             population_score -= self.population[selection].get_score();
 
             let mut diff_found: bool = false;
+            let candidate_vec: &[Vec<Key>] = self.population[0].get_vec_ref();
+            let flat_candidate: Vec<&Key> = candidate_vec.iter().flatten().collect();
+
             for climber in &self.climbers {
-                let climber_slots: usize = climber.get_key_cnt();
-                let candidate_slots: usize = self.population[selection].get_key_cnt();
-                if climber_slots != candidate_slots {
-                    return Err(anyhow!(
-                        "Climber slots {} does not match candidate slots {}",
-                        climber_slots,
-                        candidate_slots
-                    ));
-                }
+                let climber_vec: &[Vec<Key>] = climber.get_vec_ref();
+                let flat_climber: Vec<&Key> = climber_vec.iter().flatten().collect();
 
-                for i in 0..climber_slots {
-                    let climber_key: u8 = climber.get_base_at_idx(i);
-                    let candidate_key: u8 = self.population[selection].get_base_at_idx(i);
+                debug_assert_eq!(flat_candidate.len(), flat_climber.len());
 
-                    if climber_key != candidate_key {
+                for i in 0..flat_climber.len() {
+                    if flat_climber[i].get_base() != flat_candidate[i].get_base() {
                         diff_found = true;
                         break;
                     }

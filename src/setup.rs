@@ -8,7 +8,8 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::{keyboard::Keyboard, population::Population};
+// use crate::{keyboard::Keyboard, population::Population};
+use crate::population::Population;
 
 // TODO: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its

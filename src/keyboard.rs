@@ -1,10 +1,6 @@
-use std::{
-    io::{Write as _, stdout},
-    ptr,
-};
+use std::ptr;
 
 use {
-    anyhow::Result,
     rand::{Rng as _, rngs::SmallRng},
     strum::IntoEnumIterator,
 };
@@ -276,127 +272,6 @@ impl Keyboard {
     pub fn unset_elite(&mut self) {
         self.is_elite = false;
     }
-}
-
-// TODO: Function too long
-// TODO: Logically, this is indeed something the keyboard needs to be able to do to itself
-pub fn hill_climb(
-    rng: &mut SmallRng,
-    keyboard: &Keyboard,
-    corpus: &[String],
-    iter: usize,
-) -> Result<Keyboard> {
-    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
-    // TODO: This should be a hard code
-    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
-    decay_factor = decay_factor.min(clamp_value);
-    if keyboard.is_elite {
-        decay_factor *= decay_factor.powf(3.0);
-    }
-    println!("Climb Decay: {}", decay_factor);
-
-    if keyboard.is_elite {
-        let r: f64 = rng.random_range(0.0..=1.0);
-        if r >= decay_factor {
-            println!("Score: {}", keyboard.get_score());
-            keyboard.display_keyboard();
-            return Ok(keyboard.clone());
-        }
-    }
-
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
-
-    // TODO: I'm not sure if this is actually better than cloning, though the intention is more
-    // explicit
-    let mut kb: Keyboard = keyboard.clone();
-    let start: f64 = kb.get_score();
-
-    let mut last_improvement: f64 = 0.0;
-    let mut avg: f64 = 0.0;
-    let mut weighted_avg: f64 = 0.0;
-    let mut sum_weights: f64 = 0.0;
-
-    // One indexed for averaging math and display
-    for i in 1..=10000 {
-        let kb_score: f64 = kb.get_score();
-
-        // Doing steps of one change works best. If you change two keys, the algorithm will find
-        // bigger changes less frequently. This causes the decay to continue for about as many
-        // iterations as it would if doing only one step, but fewer improvements will be found,
-        // causing the improvement at the end of the hill climbing step to be lower
-        let mut climb_kb: Keyboard = kb.clone();
-        climb_kb.shuffle(rng, 1);
-        climb_kb.eval(corpus);
-        let climb_kb_score: f64 = climb_kb.get_score();
-
-        let this_change = climb_kb_score - kb_score;
-        let this_improvement: f64 = (this_change).max(0.0);
-
-        avg = get_new_avg(this_improvement, avg, i);
-
-        let delta: f64 = this_improvement - last_improvement;
-        last_improvement = this_improvement;
-        let weight: f64 = get_weight(delta, kb.is_elite);
-
-        sum_weights *= decay_factor;
-        let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
-        sum_weights += weight;
-        weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
-
-        // TODO: Debug only
-        print!(
-            "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
-            i, start, climb_kb_score, kb_score, avg, weighted_avg
-        );
-        stdout().flush()?;
-
-        if climb_kb_score > kb_score {
-            kb = climb_kb;
-        }
-
-        // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
-        // the weighted average can be smaller than the unweighted due to floating point
-        // imprecision
-        // We get around this with an iteration minimum, but it does paste over the underlying
-        // issue
-        // TODO: Is there a better solution?
-        let plateauing: bool = weighted_avg < avg && i > 1;
-        let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
-        if plateauing || not_starting {
-            break;
-        }
-    }
-
-    // TODO: For debugging
-    println!();
-    if kb.is_elite {
-        kb.display_keyboard();
-    }
-
-    return Ok(kb);
-}
-
-// TODO: How do make the division work with f64. Do we try to fix the truncating behavior?
-fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
-    let new_value_for_new_avg: f64 = new_value / (new_count as f64);
-    let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);
-
-    return new_value_for_new_avg + old_avg_for_new_avg;
-}
-
-fn get_weight(delta: f64, is_old: bool) -> f64 {
-    const K: f64 = 0.01;
-
-    if delta <= 0.0 {
-        return 1.0;
-    }
-
-    if is_old {
-        // return 1.0 + K * delta.ln(); // Less scaling for positive values
-        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
-    }
-
-    return 1.0 + K * delta.sqrt();
 }
 
 // impl Keyboard {

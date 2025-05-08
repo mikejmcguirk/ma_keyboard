@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-// use crate::{keyboard::Keyboard, population::Population};
 use crate::population::Population;
 
 // TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can

@@ -11,6 +11,9 @@ use anyhow::{Result, anyhow};
 // use crate::{keyboard::Keyboard, population::Population};
 use crate::population::Population;
 
+// TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
+// re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
+// threadRNG? Issue with threadRNG is - it's the slower version from what I understand
 // TODO: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its
 // own file

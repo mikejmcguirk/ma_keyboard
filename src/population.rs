@@ -122,9 +122,10 @@ impl Population {
         // initial population as climbers rather than general population is unintuitive, it lets us
         // transition into the main loop logic without creating a special case for the first
         // iteration
+        // TODO: The hard-coded shuffle value needs a place to live
         for _ in 0..climber_cnt {
             let mut keyboard: Keyboard = Keyboard::create_origin(id.get());
-            keyboard.shuffle(&mut rng, keyboard.get_key_cnt());
+            keyboard.shuffle(&mut rng, 30);
             // For probabalistic selection when they are mutated to fill out the population. The
             // keyboards are able to store if they have evaluated since they were last changed
             keyboard.eval(corpus);

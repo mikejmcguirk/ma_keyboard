@@ -103,7 +103,6 @@ mod custom_err;
 mod key;
 mod key_template;
 mod keyboard;
-mod layouts;
 mod population;
 mod setup;
 mod utils;

@@ -1,5 +1,7 @@
-use std::io::{Write as _, stdout};
-use std::ptr;
+use std::{
+    io::{Write as _, stdout},
+    ptr,
+};
 
 use {
     anyhow::Result,
@@ -7,14 +9,7 @@ use {
     strum::IntoEnumIterator,
 };
 
-use crate::{
-    // custom_err::KeySetError,
-    // enums::{Col, Finger, Hand, Row},
-    // kb_components::{Key, KeySlot, UpdatedKey},
-    key::Key,
-    key_template::KeyTemplate,
-    // layouts::{get_origin_slots, get_qwerty_slots},
-};
+use crate::{key::Key, key_template::KeyTemplate};
 
 #[derive(Clone)]
 pub struct Keyboard {
@@ -29,8 +24,11 @@ pub struct Keyboard {
     is_elite: bool,
 }
 
+// TODO: The meta issue with this struct is how much it relies on the KeyTemplate enum. It's
+// compile time, which is good, but it's exterior, which is bad
+// TODO: Need to rebuild the qwerty creation and add dvorak
 impl Keyboard {
-    // TODO: Turn hard code values into some kind of constant
+    // TODO: The memory safety case here is weak
     pub fn create_origin(id_in: usize) -> Self {
         const NUM_ROW_CAPACITY: usize = 12;
         const TOP_ROW_CAPACITY: usize = 12;
@@ -147,8 +145,6 @@ impl Keyboard {
                     .get_valid_locations()
                     .contains(&(row, col))
                 {
-                    // mem::swap(&mut self.kb_vec[row][col], &mut self.kb_vec[test.0][test.1]);
-
                     unsafe {
                         let ptr = self.kb_vec.as_mut_ptr();
                         let row1_ptr = ptr.add(row);
@@ -159,6 +155,13 @@ impl Keyboard {
                         ptr::swap(elem1_ptr, elem2_ptr);
                     }
 
+                    self.slot_ascii[self.kb_vec[row][col].get_base() as usize] = Some((row, col));
+                    self.slot_ascii[self.kb_vec[row][col].get_shift() as usize] = Some((row, col));
+                    self.slot_ascii[self.kb_vec[test.0][test.1].get_base() as usize] =
+                        Some((test.0, test.1));
+                    self.slot_ascii[self.kb_vec[test.0][test.1].get_shift() as usize] =
+                        Some((test.0, test.1));
+
                     shuffled += 1;
                     break;
                 }
@@ -167,6 +170,8 @@ impl Keyboard {
     }
 
     // TODO: Fix unused variable
+    // TODO: Unsure of how to handle space and return
+    // TODO: How to factor out...
     fn get_efficiency(&mut self, _input: u8) -> f64 {
         const DEFAULT_EFFICIENCY: f64 = 1.0;
 
@@ -213,7 +218,7 @@ impl Keyboard {
         self.evaluated = true;
     }
 
-    // TODO: Currently incorrect. Needs fixed
+    // TODO: Better, but will still need to be redone for final display
     pub fn display_keyboard(&self) {
         for row in &self.kb_vec {
             let mut chars: Vec<char> = Vec::new();
@@ -225,24 +230,16 @@ impl Keyboard {
         }
     }
 
+    // Pieces for mutation
     fn get_kb_vec(&self) -> &[Vec<Key>] {
         return &self.kb_vec;
-    }
-
-    // TODO: This should not need this much computation
-    pub fn get_key_cnt(&self) -> usize {
-        let mut total: usize = 0;
-        for row in &self.kb_vec {
-            total += row.len();
-        }
-
-        return total;
     }
 
     fn get_slot_ascii(&self) -> &[Option<(usize, usize)>] {
         return &self.slot_ascii;
     }
 
+    // Info display
     pub fn get_lineage(&self) -> &str {
         return &self.lineage;
     }
@@ -263,6 +260,7 @@ impl Keyboard {
         return self.id;
     }
 
+    // For population management
     pub fn get_vec_ref(&self) -> &[Vec<Key>] {
         return &self.kb_vec;
     }
@@ -401,259 +399,7 @@ fn get_weight(delta: f64, is_old: bool) -> f64 {
     return 1.0 + K * delta.sqrt();
 }
 
-// #[derive(Clone)]
-// NOTE: If RNG is stored in the keyboard, it needs to be re-seeded whenever the keyboard is cloned
-// or mutated. This makes logging the seed pointless
-// TODO: Instead of a HashMap, store an ASCII table. When you read a byte, use that as the ASCII
-// table index to get the Slot
-// TODO: FUlly blocked keys like the number row should not be considered for shuffling
-// pub struct Keyboard {
-//     keyslots: Vec<KeySlot>,
-//     slot_ascii: Vec<Option<usize>>,
-//     last_slot_idx: Option<usize>,
-//     generation: usize,
-//     id: usize,
-//     lineage: String,
-//     evaluated: bool,
-//     score: f64,
-//     pub is_elite: bool,
-// }
-
 // impl Keyboard {
-//     // PERF: This can be optimized by pre-allocating keyslots and unsafely writing to it
-//     // TODO: At some point this logic will need to handle keys that are not totally randomized. As
-//     // much of this logic as possible should be tied to the enums. The key though is it needs to
-//     // flow intuitively. Right now, col.get_finger() intuitively makes sense because we know each
-//     // keyboard column has a finger mapped to it. You don't really need to jump to definition to
-//     // understand it
-//     // TODO: The logic to insert a key into a lot in make_origin should be common with the shuffle
-//     // logic. Too early right now, but do this eventually
-//     // TODO: Broad idea for key/slot rules is - There should be some kind of menu for which keys
-//     // are allowed in which slots that the various functions can check. This could create a
-//     // challenge in terms of tying it together, but separating the pieces of how this is managed
-//     // could cause an unforeseen contradiction in rules
-//     // TODO: Possible idea for more sophisticated keyboard building, hard code the elements of the
-//     // layout, like the number row, then flatten the array into the keyslot vec. We can use those
-//     // pieces to build the invalid swap indexes (like the number keys). Doing hard codes kinda
-//     // sucks, but it's better than building messes of rules where we know the final result anyway
-//     // Do still be judicious about key restrictions, at least to start. See what the algorithm does
-//     // before locking down
-//     // The idea then is that you can pull the swappable part of keyslots as a slice for the various
-//     // functions below, and then still use the length of the slice to assess the validity of
-//     // various arguments and indexes cleanly
-//     // TODO: After the population refactor is finished, it should be possible to make get_keyslots
-//     // private again
-//     // TODO: This should not error. It takes no external input
-//     // TODO: shuffle_all should be run automatically when making an original keyboard, but
-//     // want to wait on the architecture to settle in before doing this
-//     pub fn spawn_origin(id: usize) -> Self {
-//         let mut keyslots: Vec<KeySlot> = Vec::new();
-//         let origin_slots: Vec<KeySlot> = get_origin_slots();
-//
-//         for slot in &origin_slots {
-//             keyslots.push(slot.clone());
-//         }
-//
-//         let mut slot_ascii: Vec<Option<usize>> = vec![None; 128];
-//         for i in 0..keyslots.len() {
-//             let key: Key = keyslots[i].get_key();
-//
-//             slot_ascii[key.get_base() as usize] = Some(i);
-//             slot_ascii[key.get_shift() as usize] = Some(i);
-//         }
-//
-//         let lineage: String = format!("0.{}", id);
-//
-//         return Keyboard {
-//             keyslots,
-//             slot_ascii,
-//             last_slot_idx: None,
-//             generation: 0,
-//             id,
-//             lineage,
-//             evaluated: false,
-//             score: 0.0,
-//             is_elite: false,
-//         };
-//     }
-//
-//     pub fn make_qwerty(id: usize) -> Self {
-//         let mut keyslots: Vec<KeySlot> = Vec::new();
-//         let qwerty_slots: Vec<KeySlot> = get_qwerty_slots();
-//
-//         for slot in &qwerty_slots {
-//             keyslots.push(slot.clone());
-//         }
-//
-//         let mut slot_ascii: Vec<Option<usize>> = vec![None; 128];
-//         for i in 0..keyslots.len() {
-//             let key: Key = keyslots[i].get_key();
-//
-//             slot_ascii[key.get_base() as usize] = Some(i);
-//             slot_ascii[key.get_shift() as usize] = Some(i);
-//         }
-//
-//         let lineage: String = format!("0.{}", id);
-//
-//         return Keyboard {
-//             keyslots,
-//             slot_ascii,
-//             last_slot_idx: None,
-//             generation: 0,
-//             id,
-//             lineage,
-//             evaluated: false,
-//             score: 0.0,
-//             is_elite: false,
-//         };
-//     }
-//
-//     // TODO: It is more idiomatic to this project for the keyboard object to spawn a clone of
-//     // itself, potentially with shuffling already built in. You could probably also just pass a
-//     // flag to it saying whether or not to increment the generation. But would have to think about
-//     // this and how to implement it. As is, while this function isn't theoretically good design, I
-//     // can manually control the generation as well as how I shuffle it
-//     // One issue that nags at me is, if you create using new, it sets generation to 1, which is
-//     // correct for how the code is currently used, but is inflexible. Alternatively, it's too
-//     // flexible, because outside of the initial 20 keyboards to get the process going, keyboards
-//     // should only spawn from each other rather than being airdropped in
-//     // The other is, this function requires exposing get methods that only exist for this one
-//     // purpose, which hurts encapsulation
-//     // TODO: Many clones here
-//     pub fn mutate(kb: &Keyboard, gen_input: usize, id: usize) -> Self {
-//         let keyslots: Vec<KeySlot> = kb.get_keyslots().to_vec();
-//         let slot_ascii: Vec<Option<usize>> = kb.get_slot_ascii().clone();
-//         let last_slot_idx: Option<usize> = None;
-//         let generation: usize = gen_input;
-//         let lineage: String = format!("{}-{}.{}", kb.get_lineage(), gen_input, id);
-//
-//         let evaluated: bool = kb.get_eval_status();
-//         let score: f64 = kb.get_score();
-//
-//         return Self {
-//             keyslots,
-//             slot_ascii,
-//             last_slot_idx,
-//             generation,
-//             id,
-//             lineage,
-//             evaluated,
-//             score,
-//             is_elite: false,
-//         };
-//     }
-//
-//     pub fn get_generation(&self) -> usize {
-//         return self.generation;
-//     }
-//
-//     pub fn get_id(&self) -> usize {
-//         return self.id;
-//     }
-//
-//     pub fn get_key_at_idx(&self, idx: usize) -> Key {
-//         return self.keyslots[idx].get_key();
-//     }
-//
-//     pub fn get_slot_cnt(&self) -> usize {
-//         return self.keyslots.len();
-//     }
-//
-//     // TODO: Clone bad
-//     pub fn get_lineage(&self) -> String {
-//         return self.lineage.clone();
-//     }
-//
-//     pub fn get_keyslots(&self) -> &[KeySlot] {
-//         return &self.keyslots;
-//     }
-//
-//     fn get_slot_ascii(&self) -> &Vec<Option<usize>> {
-//         return &self.slot_ascii;
-//     }
-//
-//     pub fn get_eval_status(&self) -> bool {
-//         return self.evaluated;
-//     }
-//
-//     // TODO: A shuffle amount of zero does not produce invalid behavior, so it is not an error. I
-//     // have a debug assert for now, but that issue needs to be handled somewhere more logical. A
-//     // good idea would probably be to return an error type for it, and then the caller can handle.
-//     // Not sure how you wrap that up with the keyslot errors
-//     // TODO: panics redundantly
-//     pub fn shuffle_some(&mut self, rng: &mut SmallRng, amt: usize) {
-//         self.evaluated = false;
-//
-//         debug_assert!(amt > 0);
-//
-//         let mut swaps: usize = 0;
-//         while swaps < amt {
-//             let i: usize = rng.random_range(0..self.keyslots.len());
-//             let mut j: usize = rng.random_range(0..self.keyslots.len());
-//
-//             loop {
-//                 if j != i {
-//                     break;
-//                 }
-//
-//                 j = rng.random_range(0..self.keyslots.len());
-//             }
-//
-//             let key_i: Key = self.keyslots[i].get_key();
-//             let key_j: Key = self.keyslots[j].get_key();
-//
-//             match self.keyslots[i].set_key(key_j) {
-//                 Ok(()) => {}
-//                 Err(KeySetError::HasOnlyValid | KeySetError::InvalidInput) => {
-//                     continue;
-//                 }
-//                 Err(KeySetError::HasInvalid) => {
-//                     panic!("Slot has invalid key after shuffle all");
-//                 }
-//             }
-//
-//             if let Ok(()) = self.keyslots[j].set_key(key_i) {
-//             } else {
-//                 assert!(
-//                     self.keyslots[i].set_key(key_i).is_ok(),
-//                     "Key started in invalid slot"
-//                 );
-//
-//                 continue;
-//             }
-//
-//             self.slot_ascii[key_i.get_base() as usize] = Some(j);
-//             self.slot_ascii[key_i.get_shift() as usize] = Some(j);
-//             self.slot_ascii[key_j.get_base() as usize] = Some(i);
-//             self.slot_ascii[key_j.get_shift() as usize] = Some(i);
-//
-//             swaps += 1;
-//         }
-//     }
-//
-//     // TODO: The evaluation should be setup in such a manner that this is a private function. This
-//     // kind of internal state management should not be publicly exposed
-//     fn clear_last_slot(&mut self) {
-//         self.last_slot_idx = None;
-//     }
-//
-//     // TODO: Something to keep in mind is - There are certain kinds of bad moves that are more
-//     // quantifiable, and thus easier to overweight the badness of. If the same finger is used
-//     // twice, you could calculate the distance of the movement, adding that on top of any other
-//     // demerits. Does this over-punish same-finger usage?
-//     // Broadly then, what should be done is to think of demerits in terms of classes. If you have a
-//     // finger demerit, you can apply that to all fingers easily. Same with a hand demerit or a row
-//     // jump demerit
-//     // So as an example, all scissors should be punished, and you might punish upward moving
-//     // scissors more harshly than downward moving scissors (though this feels situational). But
-//     // scissors involving the pinky and fing finger should not be punished particularly
-//     // harshly
-//     // Something else that needs to be considered is the "grain" issue of the left and right hands.
-//     // The home row of the left hand is not more difficult to hit than the right, but any row
-//     // jumping is more difficult because the shape is not natural.
-//     // TODO: This function is too long. Need a way to separate out, but I don't feel like the
-//     // overall architecture is settled in enough yet to do that
-//     // TODO: Unsure of how to handle space and return
 //     fn get_efficiency(&mut self, input: u8) -> f64 {
 //         const DEFAULT_EFFICIENCY: f64 = 1.0;
 //

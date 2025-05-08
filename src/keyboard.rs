@@ -11,12 +11,14 @@ use crate::{key::Key, key_template::KeyTemplate};
 pub struct Keyboard {
     kb_vec: Vec<Vec<Key>>,
     slot_ascii: Vec<Option<(usize, usize)>>,
-    last_key_idx: Option<usize>,
+    last_key_idx: Option<(usize, usize)>,
     generation: usize,
     id: usize,
     lineage: String,
     evaluated: bool,
     score: f64,
+    same_row_streak: f64,
+    home_row_streak: f64,
     is_elite: bool,
 }
 
@@ -43,7 +45,6 @@ impl Keyboard {
         for template in KeyTemplate::iter() {
             let location: (usize, usize) = template.get_starting_location();
             let this_key = Key::from_template(template);
-            println!("{}, {}", location.0, location.1);
 
             // SAFETY: The indexes to write come from the KeyTemplate structs, with methods built
             // at compile time
@@ -84,6 +85,8 @@ impl Keyboard {
             lineage,
             evaluated: false,
             score: 0.0,
+            same_row_streak: 1.0,
+            home_row_streak: 1.0,
             is_elite: false,
         };
     }
@@ -91,7 +94,7 @@ impl Keyboard {
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
         let kb_vec: Vec<Vec<Key>> = kb.get_kb_vec().to_vec();
         let slot_ascii: Vec<Option<(usize, usize)>> = kb.get_slot_ascii().to_vec();
-        let last_slot_idx: Option<usize> = None;
+        let last_key_idx: Option<(usize, usize)> = None;
 
         let generation: usize = gen_input;
         let id: usize = id_in;
@@ -104,12 +107,14 @@ impl Keyboard {
         return Self {
             kb_vec,
             slot_ascii,
-            last_key_idx: last_slot_idx,
+            last_key_idx,
             generation,
             id,
             lineage,
             evaluated,
             score,
+            same_row_streak: 1.0,
+            home_row_streak: 1.0,
             is_elite,
         };
     }
@@ -165,34 +170,99 @@ impl Keyboard {
         }
     }
 
-    // TODO: Fix unused variable
     // TODO: Unsure of how to handle space and return
     // TODO: How to factor out...
-    fn get_efficiency(&mut self, _input: u8) -> f64 {
+    fn get_efficiency(&mut self, input: u8) -> f64 {
         const DEFAULT_EFFICIENCY: f64 = 1.0;
 
-        // let key_idx: usize = if let Some(&Some(slot)) = self.slot_ascii.get(input as usize) {
-        //     slot
-        // } else {
-        //     self.last_key_idx = None;
-        //     return 0.0;
-        // };
+        let key_idx: (usize, usize) =
+            if let Some(&Some(slot)) = self.slot_ascii.get(input as usize) {
+                slot
+            } else {
+                self.last_key_idx = None;
 
-        // let this_key: &UpdatedKey = &self.keys[key_idx];
-        // let mut efficiency: f64 = DEFAULT_EFFICIENCY;
-        let efficiency: f64 = DEFAULT_EFFICIENCY;
+                self.same_row_streak = 1.0;
+                self.home_row_streak = 1.0;
+                return 0.0;
+            };
 
-        // let last_key: &UpdatedKey = if let Some(key) = self
-        //     .last_key_idx
-        //     .and_then(|slot| return self.keys.get(slot))
-        // {
-        //     key
-        // } else {
-        //     self.last_key_idx = Some(key_idx);
-        //     return efficiency;
-        // };
-        //
-        // self.last_key_idx = Some(key_idx);
+        let this_row: usize = key_idx.0;
+        let this_col: usize = key_idx.1;
+
+        let mut efficiency: f64 = DEFAULT_EFFICIENCY;
+
+        // Finger Rules
+        if (2..=7).contains(&this_col) {
+            efficiency *= 1.2;
+        } else {
+            efficiency *= 0.8;
+        }
+
+        if (this_col == 2 || this_col == 7) && this_row <= 1 {
+            efficiency *= 1.20;
+        }
+
+        // Row Rules
+        if this_row == 0 {
+            efficiency *= 0.6;
+        } else if this_row == 1 {
+            efficiency *= 1.0;
+        } else if this_row == 2 {
+            efficiency *= 1.2;
+        } else if this_row == 3 {
+            efficiency *= 0.8;
+        }
+
+        // Handle Symbol Keys
+        if this_col == 10 && this_row == 2 {
+            efficiency *= 0.80;
+        } else if (this_col == 10 && this_row <= 1) || this_col == 1 {
+            efficiency *= 0.60;
+        }
+
+        let last_key: (usize, usize) = if let Some(key) = self.last_key_idx {
+            key
+        } else {
+            self.last_key_idx = Some(key_idx);
+            self.same_row_streak = 1.0;
+            return efficiency;
+        };
+
+        let last_row: usize = last_key.0;
+        let last_col: usize = last_key.1;
+
+        let row_dist: usize = last_row.abs_diff(this_row);
+        let col_dist: usize = last_col.abs_diff(this_col);
+
+        let this_hand_right: bool = this_col >= 5;
+        let last_hand_right: bool = last_col >= 5;
+
+        if this_row == last_row {
+            self.same_row_streak *= 1.2;
+            efficiency *= self.same_row_streak;
+        } else {
+            self.same_row_streak = 1.0;
+        }
+
+        if this_row == 2 && last_row == 2 {
+            self.home_row_streak *= 1.2;
+            efficiency *= self.home_row_streak;
+        } else {
+            self.home_row_streak = 1.0;
+        }
+
+        if this_hand_right == last_hand_right {
+            // Scisors
+            if row_dist == 1 && col_dist >= 2 {
+                efficiency *= 0.7;
+            }
+        }
+
+        if last_col == this_col || (last_col >= 9 && this_col >= 9) {
+            efficiency *= 0.8;
+        }
+
+        self.last_key_idx = Some(key_idx);
 
         return efficiency;
     }
@@ -273,185 +343,3 @@ impl Keyboard {
         self.is_elite = false;
     }
 }
-
-// impl Keyboard {
-//     fn get_efficiency(&mut self, input: u8) -> f64 {
-//         const DEFAULT_EFFICIENCY: f64 = 1.0;
-//
-//         let slot_idx: usize = if let Some(&Some(slot)) = self.slot_ascii.get(input as usize) {
-//             slot
-//         } else {
-//             self.last_slot_idx = None;
-//             return 0.0;
-//         };
-//
-//         let this_slot: &KeySlot = &self.keyslots[slot_idx];
-//         let mut efficiency: f64 = DEFAULT_EFFICIENCY;
-//
-//         let this_row: Row = this_slot.get_row();
-//         if this_row == Row::Above {
-//             efficiency *= 0.75;
-//         } else if this_row == Row::Below {
-//             efficiency *= 0.50;
-//         } else if this_row == Row::Num {
-//             efficiency *= 0.25;
-//         }
-//
-//         let this_hand: Hand = this_slot.get_hand();
-//         // The down/right slope of each column does not agree with the left hand
-//         if this_hand == Hand::Left {
-//             efficiency *= 0.75;
-//         }
-//
-//         let this_col: Col = this_slot.get_col();
-//         if this_col == Col::Five {
-//             efficiency *= 0.75;
-//
-//             if this_row == Row::Below {
-//                 efficiency *= 0.50;
-//             }
-//         }
-//
-//         if this_col == Col::Six {
-//             efficiency *= 0.75;
-//
-//             if this_row == Row::Above {
-//                 efficiency *= 0.50;
-//             }
-//         }
-//
-//         let this_finger: Finger = this_slot.get_finger();
-//         if this_finger == Finger::Ring {
-//             efficiency *= 0.75;
-//         } else if this_finger == Finger::Pinky {
-//             efficiency *= 0.25;
-//         }
-//
-//         if this_finger == Finger::Middle && this_row == Row::Above {
-//             efficiency *= 1.25;
-//         }
-//
-//         if this_col == Col::Eleven || this_col == Col::Twelve {
-//             efficiency *= 0.75;
-//
-//             if this_row == Row::Above || this_row == Row::Num {
-//                 efficiency *= 0.25;
-//             }
-//         }
-//
-//         let last_slot: &KeySlot = if let Some(slot) = self
-//             .last_slot_idx
-//             .and_then(|slot| return self.keyslots.get(slot))
-//         {
-//             slot
-//         } else {
-//             self.last_slot_idx = Some(slot_idx);
-//             return efficiency;
-//         };
-//
-//         let last_row = last_slot.get_row();
-//         let last_col = last_slot.get_col();
-//         let last_hand = last_slot.get_hand();
-//         let last_finger = last_slot.get_finger();
-//         let row_distance = this_row.get_num().abs_diff(last_row.get_num());
-//
-//         if last_hand == this_hand {
-//             efficiency *= 0.25;
-//
-//             if this_finger == last_finger {
-//                 efficiency *= 0.50;
-//
-//                 if row_distance == 1 {
-//                     efficiency *= 0.75;
-//                 } else if row_distance == 2 {
-//                     efficiency *= 0.50;
-//                 } else if row_distance == 3 {
-//                     efficiency *= 0.25;
-//                 }
-//             }
-//
-//             if this_finger != last_finger {
-//                 let finger_distance = this_finger.get_num().abs_diff(last_finger.get_num());
-//
-//                 if finger_distance == 1 {
-//                     if row_distance == 2 {
-//                         efficiency *= 0.5;
-//                     } else if row_distance == 3 {
-//                         efficiency *= 0.75;
-//                     }
-//                 }
-//
-//                 if this_row != last_row {
-//                     efficiency *= 0.50;
-//                 }
-//             }
-//         }
-//
-//         if last_hand == Hand::Right
-//             && this_hand == Hand::Right
-//             && (last_col == Col::Eleven || last_col == Col::Twelve)
-//         {
-//             efficiency *= 0.75;
-//
-//             if last_row == Row::Above || last_row == Row::Num {
-//                 efficiency *= 0.25;
-//             }
-//         }
-//
-//         self.last_slot_idx = Some(slot_idx);
-//
-//         return efficiency;
-//     }
-//
-//     // TODO: Is there a better way to handle this? There should be some result return you can
-//     // use to say "I did a new evaluation" or "I have already been evaluated"
-//     // You could maybe make this return a corpus err and include already evaluated
-//     pub fn eval(&mut self, corpus: &[String]) {
-//         if self.evaluated {
-//             return;
-//         }
-//
-//         self.score = 0.0;
-//         self.clear_last_slot();
-//
-//         for entry in corpus {
-//             for b in entry.as_bytes() {
-//                 self.score += self.get_efficiency(*b);
-//             }
-//         }
-//
-//         self.evaluated = true;
-//     }
-//
-//     pub fn get_score(&self) -> f64 {
-//         return self.score;
-//     }
-//
-//     // TODO: This is fine for drafting but needs a rework for more serious use
-//     pub fn display_keyboard(&self) {
-//         let mut number_vec: Vec<char> = Vec::new();
-//         let mut above_vec: Vec<char> = Vec::new();
-//         let mut home_vec: Vec<char> = Vec::new();
-//         let mut below_vec: Vec<char> = Vec::new();
-//
-//         for slot in &self.keyslots {
-//             let this_row = slot.get_row();
-//             let this_key = slot.get_key().get_base() as char;
-//
-//             if this_row == Row::Num {
-//                 number_vec.push(this_key);
-//             } else if this_row == Row::Above {
-//                 above_vec.push(this_key);
-//             } else if this_row == Row::Home {
-//                 home_vec.push(this_key);
-//             } else if this_row == Row::Below {
-//                 below_vec.push(this_key);
-//             }
-//         }
-//
-//         println!("{:?}", number_vec);
-//         println!("{:?}", above_vec);
-//         println!("{:?}", home_vec);
-//         println!("{:?}", below_vec);
-//     }
-// }

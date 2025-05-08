@@ -152,7 +152,6 @@ impl Population {
     // TODO: When incrementing generations, should return an error if max usize is exceeded
     // The caller can then do what it wants with that. The mutate function should not clear the
     // climbers
-    // TODO: Contains a clone
     // TODO: Format string in keyboard evaluation should be based on digits in total population
     // size
     // PERF: We generate a random starting selection so the edge case doesn't always default to the
@@ -223,12 +222,7 @@ impl Population {
         return Ok(());
     }
 
-    // TODO: Re-arranging the population Vec is probably not the best way to do this
     // TODO: Long function
-    // TODO: The saturating sub is extra
-    // TODO: The score averages are only useful for debugging
-    // TODO: Duplicates are not being removed. I guess just do the manual comparison. To test, use
-    // a small corpus and high iterations
     // NOTE: Removing duplicates can cause the amount of available climbers to be below what is
     // intended. This is allowed to happen without error because the population is replenished
     // during the mutation phase
@@ -413,7 +407,13 @@ impl IdSpawner {
     }
 }
 
-// TODO: Function too long
+// PERF: Some of this calculation is per iteration and could be sectioned out
+// TODO: Function too long. But don't want to chip away too much without knowing how it will be
+// displayed
+// NOTE: Changing one key at a time works best. If you change two keys, the algorithm will find
+// bigger changes less frequently. This causes the decay to continue for about as many
+// iterations as it would if doing only one step, but fewer improvements will be found,
+// causing the improvement at the end of the hill climbing step to be lower
 pub fn hill_climb(
     rng: &mut SmallRng,
     keyboard: &Keyboard,
@@ -421,15 +421,12 @@ pub fn hill_climb(
     iter: usize,
 ) -> Result<Keyboard> {
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
-    // TODO: This should be a hard code
-    let clamp_value: f64 = 1.0 - (2.0_f64).powf(-53.0);
-    decay_factor = decay_factor.min(clamp_value);
-    if keyboard.is_elite() {
-        decay_factor *= decay_factor.powf(3.0);
-    }
-    println!("Climb Decay: {}", decay_factor);
+    const CLAMP_VALUE: f64 = 0.9999999999999999;
+    decay_factor = decay_factor.min(CLAMP_VALUE);
 
     if keyboard.is_elite() {
+        decay_factor *= decay_factor.powf(3.0);
+
         let r: f64 = rng.random_range(0.0..=1.0);
         if r >= decay_factor {
             println!("Score: {}", keyboard.get_score());
@@ -440,8 +437,6 @@ pub fn hill_climb(
 
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
 
-    // TODO: I'm not sure if this is actually better than cloning, though the intention is more
-    // explicit
     let mut kb: Keyboard = keyboard.clone();
     let start: f64 = kb.get_score();
 
@@ -454,10 +449,6 @@ pub fn hill_climb(
     for i in 1..=10000 {
         let kb_score: f64 = kb.get_score();
 
-        // Doing steps of one change works best. If you change two keys, the algorithm will find
-        // bigger changes less frequently. This causes the decay to continue for about as many
-        // iterations as it would if doing only one step, but fewer improvements will be found,
-        // causing the improvement at the end of the hill climbing step to be lower
         let mut climb_kb: Keyboard = kb.clone();
         climb_kb.shuffle(rng, 1);
         climb_kb.eval(corpus);
@@ -477,7 +468,6 @@ pub fn hill_climb(
         sum_weights += weight;
         weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
 
-        // TODO: Debug only
         print!(
             "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
             i, start, climb_kb_score, kb_score, avg, weighted_avg
@@ -488,12 +478,8 @@ pub fn hill_climb(
             kb = climb_kb;
         }
 
-        // NOTE: An edge case can occur where, if the first improvement is on the first iteration,
-        // the weighted average can be smaller than the unweighted due to floating point
-        // imprecision
-        // We get around this with an iteration minimum, but it does paste over the underlying
-        // issue
-        // TODO: Is there a better solution?
+        // NOTE: The i > 1 condition pastes over an edge case where the first improvement on the
+        // first iteration is smaller than the unweighted mean due to floating point imprecision
         let plateauing: bool = weighted_avg < avg && i > 1;
         let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
         if plateauing || not_starting {
@@ -501,7 +487,6 @@ pub fn hill_climb(
         }
     }
 
-    // TODO: For debugging
     println!();
     if kb.is_elite() {
         kb.display_keyboard();
@@ -518,14 +503,14 @@ fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     return new_value_for_new_avg + old_avg_for_new_avg;
 }
 
-fn get_weight(delta: f64, is_old: bool) -> f64 {
+fn get_weight(delta: f64, is_elite: bool) -> f64 {
     const K: f64 = 0.01;
 
     if delta <= 0.0 {
         return 1.0;
     }
 
-    if is_old {
+    if is_elite {
         // return 1.0 + K * delta.ln(); // Less scaling for positive values
         return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
     }

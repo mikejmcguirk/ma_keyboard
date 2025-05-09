@@ -8,23 +8,16 @@ pub struct Key {
     shift: u8,
     valid_locations: Vec<(usize, usize)>,
     is_static: bool,
+    template: KeyTemplate,
 }
 
 impl Key {
     pub fn from_template(template: KeyTemplate) -> Self {
         let base: u8 = template.get_base();
         let shift: u8 = template.get_shift();
-        let current_location: (usize, usize) = template.get_starting_location();
         let valid_locations: Vec<(usize, usize)> = template.get_valid_locations();
 
-        let is_static = if valid_locations.len() == 1 {
-            if current_location != valid_locations[0] {
-                panic!("Template has mismatch between current and valid location for static key");
-            }
-            true
-        } else {
-            false
-        };
+        let is_static = valid_locations.len() == 1;
 
         if valid_locations.len() == 0 {
             panic!("Template provided no valid locations");
@@ -35,6 +28,7 @@ impl Key {
             shift,
             valid_locations,
             is_static,
+            template,
         };
     }
 
@@ -68,5 +62,41 @@ impl Key {
 
     pub fn get_valid_location_at_idx(&self, idx: usize) -> (usize, usize) {
         return self.valid_locations[idx];
+    }
+
+    pub fn get_template(&self) -> KeyTemplate {
+        return self.template;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LightKey {
+    base: u8,
+    shift: u8,
+    template: KeyTemplate,
+}
+
+impl LightKey {
+    pub fn from_template(template: KeyTemplate) -> Self {
+        let base: u8 = template.get_base();
+        let shift: u8 = template.get_shift();
+
+        return Self {
+            base,
+            shift,
+            template,
+        };
+    }
+
+    pub fn get_base(&self) -> u8 {
+        return self.base;
+    }
+
+    pub fn get_shift(&self) -> u8 {
+        return self.shift;
+    }
+
+    pub fn get_template(&self) -> KeyTemplate {
+        return self.template;
     }
 }

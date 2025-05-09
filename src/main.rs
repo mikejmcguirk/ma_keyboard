@@ -65,6 +65,7 @@
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::manual_string_new)]
 #![allow(clippy::match_on_vec_items)]
+#![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_assert_message)]
 #![allow(clippy::missing_asserts_for_indexing)]
 #![allow(clippy::missing_panics_doc)]
@@ -77,7 +78,6 @@
 #![allow(clippy::panic)]
 #![allow(clippy::panic_in_result_fn)]
 #![allow(clippy::pathbuf_init_then_push)]
-#![allow(clippy::pattern_type_mismatch)]
 #![allow(clippy::question_mark)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::std_instead_of_alloc)]
@@ -88,6 +88,7 @@
 #![allow(clippy::type_complexity)] // Encourages premature factoring
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::uninlined_format_args)] // Trips when debug formatting is used
+#![allow(clippy::unnecessary_safety_comment)]
 #![allow(clippy::unnecessary_wraps)] // Lights up diags when trying to change code
 #![allow(clippy::unreadable_literal)] // Creates problems pasting literals
 #![allow(clippy::unused_self)]

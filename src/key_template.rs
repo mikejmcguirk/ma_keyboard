@@ -93,7 +93,7 @@ impl KeyTemplate {
             KeyTemplate::Nine => b'9',
             KeyTemplate::Zero => b'0',
             KeyTemplate::Minus => b'-',
-            KeyTemplate::Plus => b'+',
+            KeyTemplate::Plus => b'=',
             KeyTemplate::LBracket => b'[',
             KeyTemplate::RBracket => b']',
             KeyTemplate::Quote => b'\'',
@@ -150,6 +150,7 @@ impl KeyTemplate {
         };
     }
 
+    // TODO: If we put J in a corner, that his implications for Vim controls
     #[expect(clippy::match_same_arms)]
     pub fn get_valid_locations(self) -> Vec<(usize, usize)> {
         return match self {
@@ -172,30 +173,30 @@ impl KeyTemplate {
             KeyTemplate::ForwardSlash => vec![(2, 10)],
             KeyTemplate::SemiColon => vec![(1, 5), (3, 4)],
             KeyTemplate::Quote => vec![(1, 5), (3, 4)],
-            KeyTemplate::Q => alpha_slots(&vec![(1, 0)]),
-            KeyTemplate::W => alpha_slots(&vec![(1, 1)]),
-            KeyTemplate::E => alpha_slots(&vec![(1, 2)]),
+            KeyTemplate::Q => not_home(&vec![(1, 0)]),
+            KeyTemplate::W => not_home(&vec![(1, 1)]),
+            KeyTemplate::E => vec![(2, 6), (2, 7)],
             KeyTemplate::R => alpha_slots(&vec![(1, 3)]),
             KeyTemplate::T => alpha_slots(&vec![(1, 4)]),
             KeyTemplate::Y => alpha_slots(&vec![(1, 5)]),
             KeyTemplate::U => alpha_slots(&vec![(1, 6)]),
             KeyTemplate::I => alpha_slots(&vec![(1, 7)]),
             KeyTemplate::O => alpha_slots(&vec![(1, 8)]),
-            KeyTemplate::P => alpha_slots(&vec![(1, 9)]),
-            KeyTemplate::A => alpha_slots(&vec![(2, 0)]),
+            KeyTemplate::P => not_home(&vec![(1, 9)]),
+            KeyTemplate::A => major_home_slots(&vec![(2, 0)]),
             KeyTemplate::S => alpha_slots(&vec![(2, 1)]),
             KeyTemplate::D => alpha_slots(&vec![(2, 2)]),
             KeyTemplate::F => alpha_slots(&vec![(2, 3)]),
             KeyTemplate::G => alpha_slots(&vec![(2, 4)]),
             KeyTemplate::H => alpha_slots(&vec![(2, 5)]),
-            KeyTemplate::J => alpha_slots(&vec![(2, 6)]),
+            KeyTemplate::J => vec![(1, 8), (1, 9), (3, 0), (3, 9)],
             KeyTemplate::K => alpha_slots(&vec![(2, 7)]),
             KeyTemplate::L => alpha_slots(&vec![(2, 8)]),
-            KeyTemplate::Z => alpha_slots(&vec![(3, 0)]),
-            KeyTemplate::X => alpha_slots(&vec![(3, 1)]),
+            KeyTemplate::Z => not_home(&vec![(3, 0)]),
+            KeyTemplate::X => not_home(&vec![(3, 1)]),
             KeyTemplate::C => alpha_slots(&vec![(3, 2)]),
-            KeyTemplate::V => alpha_slots(&vec![(3, 3)]),
-            KeyTemplate::B => alpha_slots(&vec![(3, 4)]),
+            KeyTemplate::V => not_home(&vec![(3, 3)]),
+            KeyTemplate::B => not_home(&vec![(3, 4)]),
             KeyTemplate::N => alpha_slots(&vec![(3, 5)]),
             KeyTemplate::M => alpha_slots(&vec![(3, 6)]),
         };
@@ -217,29 +218,29 @@ impl KeyTemplate {
             KeyTemplate::RBracket => (0, 11),
             KeyTemplate::Comma => (1, 0),
             KeyTemplate::Period => (1, 1),
-            KeyTemplate::A => (1, 2),
+            KeyTemplate::A => (2, 2),
             KeyTemplate::B => (1, 3),
             KeyTemplate::C => (1, 4),
             KeyTemplate::SemiColon => (1, 5),
             KeyTemplate::D => (1, 6),
-            KeyTemplate::E => (1, 7),
+            KeyTemplate::E => (2, 7),
             KeyTemplate::F => (1, 8),
-            KeyTemplate::G => (1, 9),
+            KeyTemplate::G => (1, 2),
             KeyTemplate::Minus => (1, 10),
             KeyTemplate::Plus => (1, 11),
             KeyTemplate::H => (2, 0),
             KeyTemplate::I => (2, 1),
-            KeyTemplate::J => (2, 2),
+            KeyTemplate::J => (1, 9),
             KeyTemplate::K => (2, 3),
             KeyTemplate::L => (2, 4),
             KeyTemplate::M => (2, 5),
             KeyTemplate::N => (2, 6),
-            KeyTemplate::O => (2, 7),
-            KeyTemplate::P => (2, 8),
-            KeyTemplate::Q => (2, 9),
+            KeyTemplate::O => (1, 7),
+            KeyTemplate::P => (3, 1),
+            KeyTemplate::Q => (3, 0),
             KeyTemplate::ForwardSlash => (2, 10),
-            KeyTemplate::R => (3, 0),
-            KeyTemplate::S => (3, 1),
+            KeyTemplate::R => (2, 9),
+            KeyTemplate::S => (2, 8),
             KeyTemplate::T => (3, 2),
             KeyTemplate::U => (3, 3),
             KeyTemplate::Quote => (3, 4),
@@ -270,6 +271,32 @@ impl KeyTemplate {
 fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
     let slot_groups: Vec<Vec<(usize, usize)>> =
         vec![top_row_alpha(), home_row_alpha(), bottom_row_alpha()];
+
+    let mut slot_groups_flat: Vec<(usize, usize)> = slot_groups.into_iter().flatten().collect();
+    slot_groups_flat.retain(|x| return !exclusions.contains(x));
+
+    return slot_groups_flat;
+}
+
+fn major_home_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut slots = vec![
+        (2, 0),
+        (2, 1),
+        (2, 2),
+        (2, 3),
+        (2, 6),
+        (2, 7),
+        (2, 8),
+        (2, 9),
+    ];
+
+    slots.retain(|x| return !exclusions.contains(x));
+
+    return slots;
+}
+
+fn not_home(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let slot_groups: Vec<Vec<(usize, usize)>> = vec![top_row_alpha(), bottom_row_alpha()];
 
     let mut slot_groups_flat: Vec<(usize, usize)> = slot_groups.into_iter().flatten().collect();
     slot_groups_flat.retain(|x| return !exclusions.contains(x));

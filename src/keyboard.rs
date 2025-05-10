@@ -29,6 +29,8 @@ pub struct Keyboard {
 // compile time, which is good, but it's exterior, which is bad
 // TODO: Need to rebuild the qwerty creation and add dvorak
 impl Keyboard {
+    const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
+
     pub fn create_origin(id_in: usize) -> Self {
         const NUM_ROW_CAPACITY: usize = 12;
         const TOP_ROW_CAPACITY: usize = 12;
@@ -36,19 +38,31 @@ impl Keyboard {
         const BOT_ROW_CAPACITY: usize = 10;
 
         let mut kb_tuple_vec: Vec<Vec<(u8, u8)>> = vec![
-            vec![(b' ', b' '); NUM_ROW_CAPACITY],
-            vec![(b' ', b' '); TOP_ROW_CAPACITY],
-            vec![(b' ', b' '); HOME_ROW_CAPACITY],
-            vec![(b' ', b' '); BOT_ROW_CAPACITY],
+            vec![Self::DEFAULT_KEY; NUM_ROW_CAPACITY],
+            vec![Self::DEFAULT_KEY; TOP_ROW_CAPACITY],
+            vec![Self::DEFAULT_KEY; HOME_ROW_CAPACITY],
+            vec![Self::DEFAULT_KEY; BOT_ROW_CAPACITY],
         ];
-
-        let tuple_keys: Vec<(u8, u8)> = Self::get_keys();
+        let mut tuple_keys: Vec<((u8, u8), Vec<(usize, usize)>)> = Self::get_keys();
 
         let mut kb_tuple_vec_len: usize = 0;
         for vec in &kb_tuple_vec {
             kb_tuple_vec_len += vec.len();
         }
-        assert_eq!(kb_tuple_vec_len, tuple_keys.len());
+        debug_assert_eq!(kb_tuple_vec_len, tuple_keys.len());
+
+        tuple_keys.sort_by(|a, b| {
+            return a
+                .1
+                .len()
+                .partial_cmp(&b.1.len())
+                .unwrap_or(std::cmp::Ordering::Equal);
+        });
+
+        let placed: bool = Self::place_keys(&mut kb_tuple_vec, &tuple_keys, 0);
+        debug_assert!(placed);
+
+        tuple_keys.retain(|x| return x.1.len() > 1);
 
         let mut kb_vec: Vec<Vec<Key>> = vec![
             Vec::with_capacity(NUM_ROW_CAPACITY),
@@ -112,105 +126,54 @@ impl Keyboard {
         };
     }
 
-    fn get_keys() -> Vec<(u8, u8)> {
+    fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
         return vec![
-            (b'a', b'A'),
-            (b'b', b'B'),
-            (b'c', b'C'),
-            (b'd', b'D'),
-            (b'e', b'E'),
-            (b'f', b'F'),
-            (b'g', b'G'),
-            (b'h', b'H'),
-            (b'i', b'I'),
-            (b'j', b'J'),
-            (b'k', b'K'),
-            (b'l', b'L'),
-            (b'm', b'M'),
-            (b'n', b'N'),
-            (b'o', b'O'),
-            (b'p', b'P'),
-            (b'q', b'Q'),
-            (b'r', b'R'),
-            (b's', b'S'),
-            (b't', b'T'),
-            (b'u', b'U'),
-            (b'v', b'V'),
-            (b'w', b'W'),
-            (b'x', b'X'),
-            (b'y', b'Y'),
-            (b'z', b'Z'),
-            (b',', b'<'),
-            (b'.', b'>'),
-            (b';', b':'),
-            (b'/', b'?'),
-            (b'1', b'!'),
-            (b'2', b'@'),
-            (b'3', b'#'),
-            (b'4', b'$'),
-            (b'5', b'%'),
-            (b'6', b'^'),
-            (b'7', b'&'),
-            (b'8', b'*'),
-            (b'9', b'('),
-            (b'0', b')'),
-            (b'-', b'_'),
-            (b'=', b'+'),
-            (b'[', b'{'),
-            (b']', b'}'),
-            (b'\'', b'"'),
+            ((b'a', b'A'), vec![(0, 0)]),
+            ((b'b', b'B'), vec![(0, 1)]),
+            ((b'c', b'C'), vec![(0, 2)]),
+            ((b'd', b'D'), vec![(0, 3)]),
+            ((b'e', b'E'), vec![(0, 4)]),
+            ((b'f', b'F'), vec![(0, 5)]),
+            ((b'g', b'G'), vec![(0, 6)]),
+            ((b'h', b'H'), vec![(0, 7)]),
+            ((b'i', b'I'), vec![(0, 8)]),
+            ((b'j', b'J'), vec![(0, 9)]),
+            ((b'k', b'K'), vec![(0, 10)]),
+            ((b'l', b'L'), vec![(0, 11)]),
+            ((b'm', b'M'), vec![(1, 0)]),
+            ((b'n', b'N'), vec![(1, 1)]),
+            ((b'o', b'O'), vec![(1, 10)]),
+            ((b'p', b'P'), vec![(1, 11)]),
+            ((b'q', b'Q'), vec![(2, 10)]),
+            ((b'r', b'R'), vec![(1, 5), (3, 4)]),
+            ((b's', b'S'), vec![(1, 5), (3, 4)]),
+            ((b't', b'T'), Self::not_home(&vec![(1, 0)])),
+            ((b'u', b'U'), Self::not_home(&vec![(1, 1)])),
+            ((b'v', b'V'), vec![(2, 6), (2, 7)]),
+            ((b'w', b'W'), Self::alpha_slots(&vec![(1, 3)])),
+            ((b'x', b'X'), Self::alpha_slots(&vec![(1, 4)])),
+            ((b'y', b'Y'), Self::alpha_slots(&vec![(1, 5)])),
+            ((b'z', b'Z'), Self::alpha_slots(&vec![(1, 6)])),
+            ((b',', b'<'), Self::alpha_slots(&vec![(1, 7)])),
+            ((b'.', b'>'), Self::alpha_slots(&vec![(1, 8)])),
+            ((b';', b':'), Self::not_home(&vec![(1, 9)])),
+            ((b'/', b'?'), Self::major_home_slots(&vec![(2, 0)])),
+            ((b'1', b'!'), Self::alpha_slots(&vec![(2, 1)])),
+            ((b'2', b'@'), Self::alpha_slots(&vec![(2, 2)])),
+            ((b'3', b'#'), Self::alpha_slots(&vec![(2, 3)])),
+            ((b'4', b'$'), Self::alpha_slots(&vec![(2, 4)])),
+            ((b'5', b'%'), Self::alpha_slots(&vec![(2, 5)])),
+            ((b'6', b'^'), vec![(1, 8), (1, 9), (3, 0), (3, 9)]),
+            ((b'7', b'&'), Self::alpha_slots(&vec![(2, 7)])),
+            ((b'8', b'*'), Self::alpha_slots(&vec![(2, 8)])),
+            ((b'9', b'('), Self::not_home(&vec![(3, 0)])),
+            ((b'0', b')'), Self::not_home(&vec![(3, 1)])),
+            ((b'-', b'_'), Self::alpha_slots(&vec![(3, 2)])),
+            ((b'=', b'+'), Self::not_home(&vec![(3, 3)])),
+            ((b'[', b'{'), Self::not_home(&vec![(3, 4)])),
+            ((b']', b'}'), Self::alpha_slots(&vec![(3, 5)])),
+            ((b'\'', b'"'), Self::alpha_slots(&vec![(3, 6)])),
         ];
-    }
-
-    fn get_valid_locations(key: (u8, u8)) -> Vec<(usize, usize)> {
-        return match key {
-            (b'a', b'A') => vec![(0, 0)],
-            (b'b', b'B') => vec![(0, 1)],
-            (b'c', b'C') => vec![(0, 2)],
-            (b'd', b'D') => vec![(0, 3)],
-            (b'e', b'E') => vec![(0, 4)],
-            (b'f', b'F') => vec![(0, 5)],
-            (b'g', b'G') => vec![(0, 6)],
-            (b'h', b'H') => vec![(0, 7)],
-            (b'i', b'I') => vec![(0, 8)],
-            (b'j', b'J') => vec![(0, 9)],
-            (b'k', b'K') => vec![(0, 10)],
-            (b'l', b'L') => vec![(0, 11)],
-            (b'm', b'M') => vec![(1, 0)],
-            (b'n', b'N') => vec![(1, 1)],
-            (b'o', b'O') => vec![(1, 10)],
-            (b'p', b'P') => vec![(1, 11)],
-            (b'q', b'Q') => vec![(2, 10)],
-            (b'r', b'R') => vec![(1, 5), (3, 4)],
-            (b's', b'S') => vec![(1, 5), (3, 4)],
-            (b't', b'T') => Self::not_home(&vec![(1, 0)]),
-            (b'u', b'U') => Self::not_home(&vec![(1, 1)]),
-            (b'v', b'V') => vec![(2, 6), (2, 7)],
-            (b'w', b'W') => Self::alpha_slots(&vec![(1, 3)]),
-            (b'x', b'X') => Self::alpha_slots(&vec![(1, 4)]),
-            (b'y', b'Y') => Self::alpha_slots(&vec![(1, 5)]),
-            (b'z', b'Z') => Self::alpha_slots(&vec![(1, 6)]),
-            (b',', b'<') => Self::alpha_slots(&vec![(1, 7)]),
-            (b'.', b'>') => Self::alpha_slots(&vec![(1, 8)]),
-            (b';', b':') => Self::not_home(&vec![(1, 9)]),
-            (b'/', b'?') => Self::major_home_slots(&vec![(2, 0)]),
-            (b'1', b'!') => Self::alpha_slots(&vec![(2, 1)]),
-            (b'2', b'@') => Self::alpha_slots(&vec![(2, 2)]),
-            (b'3', b'#') => Self::alpha_slots(&vec![(2, 3)]),
-            (b'4', b'$') => Self::alpha_slots(&vec![(2, 4)]),
-            (b'5', b'%') => Self::alpha_slots(&vec![(2, 5)]),
-            (b'6', b'^') => vec![(1, 8), (1, 9), (3, 0), (3, 9)],
-            (b'7', b'&') => Self::alpha_slots(&vec![(2, 7)]),
-            (b'8', b'*') => Self::alpha_slots(&vec![(2, 8)]),
-            (b'9', b'(') => Self::not_home(&vec![(3, 0)]),
-            (b'0', b')') => Self::not_home(&vec![(3, 1)]),
-            (b'-', b'_') => Self::alpha_slots(&vec![(3, 2)]),
-            (b'=', b'+') => Self::not_home(&vec![(3, 3)]),
-            (b'[', b'{') => Self::not_home(&vec![(3, 4)]),
-            (b']', b'}') => Self::alpha_slots(&vec![(3, 5)]),
-            (b'\'', b'"') => Self::alpha_slots(&vec![(3, 6)]),
-            _ => Vec::new(),
-        };
     }
 
     fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
@@ -294,6 +257,37 @@ impl Keyboard {
             (3, 8),
             (3, 9),
         ];
+    }
+
+    fn place_keys(
+        kb_vec: &mut Vec<Vec<(u8, u8)>>,
+        keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
+        idx: usize,
+    ) -> bool {
+        debug_assert!(keys[idx].1.len() > 0);
+
+        for placement in &keys[idx].1 {
+            let row: usize = placement.0;
+            let col: usize = placement.1;
+
+            if kb_vec[row][col] != Self::DEFAULT_KEY {
+                continue;
+            }
+
+            kb_vec[row][col] = keys[idx].0;
+
+            if idx == keys.len() - 1 {
+                return true;
+            }
+
+            if Self::place_keys(kb_vec, keys, idx + 1) {
+                return true;
+            }
+
+            kb_vec[row][col] = Self::DEFAULT_KEY;
+        }
+
+        return false;
     }
 
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {

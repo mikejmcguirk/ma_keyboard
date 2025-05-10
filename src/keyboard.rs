@@ -264,21 +264,19 @@ impl Keyboard {
         keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
         idx: usize,
     ) -> bool {
+        if idx == keys.len() - 1 {
+            return true;
+        }
         debug_assert!(keys[idx].1.len() > 0);
 
         for placement in &keys[idx].1 {
-            let row: usize = placement.0;
-            let col: usize = placement.1;
+            let (row, col) = *placement;
 
             if kb_vec[row][col] != Self::DEFAULT_KEY {
                 continue;
             }
 
             kb_vec[row][col] = keys[idx].0;
-
-            if idx == keys.len() - 1 {
-                return true;
-            }
 
             if Self::place_keys(kb_vec, keys, idx + 1) {
                 return true;

@@ -8,7 +8,7 @@ use {
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::{custom_err::CorpusErr, key::Key, keyboard::Keyboard, utils::write_err};
+use crate::{custom_err::CorpusErr, keyboard::Keyboard, utils::write_err};
 
 const MIN_ELITES: usize = 1;
 
@@ -246,17 +246,17 @@ impl Population {
         let mut dup_elites: usize = 0;
         for _ in 0..self.elite_cnt - 1 {
             let mut diff_found: bool = false;
-            let candidate_vec: &[Vec<Key>] = self.population[0].get_vec_ref();
-            let flat_candidate: Vec<&Key> = candidate_vec.iter().flatten().collect();
+            let candidate_vec: &[Vec<(u8, u8)>] = self.population[0].get_vec_ref();
+            let flat_candidate: Vec<&(u8, u8)> = candidate_vec.iter().flatten().collect();
 
             for climber in &self.climbers {
-                let climber_vec: &[Vec<Key>] = climber.get_vec_ref();
-                let flat_climber: Vec<&Key> = climber_vec.iter().flatten().collect();
+                let climber_vec: &[Vec<(u8, u8)>] = climber.get_vec_ref();
+                let flat_climber: Vec<&(u8, u8)> = climber_vec.iter().flatten().collect();
 
                 debug_assert_eq!(flat_candidate.len(), flat_climber.len());
 
                 for i in 0..flat_climber.len() {
-                    if flat_climber[i].get_base() != flat_candidate[i].get_base() {
+                    if flat_climber[i].0 != flat_candidate[i].0 {
                         diff_found = true;
                         break;
                     }
@@ -293,17 +293,17 @@ impl Population {
             population_score -= self.population[selection].get_score();
 
             let mut diff_found: bool = false;
-            let candidate_vec: &[Vec<Key>] = self.population[0].get_vec_ref();
-            let flat_candidate: Vec<&Key> = candidate_vec.iter().flatten().collect();
+            let candidate_vec: &[Vec<(u8, u8)>] = self.population[0].get_vec_ref();
+            let flat_candidate: Vec<&(u8, u8)> = candidate_vec.iter().flatten().collect();
 
             for climber in &self.climbers {
-                let climber_vec: &[Vec<Key>] = climber.get_vec_ref();
-                let flat_climber: Vec<&Key> = climber_vec.iter().flatten().collect();
+                let climber_vec: &[Vec<(u8, u8)>] = climber.get_vec_ref();
+                let flat_climber: Vec<&(u8, u8)> = climber_vec.iter().flatten().collect();
 
                 debug_assert_eq!(flat_candidate.len(), flat_climber.len());
 
                 for i in 0..flat_climber.len() {
-                    if flat_climber[i].get_base() != flat_candidate[i].get_base() {
+                    if flat_climber[i].0 != flat_candidate[i].0 {
                         diff_found = true;
                         break;
                     }

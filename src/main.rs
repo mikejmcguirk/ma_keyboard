@@ -56,6 +56,7 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::explicit_iter_loop)]
 #![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::float_cmp)]
 #![allow(clippy::indexing_slicing)]
 #![allow(clippy::items_after_statements)]
 #![allow(clippy::len_zero)]
@@ -101,8 +102,6 @@
 #![allow(clippy::verbose_file_reads)]
 
 mod custom_err;
-mod key;
-mod key_template;
 mod keyboard;
 mod population;
 mod setup;

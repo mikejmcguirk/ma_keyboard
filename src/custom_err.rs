@@ -6,6 +6,8 @@ pub enum CorpusErr {
     Io(io::Error),
 }
 
+// TODO: Is this okay?
+#[expect(clippy::pattern_type_mismatch)]
 impl fmt::Display for CorpusErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -15,6 +17,8 @@ impl fmt::Display for CorpusErr {
     }
 }
 
+// TODO: Is this okay?
+#[expect(clippy::pattern_type_mismatch)]
 impl Error for CorpusErr {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         return match self {

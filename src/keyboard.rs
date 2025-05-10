@@ -771,10 +771,17 @@ impl Keyboard {
             }
         }
 
+        // println!("left: {}, right: {}", self.left_uses, self.right_uses);
         let lr_diff: f64 = (self.left_uses - self.right_uses).abs();
         let max_usage: f64 = self.left_uses.max(self.right_uses);
-        let diff_pct: f64 = lr_diff / max_usage;
+        let diff_pct: f64 = (max_usage - lr_diff) / max_usage;
+        // println!(
+        //     "diff: {lr_diff}, max: {max_usage}, diff: {diff_pct}, score:{}",
+        //     self.score
+        // );
         self.score *= diff_pct;
+        // println!("New score: {}", self.score);
+        // println!();
 
         self.evaluated = true;
     }

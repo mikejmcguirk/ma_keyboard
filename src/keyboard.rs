@@ -17,6 +17,13 @@ pub struct Keyboard {
     is_elite: bool,
 }
 
+enum KeyCompare {
+    Mult(f64),
+    MultLeft(f64),
+    MultRight(f64),
+    Mismatch,
+}
+
 // TODO: A better architecture for this is to let the user bring in the valid keys from a config
 // file rather than actually altering the source code. So then error propagation would be the
 // better design
@@ -27,6 +34,12 @@ pub struct Keyboard {
 // data is correct. These methods are not meant to be portable
 impl Keyboard {
     const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
+    const INDEX: char = 'i';
+    const MIDDLE: char = 'm';
+    const RING: char = 'r';
+    const PINKY: char = 'p';
+    const LEFT: char = 'l';
+    const RIGHT: char = 'r';
 
     // TODO: No assertion message
     pub fn create_origin(id_in: usize) -> Self {
@@ -110,13 +123,17 @@ impl Keyboard {
             ((b'0', b')'), vec![(0, 9)]),
             ((b'[', b'{'), vec![(0, 10)]),
             ((b']', b'}'), vec![(0, 11)]),
-            ((b',', b'<'), vec![(1, 0), (3, 0)]),
-            ((b'.', b'>'), vec![(1, 1), (3, 1)]),
+            // ((b',', b'<'), vec![(1, 0), (3, 0)]),
+            ((b',', b'<'), Self::alpha_slots(&vec![(3, 7)])),
+            // ((b'.', b'>'), vec![(1, 1), (3, 1)]),
+            ((b'.', b'>'), Self::alpha_slots(&vec![(3, 8)])),
             ((b'-', b'_'), vec![(1, 10)]),
             ((b'=', b'+'), vec![(1, 11)]),
             ((b'/', b'?'), vec![(2, 10)]),
-            ((b';', b':'), vec![(3, 4)]),
-            ((b'\'', b'"'), vec![(1, 5)]),
+            // ((b';', b':'), vec![(3, 4)]),
+            ((b';', b':'), Self::alpha_slots(&vec![(2, 9)])),
+            // ((b'\'', b'"'), vec![(1, 5)]),
+            ((b'\'', b'"'), Self::alpha_slots(&vec![(2, 10)])),
             (
                 (b'a', b'A'),
                 Self::alpha_slots(&vec![(1, 0), (2, 0), (3, 0)]),
@@ -271,6 +288,7 @@ impl Keyboard {
             (1, 3),
             (1, 4),
             // (1, 5) is skipped so this can hold a symbol key
+            (1, 5),
             (1, 6),
             (1, 7),
             (1, 8),
@@ -300,6 +318,7 @@ impl Keyboard {
             (3, 2),
             (3, 3),
             // (3, 4) skipped so this can hold a symbol key
+            (3, 4),
             (3, 5),
             (3, 6),
             (3, 7),
@@ -436,322 +455,95 @@ impl Keyboard {
 
     // TODO: Unsure of how to handle space and return
     // TODO: How to factor out...
-    fn get_efficiency(&mut self, input: u8) -> f64 {
+    fn get_efficiency(&mut self, this_key_idx: u8) -> f64 {
         const DEFAULT_EFFICIENCY: f64 = 1.0;
 
-        let key_idx: (usize, usize) =
-            if let Some(&Some(slot)) = self.slot_ascii.get(input as usize) {
+        let this_key: (usize, usize) =
+            if let Some(&Some(slot)) = self.slot_ascii.get(this_key_idx as usize) {
                 slot
             } else {
-                self.last_key_idx = None;
                 self.prev_key_idx = self.last_key_idx;
+                self.last_key_idx = None;
 
                 return 0.0;
             };
 
-        let this_row: usize = key_idx.0;
-        let this_col: usize = key_idx.1;
-        let this_finger: char = Self::get_finger(this_col);
-
-        let mut efficiency: f64 = DEFAULT_EFFICIENCY;
-
-        // let this_hand_right: bool = this_col >= 5;
+        let this_row: usize = this_key.0;
+        let this_col: usize = this_key.1;
         let this_hand: char = Self::get_hand(this_col);
-        if this_hand == 'r' {
+        let mut eff: f64 = DEFAULT_EFFICIENCY;
+
+        if this_hand == Self::RIGHT {
             self.right_uses += 1.0;
         } else {
             self.left_uses += 1.0;
         }
 
-        // Generally punish ring/pinky usage
-        if this_finger == 'r' || this_finger == 'p' {
-            efficiency *= 0.6;
-        }
+        eff *= Self::get_single_key_mult(this_key);
 
-        // Generally disfavor the bottom row
-        if this_row == 3 {
-            efficiency *= 0.1;
-        }
+        let last_compare: Option<KeyCompare> = self
+            .last_key_idx
+            .map(|last_key| return Self::compare_keys(this_key, last_key, true));
 
-        // Generally favor the home row
-        if this_row == 2 {
-            efficiency *= 2.0;
-        }
+        let has_bigram: bool = !(matches!(last_compare, None | Some(KeyCompare::Mismatch)));
+        let prev_compare: Option<KeyCompare> = if has_bigram {
+            None
+        } else {
+            self.prev_key_idx
+                .map(|prev_key| return Self::compare_keys(this_key, prev_key, false))
+        };
 
-        if this_row == 1 {
-            efficiency *= 0.6;
-        }
+        let has_skipgram: bool = !(matches!(prev_compare, None | Some(KeyCompare::Mismatch)));
 
-        if (4..=5).contains(&this_col) {
-            efficiency *= 0.2;
-        }
-
-        // Avoid using the same finger twice in a row
-        if let Some(last_key) = self.last_key_idx {
-            let last_col: usize = last_key.1;
-            let last_finger: char = Self::get_finger(last_col);
-
-            if this_finger == last_finger {
-                efficiency *= 0.4;
-            }
-        }
-
-        // Further penalize same finger usage if it moves rows
-        let mut row_move_deduction: f64 = 1.0;
-        if let Some(last_key) = self.last_key_idx {
-            let last_row: usize = last_key.0;
-            let last_col: usize = last_key.1;
-            let last_finger: char = Self::get_finger(last_col);
-
-            if this_finger == last_finger {
-                let row_diff = last_row.abs_diff(this_row);
-                if row_diff == 1 {
-                    row_move_deduction = 0.8;
-                } else if row_diff == 2 {
-                    row_move_deduction = 0.6;
-                } else if row_diff == 3 {
-                    row_move_deduction = 0.4;
-                }
-            }
-        } else if let Some(prev_key) = self.prev_key_idx {
-            let prev_row: usize = prev_key.0;
-            let prev_col: usize = prev_key.1;
-            let prev_finger: char = Self::get_finger(prev_col);
-
-            if this_finger == prev_finger {
-                let row_diff = prev_row.abs_diff(this_row);
-                if row_diff == 1 {
-                    row_move_deduction = 0.9;
-                } else if row_diff == 2 {
-                    row_move_deduction = 0.8;
-                } else if row_diff == 3 {
-                    row_move_deduction = 0.7;
-                }
-            }
-        } else if this_row.abs_diff(2) == 1 {
-            row_move_deduction = 0.8;
-        } else if this_row.abs_diff(2) == 2 {
-            row_move_deduction = 0.6;
-        }
-
-        efficiency *= row_move_deduction;
-
-        let mut index_move_deduction = 1.0;
-        if this_finger == 'i' {
-            if let Some(last_key) = self.last_key_idx {
-                let last_row: usize = last_key.0;
-                let last_col: usize = last_key.1;
-
-                if (3..5).contains(&this_col)
-                    && (3..5).contains(&last_col)
-                    && this_col.abs_diff(last_col) == 1
-                {
-                    let b: bool =
-                        (this_row == 3 && this_col == 4) || (last_row == 3 && last_col == 4);
-                    let tv: bool =
-                        (this_row == 1 && this_col == 4 && last_row == 3 && last_col == 3)
-                            || (this_row == 3 && this_col == 3 && last_row == 1 && last_col == 4);
-
-                    if b {
-                        index_move_deduction = 0.4;
-                    } else if !tv {
-                        index_move_deduction = 0.8;
-                    }
-                }
-
-                if (5..7).contains(&this_col)
-                    && (5..7).contains(&last_col)
-                    && this_col.abs_diff(last_col) == 1
-                {
-                    let un: bool =
-                        (this_row == 1 && this_col == 6 && last_row == 3 && last_col == 5)
-                            || (this_row == 3 && this_col == 5 && last_row == 1 && last_col == 6);
-                    let y: bool =
-                        (this_row == 1 && this_col == 5) || (last_row == 1 && last_col == 5);
-
-                    if y {
-                        index_move_deduction = 0.4;
-                    } else if !un {
-                        index_move_deduction = 0.8;
-                    }
-                }
-
-                efficiency *= index_move_deduction;
-            } else if let Some(prev_key) = self.prev_key_idx {
-                let prev_row: usize = prev_key.0;
-                let prev_col: usize = prev_key.1;
-
-                if (3..5).contains(&this_col)
-                    && (3..5).contains(&prev_col)
-                    && this_col.abs_diff(prev_col) == 1
-                {
-                    let b: bool =
-                        (this_row == 3 && this_col == 4) || (prev_row == 3 && prev_col == 4);
-                    let tv: bool =
-                        (this_row == 1 && this_col == 4 && prev_row == 3 && prev_col == 3)
-                            || (this_row == 3 && this_col == 3 && prev_row == 1 && prev_col == 4);
-
-                    if b {
-                        index_move_deduction *= 0.7;
-                    } else if !tv {
-                        index_move_deduction = 0.9;
-                    }
-                }
-
-                if (5..7).contains(&this_col)
-                    && (5..7).contains(&prev_col)
-                    && this_col.abs_diff(prev_col) == 1
-                {
-                    let un: bool =
-                        (this_row == 1 && this_col == 6 && prev_row == 3 && prev_col == 5)
-                            || (this_row == 3 && this_col == 5 && prev_row == 1 && prev_col == 6);
-                    let y: bool =
-                        (this_row == 1 && this_col == 5) || (prev_row == 1 && prev_col == 5);
-
-                    if y {
-                        index_move_deduction = 0.7;
-                    } else if !un {
-                        index_move_deduction = 0.9;
-                    }
-                }
-
-                efficiency *= index_move_deduction;
-            }
-        }
-
-        // The keyboard is sloped against the natural shape of the left hand
-        if this_hand == 'l' && row_move_deduction < 1.0 {
-            efficiency *= 0.8;
-        }
-
-        // Scissors and rolls
-        if let Some(last_key) = self.last_key_idx {
-            let last_row: usize = last_key.0;
-            let last_col: usize = last_key.1;
-            let last_finger: char = Self::get_finger(last_col);
-            let last_hand: char = Self::get_hand(last_col);
-
-            if this_hand == last_hand && last_row != this_row && last_finger != this_finger {
-                let is_good_combo: bool = if last_row > this_row {
-                    Self::is_good_combo(last_finger, this_finger)
-                } else {
-                    Self::is_good_combo(this_finger, last_finger)
-                };
-
-                if this_row > last_row {
-                    efficiency *= 0.8;
-                }
-
-                if !is_good_combo {
-                    efficiency *= 0.8;
-                }
-
-                if is_good_combo
-                    && Self::get_center_distance(this_row) < Self::get_center_distance(last_row)
-                {
-                    efficiency *= 1.2;
-                }
-
-                if last_row == this_row
-                    && Self::get_center_distance(this_row) < Self::get_center_distance(last_row)
-                {
-                    efficiency *= 1.8;
-                }
-
-                if last_row == this_row
-                    && Self::get_center_distance(this_row) > Self::get_center_distance(last_row)
-                {
-                    efficiency *= 1.2;
-                }
-
-                //Scissor
-                // TODO: Not totally sure how to grade this. Even good combo scissors on the
-                // ring/pinky tend to be tough, but they're okay with the middle and index if it's
-                // a good combo
-                // 3 row scissors don't need extra deduction because we already have addressed row
-                //   jumps
-                if last_col.abs_diff(this_col) == 1 && last_row.abs_diff(this_row) > 1 {
-                    if is_good_combo {
-                        efficiency *= 0.6;
-                    } else {
-                        efficiency *= 0.1;
-                    }
-                }
-
-                // TODO: This does not handle a case like DT
-                if last_col.abs_diff(this_col) == 1
-                    && last_row.abs_diff(this_row) == 1
-                    && !is_good_combo
-                {
-                    efficiency *= 0.8;
-                }
-            }
-        } else if let Some(prev_key) = self.prev_key_idx {
-            let prev_row: usize = prev_key.0;
-            let prev_col: usize = prev_key.1;
-            let prev_finger: char = Self::get_finger(prev_col);
-            let prev_hand: char = Self::get_hand(prev_col);
-
-            if this_hand == prev_hand && prev_row != this_row && prev_finger != this_finger {
-                let is_good_combo: bool = if prev_row > this_row {
-                    Self::is_good_combo(prev_finger, this_finger)
-                } else {
-                    Self::is_good_combo(this_finger, prev_finger)
-                };
-
-                if this_row > prev_row {
-                    efficiency *= 0.9;
-                }
-
-                if !is_good_combo {
-                    efficiency *= 0.9;
-                }
-
-                if is_good_combo
-                    && Self::get_center_distance(this_row) < Self::get_center_distance(prev_row)
-                {
-                    efficiency *= 1.1;
-                }
-
-                if prev_row == this_row
-                    && Self::get_center_distance(this_row) < Self::get_center_distance(prev_row)
-                {
-                    efficiency *= 1.4;
-                }
-
-                if prev_row == this_row
-                    && Self::get_center_distance(this_row) > Self::get_center_distance(prev_row)
-                {
-                    efficiency *= 1.1;
-                }
-                //Scissor
-                // TODO: Not totally sure how to grade this. Even good combo scissors on the
-                // ring/pinky tend to be tough, but they're okay with the middle and index if it's
-                // a good combo
-                // 3 row scissors don't need extra deduction because we already have addressed row
-                //   jumps
-                if prev_col.abs_diff(this_col) == 1 && prev_row.abs_diff(this_row) > 1 {
-                    if is_good_combo {
-                        efficiency *= 0.8;
-                    } else {
-                        efficiency *= 0.5;
-                    }
-                }
-
-                // TODO: This does not handle a case like DT
-                if prev_col.abs_diff(this_col) == 1
-                    && prev_row.abs_diff(this_row) == 1
-                    && !is_good_combo
-                {
-                    efficiency *= 0.9;
-                }
-            }
-        }
-
-        self.last_key_idx = Some(key_idx);
         self.prev_key_idx = self.last_key_idx;
+        self.last_key_idx = Some(this_key);
 
-        return efficiency;
+        let mut has_left_move: bool = false;
+        // TODO: Outline this probably
+        // TODO: This should also early return when complete
+        if !(has_bigram || has_skipgram) {
+            let dist_from_home: usize = this_row.abs_diff(2);
+
+            if dist_from_home == 1 {
+                eff *= 0.8;
+            } else if dist_from_home == 2 {
+                eff *= 0.6;
+            }
+
+            if this_hand == 'l' && dist_from_home > 0 {
+                // TODO: tecnically correct but confusing naming
+                has_left_move = true;
+            }
+        }
+
+        if has_bigram {
+            match last_compare {
+                Some(KeyCompare::Mult(x)) => eff *= x,
+                Some(KeyCompare::MultLeft(x)) => {
+                    eff *= x;
+                    has_left_move = true;
+                }
+                _ => {}
+            }
+        } else if has_skipgram {
+            match prev_compare {
+                Some(KeyCompare::Mult(x)) => eff *= x,
+                Some(KeyCompare::MultLeft(x)) => {
+                    eff *= x;
+                    has_left_move = true;
+                }
+                _ => {}
+            }
+        }
+
+        // The diagonal of the left keys goes against the shape of the hand
+        if has_left_move && has_skipgram {
+            eff *= 0.9;
+        } else if has_left_move {
+            eff *= 0.8;
+        }
+
+        return eff;
     }
 
     pub fn eval(&mut self, corpus: &[String]) {
@@ -771,17 +563,10 @@ impl Keyboard {
             }
         }
 
-        // println!("left: {}, right: {}", self.left_uses, self.right_uses);
         let lr_diff: f64 = (self.left_uses - self.right_uses).abs();
         let max_usage: f64 = self.left_uses.max(self.right_uses);
         let diff_pct: f64 = (max_usage - lr_diff) / max_usage;
-        // println!(
-        //     "diff: {lr_diff}, max: {max_usage}, diff: {diff_pct}, score:{}",
-        //     self.score
-        // );
         self.score *= diff_pct;
-        // println!("New score: {}", self.score);
-        // println!();
 
         self.evaluated = true;
     }
@@ -793,7 +578,7 @@ impl Keyboard {
             _ => 'u',
         };
     }
-    // TODO: Make an enum?
+
     fn get_finger(col: usize) -> char {
         return match col {
             0 | 9..=11 => 'p',
@@ -804,8 +589,106 @@ impl Keyboard {
         };
     }
 
-    fn is_good_combo(top: char, bot: char) -> bool {
-        return bot == 'i' || top == 'm' || (top == 'r' && bot == 'p');
+    // NOTE: The algorithm cannot inherently know that the ring and pinky are less dexterous than
+    // the index and middle fingers. Rather than make micro adjustments through, just do a blanket
+    // deduction here. The deduction for ring and pinky is small because, if it is too large, the
+    // algorithm will start creating SFBs of common pairs on the index and middle fingers to avoid
+    // the ring and pinky fingers. The deduction is also the same for both the ring and middle
+    // fingers, because some people have a different one of the two they prefer
+    // TODO: One edit you could make the the ring/pinky adjustment is, add a larger downgrade if
+    // they move
+    // NOTE: Because the algorithm does not inherently know that the bottom and number rows are
+    // harder to reach than the home and top alpha rows, a deduction is added here. Like the
+    // ring/pinky deduction, it is not overly large in order to avoid the algorithm putting keys in
+    // convoluted places. Because the algorithm later penalizes moving off the home row, a
+    // generalized favoritism for it is not added here
+    fn get_single_key_mult(key: (usize, usize)) -> f64 {
+        let row: usize = key.0;
+        let col: usize = key.1;
+        let finger: char = Self::get_finger(col);
+
+        let mut eff_mult: f64 = 1.0;
+
+        if finger == Self::RING || finger == Self::PINKY {
+            eff_mult *= 0.8;
+        }
+
+        if row == 3 {
+            eff_mult *= 0.8;
+        } else if row == 0 {
+            eff_mult *= 0.6;
+        }
+
+        return eff_mult;
+    }
+
+    fn compare_keys(key_x: (usize, usize), key_y: (usize, usize), is_last: bool) -> KeyCompare {
+        let key_x_col: usize = key_x.1;
+        let key_x_hand: char = Self::get_hand(key_x_col);
+        let key_y_col: usize = key_y.1;
+        let key_y_hand: char = Self::get_hand(key_y_col);
+        if key_x_hand != key_y_hand {
+            return KeyCompare::Mismatch;
+        }
+
+        let key_x_row: usize = key_x.0;
+        let key_y_row: usize = key_y.0;
+        let key_x_finger: char = Self::get_finger(key_x_col);
+        let key_y_finger: char = Self::get_finger(key_y_col);
+        let mut mult: f64 = 1.0;
+
+        let row_eff: f64 = Self::get_repeat_row_mult(key_x_row, key_y_row, is_last);
+        mult *= row_eff;
+        // NOTE: These extension effeciencies are meant to track the impact of moving the index or
+        // the pinky off the home columns on the entire hand
+        let index_ext_eff: f64 = Self::handle_index(key_x, key_y, is_last);
+        mult *= index_ext_eff;
+        mult *= Self::handle_right_pinky(key_x, key_y, is_last);
+
+        let mut index_mv_eff: f64 = 1.0;
+        if key_x_finger != key_y_finger {
+            mult *= Self::get_base_sf_penalty(is_last);
+
+            index_mv_eff = Self::get_repeat_col_mult(key_x_col, key_y_col, is_last);
+            mult *= index_mv_eff;
+        } else if key_x_row == key_y_row {
+            mult *= Self::check_roll(key_x_col, key_y_col, is_last);
+        } else {
+            // No need here to save a value to check left hand efficiency. This branch requires a
+            // row move, which has already been checked
+            mult *= Self::check_combo(key_x, key_y, is_last);
+            mult *= Self::check_scissor(key_x_col, key_y_col, key_x_row, key_y_row, is_last);
+        }
+
+        let did_mv: bool = row_eff < 1.0 || index_ext_eff < 1.0 || index_mv_eff < 1.0;
+        if key_x_hand == Self::LEFT && did_mv {
+            return KeyCompare::MultLeft(mult);
+        }
+
+        return KeyCompare::Mult(mult);
+    }
+
+    fn check_combo(this_key: (usize, usize), that_key: (usize, usize), is_last: bool) -> f64 {
+        let this_row: usize = this_key.0;
+        let that_row: usize = that_key.0;
+        let this_finger: char = Self::get_finger(this_key.1);
+        let that_finger: char = Self::get_finger(that_key.1);
+
+        let (top, bot): (char, char) = if this_row > that_row {
+            (this_finger, that_finger)
+        } else if that_row > this_row {
+            (that_finger, this_finger)
+        } else {
+            panic!("Trying to get combo of equal rows");
+        };
+
+        if bot == Self::INDEX || top == Self::MIDDLE || (top == Self::RING && bot == Self::PINKY) {
+            return 1.0;
+        } else if is_last {
+            return 0.6;
+        } else {
+            return 0.8;
+        }
     }
 
     fn get_center_distance(row: usize) -> usize {
@@ -813,6 +696,169 @@ impl Keyboard {
             4 - row
         } else {
             row - 5
+        };
+    }
+
+    fn get_repeat_row_mult(this_row: usize, last_row: usize, last: bool) -> f64 {
+        let row_diff: usize = this_row.abs_diff(last_row);
+
+        return match (row_diff, last) {
+            (0, true) => 0.8,
+            (1, true) => 0.6,
+            (2, true) => 0.4,
+            (3, true) => 0.2,
+            (0, false) => 0.9,
+            (1, false) => 0.8,
+            (2, false) => 0.7,
+            (3, false) => 0.6,
+            _ => 1.0,
+        };
+    }
+
+    fn handle_index(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
+        if !((4..=5).contains(&this.1) || (4..=5).contains(&last.1)) {
+            return 1.0;
+        }
+
+        // These motions are straightforward
+        let this_t: bool = this.0 == 1 && this.1 == 4;
+        let last_t: bool = last.0 == 1 && last.1 == 4;
+        let this_v: bool = this.0 == 3 && this.1 == 3;
+        let last_v: bool = last.0 == 3 && last.1 == 3;
+        let tv: bool = (this_t && last_v) || (this_v && last_t);
+        let this_u: bool = this.0 == 1 && this.1 == 6;
+        let last_u: bool = last.0 == 1 && last.1 == 6;
+        let this_n: bool = this.0 == 3 && this.1 == 5;
+        let last_n: bool = last.0 == 3 && last.1 == 5;
+        let un: bool = (this_u && last_n) || (this_n && last_u);
+        if tv || un {
+            return 1.0;
+        }
+
+        if this_t || last_t || this_n || last_n {
+            if is_last {
+                return 0.6;
+            } else {
+                return 0.8;
+            }
+        }
+
+        // B or Y
+        let is_b: bool = this.1 == 4 && this.0 == 3 || last.1 == 4 && last.0 == 3;
+        let is_y: bool = this.1 == 5 && this.0 == 1 || last.1 == 5 && last.0 == 1;
+        if is_b || is_y {
+            if is_last {
+                return 0.2;
+            } else {
+                return 0.6;
+            }
+        }
+
+        // B or Y
+        let is_g: bool = this.1 == 4 && this.0 == 2 || last.1 == 4 && last.0 == 2;
+        let is_h: bool = this.1 == 5 && this.0 == 2 || last.1 == 5 && last.0 == 2;
+        if is_g || is_h {
+            if is_last {
+                return 0.8;
+            } else {
+                return 0.9;
+            }
+        }
+
+        return 1.0;
+    }
+
+    fn handle_right_pinky(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
+        if !((10..=11).contains(&this.1) || (10..=11).contains(&last.1)) {
+            return 1.0;
+        }
+
+        return match (this.0, this.1, last.0, last.1, is_last) {
+            (0, 10, _, _, true) => 0.2,
+            (0, 11, _, _, true) => 0.2,
+            (1, 10, _, _, true) => 0.6,
+            (1, 11, _, _, true) => 0.4,
+            (2, 10, _, _, true) => 0.8,
+            (0, 10, _, _, false) => 0.6,
+            (0, 11, _, _, false) => 0.6,
+            (1, 10, _, _, false) => 0.8,
+            (1, 11, _, _, false) => 0.7,
+            (2, 10, _, _, false) => 0.9,
+            (_, _, 0, 10, true) => 0.2,
+            (_, _, 0, 11, true) => 0.2,
+            (_, _, 1, 10, true) => 0.6,
+            (_, _, 1, 11, true) => 0.4,
+            (_, _, 2, 10, true) => 0.8,
+            (_, _, 0, 10, false) => 0.6,
+            (_, _, 0, 11, false) => 0.6,
+            (_, _, 1, 10, false) => 0.8,
+            (_, _, 1, 11, false) => 0.7,
+            (_, _, 2, 10, false) => 0.9,
+            _ => 1.0,
+        };
+    }
+
+    fn get_base_sf_penalty(is_last: bool) -> f64 {
+        if is_last {
+            return 0.6;
+        } else {
+            return 0.8;
+        }
+    }
+
+    // NOTE: These are more severely devalued because the algorithm inherently likes to put
+    // important keys here
+    // TODO: But there maybe an alternative solution, if we factor in the move for the stretch back
+    // as well
+    // TODO: Does this need to handle YB specifically?
+    fn get_repeat_col_mult(this_col: usize, last_col: usize, last: bool) -> f64 {
+        let this_center_dist: usize = Self::get_center_distance(this_col);
+        let last_center_dist: usize = Self::get_center_distance(last_col);
+        let center_diff: usize = this_center_dist.abs_diff(last_center_dist);
+
+        return match (center_diff, last) {
+            (1, true) => 0.8,
+            (2, true) => 0.6,
+            (1, false) => 0.9,
+            (2, false) => 0.8,
+            _ => 1.0,
+        };
+    }
+
+    // TODO: Oddity - Middle > Index rolls on the right hand aren't the best but they're fine on
+    // the left
+    fn check_roll(this_col: usize, last_col: usize, last: bool) -> f64 {
+        let this_center_dist: usize = Self::get_center_distance(this_col);
+        let last_center_dist: usize = Self::get_center_distance(last_col);
+
+        return match (this_center_dist < last_center_dist, last) {
+            (true, true) => 1.2,
+            (true, false) => 1.1,
+            _ => 1.0,
+        };
+    }
+
+    // NOTE: This function assumes we've already verified that we're on the same hand
+    // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
+    // handle using the normal rules
+    // TODO: Long function signature
+    fn check_scissor(
+        this_col: usize,
+        last_col: usize,
+        this_row: usize,
+        last_row: usize,
+        last: bool,
+    ) -> f64 {
+        if this_col.abs_diff(last_col) > 1 {
+            return 1.0;
+        }
+
+        return match (this_row.abs_diff(last_row), last) {
+            (2, true) => 0.6,
+            (3, true) => 0.4,
+            (2, false) => 0.8,
+            (3, false) => 0.7,
+            _ => 1.0,
         };
     }
 

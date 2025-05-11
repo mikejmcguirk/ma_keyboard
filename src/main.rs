@@ -48,6 +48,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::comparison_chain)]
 #![allow(clippy::create_dir)]
 #![allow(clippy::default_numeric_fallback)]
 #![allow(clippy::double_must_use)]

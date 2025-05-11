@@ -103,6 +103,7 @@
 #![allow(clippy::verbose_file_reads)]
 
 mod custom_err;
+mod display;
 mod keyboard;
 mod population;
 mod setup;
@@ -126,11 +127,11 @@ fn main() -> ExitCode {
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
-    println!();
-    println!("{NAME_DASHES}");
-    println!("{PROG_NAME}");
-    println!("{NAME_DASHES}");
-    println!();
+    // println!();
+    // println!("{NAME_DASHES}");
+    // println!("{PROG_NAME}");
+    // println!("{NAME_DASHES}");
+    // println!();
 
     let log_dir: PathBuf = match create_log_dir() {
         Ok(dir) => dir,
@@ -140,8 +141,8 @@ fn main() -> ExitCode {
         }
     };
 
-    println!("Log Path: {}", log_dir.display());
-    println!();
+    // println!("Log Path: {}", log_dir.display());
+    // println!();
 
     let mut log_handle: File = match setup_log_handle(&log_dir) {
         Ok(handle) => handle,

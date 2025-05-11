@@ -58,7 +58,7 @@ impl Population {
         }
 
         let gen_pop: Vec<Keyboard> = Vec::with_capacity(pop_cnt);
-        println!("Population initialized with a size of {pop_cnt}");
+        // println!("Population initialized with a size of {pop_cnt}");
 
         // let climb_pct: f64 = climb_pct_in.unwrap_or(DEFAULT_CLIMB_PCT);
         // if climb_pct <= 0.0 {
@@ -81,15 +81,16 @@ impl Population {
                 "Climbers {climber_cnt} cannot be greater than total population ({pop_cnt})"
             ));
         }
-        println!("Population will have {climber_cnt} climbers");
+        // println!("Population will have {climber_cnt} climbers");
 
-        let elite_cnt: usize = (climber_cnt as f64 * 0.2).max(MIN_ELITES as f64) as usize;
+        // let elite_cnt: usize = (climber_cnt as f64 * 0.2).max(MIN_ELITES as f64) as usize;
+        let elite_cnt: usize = MIN_ELITES;
         if elite_cnt > climber_cnt {
             return Err(anyhow!(
                 "Elite count ({elite_cnt}) cannot be higher than climber count ({climber_cnt})"
             ));
         }
-        println!("Population will have {elite_cnt} elites");
+        // println!("Population will have {elite_cnt} elites");
 
         let cull_cnt: usize = (pop_cnt as f64 * 0.04).max(1.0) as usize;
         if cull_cnt + elite_cnt > pop_cnt {
@@ -110,7 +111,7 @@ impl Population {
             ));
         }
 
-        println!("The bottom {cull_cnt} keyboards will be eliminated each iteration");
+        // println!("The bottom {cull_cnt} keyboards will be eliminated each iteration");
 
         // At the end of the last iteration, it is not necessary to mutate the climbers. Therefore,
         // mutating climbers is done at the beginning of each iteration. Even though creating our
@@ -212,16 +213,20 @@ impl Population {
         }
 
         for i in 0..self.population.len() {
-            print!("Evaluating Keyboard {:03}\r", i + 1);
-            stdout().flush()?; // MyError handles io errors
+            // print!("Evaluating Keyboard {:03}\r", i + 1);
+            // stdout().flush()?; // MyError handles io errors
             self.population[i].eval(corpus);
         }
 
-        println!();
+        // println!();
 
         return Ok(());
     }
 
+    // TODO: Since we're just going with one elite, we only need to pull one out. And because only
+    // one elite creates more diversity, checking for duplicates in the general population is a
+    // waste of time, so that can be stripped out. I'm also not against getting rid of the code to
+    // cut the bottom n, since it adds complexity to the setup.
     // TODO: Long function
     // NOTE: Removing duplicates can cause the amount of available climbers to be below what is
     // intended. This is allowed to happen without error because the population is replenished
@@ -329,33 +334,33 @@ impl Population {
             }
         }
 
-        println!(
-            "{} climbers containing {this_elite_cnt} elites",
-            self.climbers.len()
-        );
+        // println!(
+        //     "{} climbers containing {this_elite_cnt} elites",
+        //     self.climbers.len()
+        // );
 
-        println!("Top Score: {}", self.climbers[0].get_score());
+        // println!("Top Score: {}", self.climbers[0].get_score());
 
         let mut selection_score: f64 = 0.0;
         for climber in &self.climbers {
             selection_score += climber.get_score();
         }
         let avg_selection_score = selection_score / self.climbers.len() as f64;
-        println!("Average Score: {}", avg_selection_score);
+        // println!("Average Score: {}", avg_selection_score);
 
         return Ok(());
     }
 
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         for i in 0..self.climbers.len() {
-            println!();
-            println!("Climbing Keyboard {}", i + 1,);
-            println!(
-                "Gen {}, Id {}, Lineage: {}",
-                self.climbers[i].get_generation(),
-                self.climbers[i].get_id(),
-                self.climbers[i].get_lineage()
-            );
+            // println!();
+            // println!("Climbing Keyboard {}", i + 1,);
+            // println!(
+            //     "Gen {}, Id {}",
+            //     self.climbers[i].get_generation(),
+            //     self.climbers[i].get_id(),
+            //     // self.climbers[i].get_lineage()
+            // );
 
             self.climbers[i] = hill_climb(&mut self.rng, &self.climbers[i], corpus, iter)?;
         }
@@ -371,20 +376,20 @@ impl Population {
                 .unwrap_or(std::cmp::Ordering::Equal);
         });
 
-        println!();
+        // println!();
 
         for i in 0..self.climbers.len() {
-            println!("Results: Keyboard {}", i + 1);
-            println!(
-                "Gen {}, Id {}, Lineage: {}",
-                self.climbers[i].get_generation(),
-                self.climbers[i].get_id(),
-                self.climbers[i].get_lineage()
-            );
-            println!("Score: {}", self.climbers[i].get_score());
-            println!("Layout:");
-            self.climbers[i].display_keyboard();
-            println!();
+            // println!("Results: Keyboard {}", i + 1);
+            // println!(
+            //     "Gen {}, Id {}, Lineage: {}",
+            //     self.climbers[i].get_generation(),
+            //     self.climbers[i].get_id(),
+            //     self.climbers[i].get_lineage()
+            // );
+            // println!("Score: {}", self.climbers[i].get_score());
+            // println!("Layout:");
+            // self.climbers[i].display_keyboard();
+            // println!();
         }
     }
 }
@@ -420,22 +425,23 @@ pub fn hill_climb(
     corpus: &[String],
     iter: usize,
 ) -> Result<Keyboard> {
-    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
+    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.9999999999999999;
+
+    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
 
-    if keyboard.is_elite() {
-        decay_factor *= decay_factor.powf(3.0);
-
-        let r: f64 = rng.random_range(0.0..=1.0);
-        if r >= decay_factor {
-            println!("Score: {}", keyboard.get_score());
-            keyboard.display_keyboard();
-            return Ok(keyboard.clone());
-        }
-    }
-
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
+    // if keyboard.is_elite() {
+    //     decay_factor *= decay_factor.powf(3.0);
+    //
+    //     let r: f64 = rng.random_range(0.0..=1.0);
+    //     if r >= decay_factor {
+    //         println!("Score: {}", keyboard.get_score());
+    //         println!("Positive Iterations: {}", keyboard.get_pos_iter());
+    //         keyboard.display_keyboard();
+    //         return Ok(keyboard.clone());
+    //     }
+    // }
 
     let mut kb: Keyboard = keyboard.clone();
     let start: f64 = kb.get_score();
@@ -468,13 +474,14 @@ pub fn hill_climb(
         sum_weights += weight;
         weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
 
-        print!(
-            "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
-            i, start, climb_kb_score, kb_score, avg, weighted_avg
-        );
-        stdout().flush()?;
+        // print!(
+        //     "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
+        //     i, start, climb_kb_score, kb_score, avg, weighted_avg
+        // );
+        // stdout().flush()?;
 
         if climb_kb_score > kb_score {
+            climb_kb.add_pos_iter();
             kb = climb_kb;
         }
 
@@ -487,10 +494,11 @@ pub fn hill_climb(
         }
     }
 
-    println!();
-    if kb.is_elite() {
-        kb.display_keyboard();
-    }
+    // println!();
+    // if kb.is_elite() {
+    //     kb.display_keyboard();
+    //     println!("Positive Iterations: {}", kb.get_pos_iter());
+    // }
 
     return Ok(kb);
 }
@@ -512,8 +520,10 @@ fn get_weight(delta: f64, is_elite: bool) -> f64 {
 
     if is_elite {
         // return 1.0 + K * delta.ln(); // Less scaling for positive values
-        return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
+        // return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
+        return 1.0 + K * delta.powf(0.9);
     }
 
-    return 1.0 + K * delta.sqrt();
+    return 1.0 + K * delta.powf(0.9);
+    // return 1.0 + K * delta.sqrt();
 }

@@ -27,7 +27,7 @@ use crate::population::Population;
 // - Amount of elites
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 500;
+    const ITERATIONS: usize = 400;
 
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;
@@ -45,9 +45,9 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     let large_decay_target: f64 = 4.0;
 
     for iter in 1..=ITERATIONS {
-        println!();
-        println!("Iteration {}", iter);
-        println!();
+        // println!();
+        // println!("Iteration {}", iter);
+        // println!();
 
         let iter_decay: f64 = iter as f64 - 1.0;
         let small_decay: f64 = decay_value(decay_start, iter_decay, small_decay_target);

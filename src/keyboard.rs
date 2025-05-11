@@ -15,12 +15,12 @@ pub struct Keyboard {
     left_uses: f64,
     right_uses: f64,
     is_elite: bool,
+    pos_iter: usize,
 }
 
 enum KeyCompare {
     Mult(f64),
     MultLeft(f64),
-    MultRight(f64),
     Mismatch,
 }
 
@@ -34,12 +34,21 @@ enum KeyCompare {
 // data is correct. These methods are not meant to be portable
 impl Keyboard {
     const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
+
+    const DEFAULT_EFF: f64 = 1.0;
+
     const INDEX: char = 'i';
     const MIDDLE: char = 'm';
     const RING: char = 'r';
     const PINKY: char = 'p';
+
     const LEFT: char = 'l';
     const RIGHT: char = 'r';
+
+    const NUM: usize = 0;
+    const TOP: usize = 1;
+    const HOME: usize = 2;
+    const BOT: usize = 3;
 
     // TODO: No assertion message
     pub fn create_origin(id_in: usize) -> Self {
@@ -106,6 +115,7 @@ impl Keyboard {
             left_uses: 0.0,
             right_uses: 0.0,
             is_elite: false,
+            pos_iter: 0,
         };
     }
 
@@ -376,6 +386,7 @@ impl Keyboard {
             left_uses: 0.0,
             right_uses: 0.0,
             is_elite: false,
+            pos_iter: kb.pos_iter,
         };
     }
 
@@ -454,25 +465,19 @@ impl Keyboard {
     }
 
     // TODO: Unsure of how to handle space and return
-    // TODO: How to factor out...
+    // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
+    // layout to change. Be careful over-indexing for any particular factor
     fn get_efficiency(&mut self, this_key_idx: u8) -> f64 {
-        const DEFAULT_EFFICIENCY: f64 = 1.0;
-
         let this_key: (usize, usize) =
             if let Some(&Some(slot)) = self.slot_ascii.get(this_key_idx as usize) {
                 slot
             } else {
-                self.prev_key_idx = self.last_key_idx;
-                self.last_key_idx = None;
-
                 return 0.0;
             };
 
-        let this_row: usize = this_key.0;
+        let mut eff: f64 = Self::DEFAULT_EFF;
         let this_col: usize = this_key.1;
         let this_hand: char = Self::get_hand(this_col);
-        let mut eff: f64 = DEFAULT_EFFICIENCY;
-
         if this_hand == Self::RIGHT {
             self.right_uses += 1.0;
         } else {
@@ -484,62 +489,34 @@ impl Keyboard {
         let last_compare: Option<KeyCompare> = self
             .last_key_idx
             .map(|last_key| return Self::compare_keys(this_key, last_key, true));
-
-        let has_bigram: bool = !(matches!(last_compare, None | Some(KeyCompare::Mismatch)));
-        let prev_compare: Option<KeyCompare> = if has_bigram {
-            None
-        } else {
-            self.prev_key_idx
-                .map(|prev_key| return Self::compare_keys(this_key, prev_key, false))
-        };
-
-        let has_skipgram: bool = !(matches!(prev_compare, None | Some(KeyCompare::Mismatch)));
-
-        self.prev_key_idx = self.last_key_idx;
-        self.last_key_idx = Some(this_key);
-
-        let mut has_left_move: bool = false;
-        // TODO: Outline this probably
-        // TODO: This should also early return when complete
-        if !(has_bigram || has_skipgram) {
-            let dist_from_home: usize = this_row.abs_diff(2);
-
-            if dist_from_home == 1 {
-                eff *= 0.8;
-            } else if dist_from_home == 2 {
-                eff *= 0.6;
-            }
-
-            if this_hand == 'l' && dist_from_home > 0 {
-                // TODO: tecnically correct but confusing naming
-                has_left_move = true;
+        if let Some(key_compare) = last_compare {
+            match key_compare {
+                KeyCompare::Mult(x) => return eff * x,
+                KeyCompare::MultLeft(x) => return eff * x * 0.8,
+                KeyCompare::Mismatch => {}
             }
         }
 
-        if has_bigram {
-            match last_compare {
-                Some(KeyCompare::Mult(x)) => eff *= x,
-                Some(KeyCompare::MultLeft(x)) => {
-                    eff *= x;
-                    has_left_move = true;
-                }
-                _ => {}
-            }
-        } else if has_skipgram {
-            match prev_compare {
-                Some(KeyCompare::Mult(x)) => eff *= x,
-                Some(KeyCompare::MultLeft(x)) => {
-                    eff *= x;
-                    has_left_move = true;
-                }
-                _ => {}
+        let prev_compare: Option<KeyCompare> = self
+            .prev_key_idx
+            .map(|prev_key| return Self::compare_keys(this_key, prev_key, true));
+        if let Some(key_compare) = prev_compare {
+            match key_compare {
+                KeyCompare::Mult(x) => return eff * x,
+                KeyCompare::MultLeft(x) => return eff * x * 0.8,
+                KeyCompare::Mismatch => {}
             }
         }
 
-        // The diagonal of the left keys goes against the shape of the hand
-        if has_left_move && has_skipgram {
-            eff *= 0.9;
-        } else if has_left_move {
+        let this_row: usize = this_key.0;
+        let dist_from_home: usize = this_row.abs_diff(2);
+        if dist_from_home == 1 {
+            eff *= 0.8;
+        } else if dist_from_home == 2 {
+            eff *= 0.6;
+        }
+
+        if this_hand == 'l' && dist_from_home > 0 {
             eff *= 0.8;
         }
 
@@ -560,13 +537,17 @@ impl Keyboard {
         for entry in corpus {
             for b in entry.as_bytes() {
                 self.score += self.get_efficiency(*b);
+
+                self.prev_key_idx = self.last_key_idx;
+                self.last_key_idx = None;
             }
         }
 
-        let lr_diff: f64 = (self.left_uses - self.right_uses).abs();
-        let max_usage: f64 = self.left_uses.max(self.right_uses);
-        let diff_pct: f64 = (max_usage - lr_diff) / max_usage;
-        self.score *= diff_pct;
+        if self.left_uses < self.right_uses {
+            self.score *= self.left_uses / self.right_uses;
+        } else {
+            self.score *= self.right_uses / self.left_uses;
+        }
 
         self.evaluated = true;
     }
@@ -589,35 +570,43 @@ impl Keyboard {
         };
     }
 
-    // NOTE: The algorithm cannot inherently know that the ring and pinky are less dexterous than
-    // the index and middle fingers. Rather than make micro adjustments through, just do a blanket
-    // deduction here. The deduction for ring and pinky is small because, if it is too large, the
-    // algorithm will start creating SFBs of common pairs on the index and middle fingers to avoid
-    // the ring and pinky fingers. The deduction is also the same for both the ring and middle
-    // fingers, because some people have a different one of the two they prefer
-    // TODO: One edit you could make the the ring/pinky adjustment is, add a larger downgrade if
-    // they move
-    // NOTE: Because the algorithm does not inherently know that the bottom and number rows are
-    // harder to reach than the home and top alpha rows, a deduction is added here. Like the
-    // ring/pinky deduction, it is not overly large in order to avoid the algorithm putting keys in
-    // convoluted places. Because the algorithm later penalizes moving off the home row, a
-    // generalized favoritism for it is not added here
+    // NOTE: The number row is not deducted here because all keys on it should be static
     fn get_single_key_mult(key: (usize, usize)) -> f64 {
         let row: usize = key.0;
         let col: usize = key.1;
         let finger: char = Self::get_finger(col);
 
-        let mut eff_mult: f64 = 1.0;
+        let mut eff_mult: f64 = Self::DEFAULT_EFF;
 
+        // Do a blanket downward adjustment rather than micro-correct in the finger comparisons
+        // The ring and pinky are mostly treated the same due to different preferences per typist.
+        // However, the pinky top row is given an extra penalty because the whole hand has to be
+        // moved to hit it
         if finger == Self::RING || finger == Self::PINKY {
-            eff_mult *= 0.8;
+            if row == Self::HOME {
+                eff_mult *= 0.8;
+            } else if (row == Self::BOT) || (row == Self::TOP && finger == Self::RING) {
+                eff_mult *= 0.6;
+            } else if row == Self::TOP && finger == Self::PINKY {
+                eff_mult *= 0.4;
+            }
         }
 
-        if row == 3 {
-            eff_mult *= 0.8;
-        } else if row == 0 {
-            eff_mult *= 0.6;
-        }
+        // The algo is too willing to put high-usage keys here
+        eff_mult *= match (row, col) {
+            (Self::TOP, 4) => 0.6,
+            (Self::HOME, 4) => 0.8,
+            (Self::BOT, 4) => 0.4,
+            (Self::TOP, 5) => 0.4,
+            (Self::HOME, 5) => 0.8,
+            (Self::BOT, 5) => 0.6,
+            _ => 1.0,
+        };
+
+        // Do a blanket downward adjustment rather than try micro-correcting later
+        // if row == Self::BOT {
+        //     eff_mult *= 0.8;
+        // }
 
         return eff_mult;
     }
@@ -635,37 +624,37 @@ impl Keyboard {
         let key_y_row: usize = key_y.0;
         let key_x_finger: char = Self::get_finger(key_x_col);
         let key_y_finger: char = Self::get_finger(key_y_col);
-        let mut mult: f64 = 1.0;
+        let mut eff: f64 = Self::DEFAULT_EFF;
 
-        let row_eff: f64 = Self::get_repeat_row_mult(key_x_row, key_y_row, is_last);
-        mult *= row_eff;
+        let row_eff: f64 = Self::get_row_mult(key_x_row, key_y_row, is_last);
+        eff *= row_eff;
         // NOTE: These extension effeciencies are meant to track the impact of moving the index or
         // the pinky off the home columns on the entire hand
-        let index_ext_eff: f64 = Self::handle_index(key_x, key_y, is_last);
-        mult *= index_ext_eff;
-        mult *= Self::handle_right_pinky(key_x, key_y, is_last);
+        let index_ext_eff: f64 = Self::get_index_eff(key_x, key_y, is_last);
+        eff *= index_ext_eff;
+        eff *= Self::get_pinky_eff(key_x, key_y, is_last);
 
         let mut index_mv_eff: f64 = 1.0;
-        if key_x_finger != key_y_finger {
-            mult *= Self::get_base_sf_penalty(is_last);
-
+        if key_x_finger == key_y_finger {
+            eff *= Self::get_base_sf_penalty(is_last);
             index_mv_eff = Self::get_repeat_col_mult(key_x_col, key_y_col, is_last);
-            mult *= index_mv_eff;
-        } else if key_x_row == key_y_row {
-            mult *= Self::check_roll(key_x_col, key_y_col, is_last);
-        } else {
+            eff *= index_mv_eff;
+        // } else if key_x_row == key_y_row {
+        //     eff *= Self::check_roll(key_x_col, key_y_col, is_last);
+        // } else {
+        } else if key_x_row != key_y_row {
             // No need here to save a value to check left hand efficiency. This branch requires a
             // row move, which has already been checked
-            mult *= Self::check_combo(key_x, key_y, is_last);
-            mult *= Self::check_scissor(key_x_col, key_y_col, key_x_row, key_y_row, is_last);
+            eff *= Self::check_combo(key_x, key_y, is_last);
+            eff *= Self::check_scissor(key_x, key_y, is_last);
         }
 
         let did_mv: bool = row_eff < 1.0 || index_ext_eff < 1.0 || index_mv_eff < 1.0;
         if key_x_hand == Self::LEFT && did_mv {
-            return KeyCompare::MultLeft(mult);
+            return KeyCompare::MultLeft(eff);
         }
 
-        return KeyCompare::Mult(mult);
+        return KeyCompare::Mult(eff);
     }
 
     fn check_combo(this_key: (usize, usize), that_key: (usize, usize), is_last: bool) -> f64 {
@@ -699,10 +688,11 @@ impl Keyboard {
         };
     }
 
-    fn get_repeat_row_mult(this_row: usize, last_row: usize, last: bool) -> f64 {
-        let row_diff: usize = this_row.abs_diff(last_row);
+    // NOTE: Assumes that both keys are on the same hand
+    fn get_row_mult(this_row: usize, that_row: usize, is_last: bool) -> f64 {
+        let row_diff: usize = this_row.abs_diff(that_row);
 
-        return match (row_diff, last) {
+        return match (row_diff, is_last) {
             (0, true) => 0.8,
             (1, true) => 0.6,
             (2, true) => 0.4,
@@ -715,85 +705,71 @@ impl Keyboard {
         };
     }
 
-    fn handle_index(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
-        if !((4..=5).contains(&this.1) || (4..=5).contains(&last.1)) {
-            return 1.0;
+    // NOTE: Assumes that both keys are on the same hand
+    fn get_index_eff(this: (usize, usize), that: (usize, usize), is_last: bool) -> f64 {
+        if !((4..=5).contains(&this.1) || (4..=5).contains(&that.1)) {
+            return Self::DEFAULT_EFF;
         }
 
-        // These motions are straightforward
-        let this_t: bool = this.0 == 1 && this.1 == 4;
-        let last_t: bool = last.0 == 1 && last.1 == 4;
-        let this_v: bool = this.0 == 3 && this.1 == 3;
-        let last_v: bool = last.0 == 3 && last.1 == 3;
-        let tv: bool = (this_t && last_v) || (this_v && last_t);
-        let this_u: bool = this.0 == 1 && this.1 == 6;
-        let last_u: bool = last.0 == 1 && last.1 == 6;
-        let this_n: bool = this.0 == 3 && this.1 == 5;
-        let last_n: bool = last.0 == 3 && last.1 == 5;
-        let un: bool = (this_u && last_n) || (this_n && last_u);
-        if tv || un {
-            return 1.0;
-        }
-
-        if this_t || last_t || this_n || last_n {
-            if is_last {
-                return 0.6;
-            } else {
-                return 0.8;
-            }
-        }
-
-        // B or Y
-        let is_b: bool = this.1 == 4 && this.0 == 3 || last.1 == 4 && last.0 == 3;
-        let is_y: bool = this.1 == 5 && this.0 == 1 || last.1 == 5 && last.0 == 1;
-        if is_b || is_y {
-            if is_last {
-                return 0.2;
-            } else {
-                return 0.6;
-            }
-        }
-
-        // B or Y
-        let is_g: bool = this.1 == 4 && this.0 == 2 || last.1 == 4 && last.0 == 2;
-        let is_h: bool = this.1 == 5 && this.0 == 2 || last.1 == 5 && last.0 == 2;
-        if is_g || is_h {
-            if is_last {
-                return 0.8;
-            } else {
-                return 0.9;
-            }
-        }
-
-        return 1.0;
+        return match (this.0, this.1, that.0, that.1, is_last) {
+            // TV. Relatively natural movement
+            (Self::TOP, 4, 3, 3, true) | (Self::BOT, 3, Self::TOP, 4, true) => 0.8,
+            (Self::TOP, 4, 3, 3, false) | (Self::BOT, 3, Self::TOP, 4, false) => 0.9,
+            // Penalize Other T movements
+            (Self::TOP, 4, _, _, true) | (_, _, Self::TOP, 4, true) => 0.6,
+            (Self::TOP, 4, _, _, false) | (_, _, Self::TOP, 4, false) => 0.8,
+            // G
+            (Self::HOME, 4, _, _, true) | (_, _, Self::HOME, 4, true) => 0.8,
+            (Self::HOME, 4, _, _, false) | (_, _, Self::HOME, 4, false) => 0.9,
+            // B
+            (Self::BOT, 4, _, _, true) | (_, _, Self::BOT, 4, true) => 0.4,
+            (Self::BOT, 4, _, _, false) | (_, _, Self::BOT, 4, false) => 0.7,
+            // UN. Relatively natural movement
+            (Self::TOP, 5, 3, 6, true) | (Self::BOT, 6, Self::TOP, 5, true) => 0.8,
+            (Self::TOP, 5, 3, 6, false) | (Self::BOT, 6, Self::TOP, 5, false) => 0.9,
+            // Penalize Other T movements
+            (Self::TOP, 5, _, _, true) | (_, _, Self::TOP, 5, true) => 0.6,
+            (Self::TOP, 5, _, _, false) | (_, _, Self::TOP, 5, false) => 0.8,
+            // G
+            (Self::HOME, 5, _, _, true) | (_, _, Self::HOME, 5, true) => 0.8,
+            (Self::HOME, 5, _, _, false) | (_, _, Self::HOME, 5, false) => 0.9,
+            // B
+            (Self::BOT, 5, _, _, true) | (_, _, Self::BOT, 5, true) => 0.4,
+            (Self::BOT, 5, _, _, false) | (_, _, Self::BOT, 5, false) => 0.7,
+            // 6
+            (Self::NUM, 5, _, _, true) | (_, _, Self::NUM, 5, true) => 0.2,
+            (Self::NUM, 5, _, _, false) | (_, _, Self::NUM, 5, false) => 0.6,
+            _ => Self::DEFAULT_EFF,
+        };
     }
 
-    fn handle_right_pinky(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
+    // NOTE: Assumes that both keys are on the same hand
+    fn get_pinky_eff(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
         if !((10..=11).contains(&this.1) || (10..=11).contains(&last.1)) {
             return 1.0;
         }
 
         return match (this.0, this.1, last.0, last.1, is_last) {
-            (0, 10, _, _, true) => 0.2,
-            (0, 11, _, _, true) => 0.2,
-            (1, 10, _, _, true) => 0.6,
-            (1, 11, _, _, true) => 0.4,
-            (2, 10, _, _, true) => 0.8,
-            (0, 10, _, _, false) => 0.6,
-            (0, 11, _, _, false) => 0.6,
-            (1, 10, _, _, false) => 0.8,
-            (1, 11, _, _, false) => 0.7,
-            (2, 10, _, _, false) => 0.9,
-            (_, _, 0, 10, true) => 0.2,
-            (_, _, 0, 11, true) => 0.2,
-            (_, _, 1, 10, true) => 0.6,
-            (_, _, 1, 11, true) => 0.4,
-            (_, _, 2, 10, true) => 0.8,
-            (_, _, 0, 10, false) => 0.6,
-            (_, _, 0, 11, false) => 0.6,
-            (_, _, 1, 10, false) => 0.8,
-            (_, _, 1, 11, false) => 0.7,
-            (_, _, 2, 10, false) => 0.9,
+            (Self::NUM, 10, _, _, true) => 0.2,
+            (Self::NUM, 11, _, _, true) => 0.2,
+            (Self::TOP, 10, _, _, true) => 0.6,
+            (Self::TOP, 11, _, _, true) => 0.4,
+            (Self::HOME, 10, _, _, true) => 0.8,
+            (Self::NUM, 10, _, _, false) => 0.6,
+            (Self::NUM, 11, _, _, false) => 0.6,
+            (Self::TOP, 10, _, _, false) => 0.8,
+            (Self::TOP, 11, _, _, false) => 0.7,
+            (Self::HOME, 10, _, _, false) => 0.9,
+            (_, _, Self::NUM, 10, true) => 0.2,
+            (_, _, Self::NUM, 11, true) => 0.2,
+            (_, _, Self::TOP, 10, true) => 0.6,
+            (_, _, Self::TOP, 11, true) => 0.4,
+            (_, _, Self::HOME, 10, true) => 0.8,
+            (_, _, Self::NUM, 10, false) => 0.6,
+            (_, _, Self::NUM, 11, false) => 0.6,
+            (_, _, Self::TOP, 10, false) => 0.8,
+            (_, _, Self::TOP, 11, false) => 0.7,
+            (_, _, Self::HOME, 10, false) => 0.9,
             _ => 1.0,
         };
     }
@@ -827,6 +803,8 @@ impl Keyboard {
 
     // TODO: Oddity - Middle > Index rolls on the right hand aren't the best but they're fine on
     // the left
+    // NOTE: This assumes we've verified the fingers aren't the same. We don't want a UY roll, for
+    // example
     fn check_roll(this_col: usize, last_col: usize, last: bool) -> f64 {
         let this_center_dist: usize = Self::get_center_distance(this_col);
         let last_center_dist: usize = Self::get_center_distance(last_col);
@@ -841,23 +819,27 @@ impl Keyboard {
     // NOTE: This function assumes we've already verified that we're on the same hand
     // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
     // handle using the normal rules
-    // TODO: Long function signature
-    fn check_scissor(
-        this_col: usize,
-        last_col: usize,
-        this_row: usize,
-        last_row: usize,
-        last: bool,
-    ) -> f64 {
-        if this_col.abs_diff(last_col) > 1 {
+    fn check_scissor(this_key: (usize, usize), that_key: (usize, usize), is_last: bool) -> f64 {
+        let this_col: usize = this_key.1;
+        let that_col: usize = that_key.1;
+        if this_col.abs_diff(that_col) > 1 {
             return 1.0;
         }
 
-        return match (this_row.abs_diff(last_row), last) {
-            (2, true) => 0.6,
-            (3, true) => 0.4,
-            (2, false) => 0.8,
-            (3, false) => 0.7,
+        let this_row: usize = this_key.0;
+        let that_row: usize = that_key.0;
+        let hand: char = Self::get_hand(this_col);
+        // Left-handed scissors are punished beyond the base left-hand movement deduction because,
+        // unlike right-handed scissors, you have to actually rock your hand to hit them
+        return match (this_row.abs_diff(that_row), hand, is_last) {
+            (2, Self::RIGHT, true) => 0.6,
+            (3, Self::RIGHT, true) => 0.4,
+            (2, Self::RIGHT, false) => 0.8,
+            (3, Self::RIGHT, false) => 0.7,
+            (2, Self::LEFT, true) => 0.4,
+            (3, Self::LEFT, true) => 0.2,
+            (2, Self::LEFT, false) => 0.7,
+            (3, Self::LEFT, false) => 0.6,
             _ => 1.0,
         };
     }
@@ -870,7 +852,7 @@ impl Keyboard {
                 let char = element.0 as char;
                 chars.push(char);
             }
-            println!("{:?}", chars);
+            // println!("{:?}", chars);
         }
     }
 
@@ -906,5 +888,13 @@ impl Keyboard {
 
     pub fn unset_elite(&mut self) {
         self.is_elite = false;
+    }
+
+    pub fn get_pos_iter(&self) -> usize {
+        return self.pos_iter;
+    }
+
+    pub fn add_pos_iter(&mut self) {
+        self.pos_iter += 1;
     }
 }

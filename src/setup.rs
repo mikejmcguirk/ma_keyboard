@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::population::Population;
+use crate::{display::Display, population::Population};
 
 // TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
 // re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
@@ -39,15 +39,16 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
 
     let mut population: Population = Population::create(None, &corpus, log_handle)?;
 
+    let mut display: Display = Display::new();
+    display.draw_initial(&population);
+
     let decay_start: f64 = 30.0;
     let small_decay_target: f64 = 2.0;
     let med_decay_target: f64 = 3.0;
     let large_decay_target: f64 = 4.0;
 
     for iter in 1..=ITERATIONS {
-        // println!();
-        // println!("Iteration {}", iter);
-        // println!();
+        display.update_iter(iter);
 
         let iter_decay: f64 = iter as f64 - 1.0;
         let small_decay: f64 = decay_value(decay_start, iter_decay, small_decay_target);

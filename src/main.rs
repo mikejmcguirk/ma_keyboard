@@ -58,6 +58,7 @@
 #![allow(clippy::explicit_iter_loop)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::float_cmp)]
+#![allow(clippy::identity_op)]
 #![allow(clippy::indexing_slicing)]
 #![allow(clippy::items_after_statements)]
 #![allow(clippy::len_zero)]

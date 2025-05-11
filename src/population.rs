@@ -12,6 +12,8 @@ use crate::{custom_err::CorpusErr, keyboard::Keyboard, utils::write_err};
 
 const MIN_ELITES: usize = 1;
 
+// TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
+// to improve the keyboard. Do this after a full clippy pass of the non-swap code
 // TODO: Maybe add some sort of health check function to make sure all the keyboards keep the same
 // parameters. Unsure to what extent this is a population vs keyboard problem
 // TODO: When incorporating multi-threading for the keyboards, unsure if we can pass a SmallRng
@@ -391,6 +393,10 @@ impl Population {
             // self.climbers[i].display_keyboard();
             // println!();
         }
+    }
+
+    pub fn get_pop_size(&self) -> usize {
+        return self.pop_size;
     }
 }
 

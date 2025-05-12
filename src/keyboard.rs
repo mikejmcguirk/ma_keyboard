@@ -685,14 +685,14 @@ impl Keyboard {
         let row_diff: usize = this_row.abs_diff(that_row);
 
         return match (row_diff, is_last) {
-            (0, true) => 0.8,
-            (1, true) => 0.6,
-            (2, true) => 0.4,
+            (0, true) => 1.0,
+            (1, true) => 0.8,
+            (2, true) => 0.6,
             (3, true) => 0.2,
-            (0, false) => 0.9,
-            (1, false) => 0.8,
+            (0, false) => 1.0,
+            (1, false) => 0.9,
             (2, false) => 0.7,
-            (3, false) => 0.6,
+            (3, false) => 0.5,
             _ => 1.0,
         };
     }
@@ -704,9 +704,9 @@ impl Keyboard {
         }
 
         return match (this.0, this.1, that.0, that.1, is_last) {
-            // TV. Relatively natural movement
-            (Self::TOP, 4, 3, 3, true) | (Self::BOT, 3, Self::TOP, 4, true) => 0.8,
-            (Self::TOP, 4, 3, 3, false) | (Self::BOT, 3, Self::TOP, 4, false) => 0.9,
+            // TV. Relatively natural movement. Already addressed by global deduction on row jumps
+            (Self::TOP, 4, 3, 3, true) | (Self::BOT, 3, Self::TOP, 4, true) => 1.0,
+            (Self::TOP, 4, 3, 3, false) | (Self::BOT, 3, Self::TOP, 4, false) => 1.0,
             // Penalize Other T movements
             (Self::TOP, 4, _, _, true) | (_, _, Self::TOP, 4, true) => 0.6,
             (Self::TOP, 4, _, _, false) | (_, _, Self::TOP, 4, false) => 0.8,
@@ -716,9 +716,9 @@ impl Keyboard {
             // B
             (Self::BOT, 4, _, _, true) | (_, _, Self::BOT, 4, true) => 0.4,
             (Self::BOT, 4, _, _, false) | (_, _, Self::BOT, 4, false) => 0.7,
-            // UN. Relatively natural movement
-            (Self::TOP, 5, 3, 6, true) | (Self::BOT, 6, Self::TOP, 5, true) => 0.8,
-            (Self::TOP, 5, 3, 6, false) | (Self::BOT, 6, Self::TOP, 5, false) => 0.9,
+            // UN. Same as TV
+            (Self::TOP, 5, 3, 6, true) | (Self::BOT, 6, Self::TOP, 5, true) => 1.0,
+            (Self::TOP, 5, 3, 6, false) | (Self::BOT, 6, Self::TOP, 5, false) => 1.0,
             // Penalize Other T movements
             (Self::TOP, 5, _, _, true) | (_, _, Self::TOP, 5, true) => 0.6,
             (Self::TOP, 5, _, _, false) | (_, _, Self::TOP, 5, false) => 0.8,
@@ -736,41 +736,31 @@ impl Keyboard {
     }
 
     // NOTE: Assumes that both keys are on the same hand
-    fn get_pinky_eff(this: (usize, usize), last: (usize, usize), is_last: bool) -> f64 {
-        if !((10..=11).contains(&this.1) || (10..=11).contains(&last.1)) {
+    fn get_pinky_eff(this: (usize, usize), that: (usize, usize), is_last: bool) -> f64 {
+        if !((10..=11).contains(&this.1) || (10..=11).contains(&that.1)) {
             return 1.0;
         }
 
-        return match (this.0, this.1, last.0, last.1, is_last) {
-            (Self::NUM, 10, _, _, true) => 0.2,
-            (Self::NUM, 11, _, _, true) => 0.2,
-            (Self::TOP, 10, _, _, true) => 0.6,
-            (Self::TOP, 11, _, _, true) => 0.4,
-            (Self::HOME, 10, _, _, true) => 0.8,
-            (Self::NUM, 10, _, _, false) => 0.6,
-            (Self::NUM, 11, _, _, false) => 0.6,
-            (Self::TOP, 10, _, _, false) => 0.8,
-            (Self::TOP, 11, _, _, false) => 0.7,
-            (Self::HOME, 10, _, _, false) => 0.9,
-            (_, _, Self::NUM, 10, true) => 0.2,
-            (_, _, Self::NUM, 11, true) => 0.2,
-            (_, _, Self::TOP, 10, true) => 0.6,
-            (_, _, Self::TOP, 11, true) => 0.4,
-            (_, _, Self::HOME, 10, true) => 0.8,
-            (_, _, Self::NUM, 10, false) => 0.6,
-            (_, _, Self::NUM, 11, false) => 0.6,
-            (_, _, Self::TOP, 10, false) => 0.8,
-            (_, _, Self::TOP, 11, false) => 0.7,
-            (_, _, Self::HOME, 10, false) => 0.9,
+        return match (this.0, this.1, that.0, that.1, is_last) {
+            (Self::NUM, 10, _, _, true) | (_, _, Self::NUM, 10, true) => 0.2,
+            (Self::NUM, 11, _, _, true) | (_, _, Self::NUM, 11, true) => 0.2,
+            (Self::TOP, 10, _, _, true) | (_, _, Self::TOP, 10, true) => 0.6,
+            (Self::TOP, 11, _, _, true) | (_, _, Self::TOP, 11, true) => 0.4,
+            (Self::HOME, 10, _, _, true) | (_, _, Self::HOME, 10, true) => 0.8,
+            (Self::NUM, 10, _, _, false) | (_, _, Self::NUM, 10, false) => 0.2,
+            (Self::NUM, 11, _, _, false) | (_, _, Self::NUM, 11, false) => 0.2,
+            (Self::TOP, 10, _, _, false) | (_, _, Self::TOP, 10, false) => 0.8,
+            (Self::TOP, 11, _, _, false) | (_, _, Self::TOP, 11, false) => 0.7,
+            (Self::HOME, 10, _, _, false) | (_, _, Self::HOME, 10, false) => 0.9,
             _ => 1.0,
         };
     }
 
     fn get_base_sf_penalty(is_last: bool) -> f64 {
         if is_last {
-            return 0.6;
-        } else {
             return 0.8;
+        } else {
+            return 0.9;
         }
     }
 

@@ -349,6 +349,7 @@ impl Display {
     }
 }
 
+// TODO: How to make this fun on ctrl+c?
 impl Drop for Display {
     fn drop(&mut self) {
         stdout()

@@ -10,6 +10,11 @@ use anyhow::{Result, anyhow};
 
 use crate::{display::Display, population::Population};
 
+// TODO: I think display being globally available context acutally makes sense, but not totally
+// sure how to do it
+// TODO: THe mutation amounts need to go back to ranges, given that we have further segmented out
+// the hill climbing as its own thing and we have reduced to one elite
+// TODO: Create qwerty and dvorak controls
 // TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
 // re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
 // threadRNG? Issue with threadRNG is - it's the slower version from what I understand
@@ -19,6 +24,7 @@ use crate::{display::Display, population::Population};
 // TODO: Run qwerty and dvorak controls for scoring
 // TODO: Args:
 // TODO: write seed to log not error
+// TODO: The usize conversions on the decays are still bad
 // - Population size
 // - Layout to rate
 // - Save file to load
@@ -32,12 +38,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;
 
-    // let mut qwerty: Keyboard = Keyboard::make_qwerty(0);
-    // qwerty.eval(&corpus);
-    // qwerty.display_keyboard();
-    // println!("Qwerty score: {}", qwerty.get_score());
-
-    let mut population: Population = Population::create(None, &corpus, log_handle)?;
+    let mut population: Population = Population::create(None, log_handle)?;
 
     let mut display: Display = Display::new();
     display.draw_initial(&population);
@@ -57,21 +58,28 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         let med_decay_usize: usize = med_decay as usize;
         let large_decay: f64 = decay_value(decay_start, iter_decay, large_decay_target);
         let large_decay_usize: usize = large_decay as usize;
+        display.update_mut_values(
+            small_decay_usize,
+            small_decay_usize,
+            med_decay_usize,
+            med_decay_usize,
+            large_decay_usize,
+            large_decay_usize,
+        );
 
         population.mutate_climbers([
             small_decay_usize,
             small_decay_usize,
             med_decay_usize,
             large_decay_usize,
-        ])?;
+        ]);
 
-        population.eval_gen_pop(&corpus)?;
-        population.setup_climbers()?;
-        population.climb_kbs(&corpus, iter)?;
+        population.eval_gen_pop(&corpus, &mut display)?;
+        population.setup_climbers(&mut display)?;
+        population.climb_kbs(&corpus, iter, &mut display)?;
     }
 
-    // println!("Qwerty score: {}", qwerty.get_score());
-    population.print_results();
+    // TODO: use display to tell the user the program's complete
 
     return Ok(ExitCode::SUCCESS);
 }

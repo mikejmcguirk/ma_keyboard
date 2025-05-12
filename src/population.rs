@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Write as _, stdout},
+    // io::{Write as _, stdout},
 };
 
 use {
@@ -8,9 +8,7 @@ use {
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::{custom_err::CorpusErr, keyboard::Keyboard, utils::write_err};
-
-const MIN_ELITES: usize = 1;
+use crate::{custom_err::CorpusErr, display::Display, keyboard::Keyboard, utils::write_err};
 
 // TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
 // to improve the keyboard. Do this after a full clippy pass of the non-swap code
@@ -34,18 +32,20 @@ pub struct Population {
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
     elite_cnt: usize,
-    cull_cnt: usize,
     generation: usize,
+    top_score: f64,
 }
 
 impl Population {
+    const ELITE_CNT: usize = 1;
     // TODO: Long function
     // TODO: Current code cannot robustly handle input options
     // TODO: long function signature
-    pub fn create(size: Option<usize>, corpus: &[String], log_handle: &mut File) -> Result<Self> {
+    // TODO: This will eventually take user input, so keep the error return
+    pub fn create(size: Option<usize>, log_handle: &mut File) -> Result<Self> {
         const DEFAULT_POPULATION: usize = 100;
-        const DEFAULT_CLIMB_PCT: f64 = 0.2;
-        const MIN_CLIMBERS: f64 = 1.0;
+        const DEFAULT_CLIMB_CNT: usize = 20;
+        const MIN_CLIMBERS: usize = 1;
 
         let seed: [u8; 32] = rand::random();
         let seed_string: String = format!("{seed:?}");
@@ -58,62 +58,27 @@ impl Population {
         if pop_cnt == 0 {
             return Err(anyhow!("Population size cannot be zero"));
         }
-
         let gen_pop: Vec<Keyboard> = Vec::with_capacity(pop_cnt);
-        // println!("Population initialized with a size of {pop_cnt}");
 
-        // let climb_pct: f64 = climb_pct_in.unwrap_or(DEFAULT_CLIMB_PCT);
-        // if climb_pct <= 0.0 {
-        //     return Err(anyhow!(
-        //         "ERROR: Climb % ({:.2}%) must be greater than zero",
-        //         climb_pct * 100.0
-        //     ));
-        // } else if climb_pct > 1.0 {
-        //     return Err(anyhow!(
-        //         "ERROR: Climb % ({:.2}%) cannot be greater than 100%",
-        //         climb_pct * 100.0
-        //     ));
-        // }
+        // TODO: The input should just be the population total and the climber total. No need for
+        // goofy % math
 
-        // let climbers: usize = (pop_size as f64 * climb_pct).max(1.0) as usize;
-        let climber_cnt: usize = (pop_cnt as f64 * DEFAULT_CLIMB_PCT).max(MIN_CLIMBERS) as usize;
-        let mut climbers: Vec<Keyboard> = Vec::with_capacity(climber_cnt);
+        let climber_cnt: usize = DEFAULT_CLIMB_CNT;
         if climber_cnt > pop_cnt {
             return Err(anyhow!(
                 "Climbers {climber_cnt} cannot be greater than total population ({pop_cnt})"
             ));
-        }
-        // println!("Population will have {climber_cnt} climbers");
-
-        // let elite_cnt: usize = (climber_cnt as f64 * 0.2).max(MIN_ELITES as f64) as usize;
-        let elite_cnt: usize = MIN_ELITES;
-        if elite_cnt > climber_cnt {
+        } else if climber_cnt < MIN_CLIMBERS {
             return Err(anyhow!(
-                "Elite count ({elite_cnt}) cannot be higher than climber count ({climber_cnt})"
+                "Climbers {climber_cnt} less than the minimum ({MIN_CLIMBERS})"
             ));
         }
-        // println!("Population will have {elite_cnt} elites");
+        let mut climbers: Vec<Keyboard> = Vec::with_capacity(climber_cnt);
 
-        let cull_cnt: usize = (pop_cnt as f64 * 0.04).max(1.0) as usize;
-        if cull_cnt + elite_cnt > pop_cnt {
-            return Err(anyhow!(
-                "ERROR: Elites ({}) and amount to cull ({}) cannot be greater than the total ({})",
-                elite_cnt,
-                cull_cnt,
-                pop_cnt
-            ));
-        }
-
-        if pop_cnt - cull_cnt < climber_cnt {
-            return Err(anyhow!(
-                "Population ({}) less group to cull ({}) is less than climber count ({})",
-                pop_cnt,
-                cull_cnt,
-                climber_cnt
-            ));
-        }
-
-        // println!("The bottom {cull_cnt} keyboards will be eliminated each iteration");
+        // Having multiple elites kills genetic diversity
+        let elite_cnt: usize = Self::ELITE_CNT;
+        // Should be impossible to fail due to compile time constraints
+        assert!(elite_cnt <= climber_cnt);
 
         // At the end of the last iteration, it is not necessary to mutate the climbers. Therefore,
         // mutating climbers is done at the beginning of each iteration. Even though creating our
@@ -124,9 +89,6 @@ impl Population {
         for _ in 0..climber_cnt {
             let mut keyboard: Keyboard = Keyboard::create_origin(id.get());
             keyboard.shuffle(&mut rng, 30);
-            // For probabalistic selection when they are mutated to fill out the population. The
-            // keyboards are able to store if they have evaluated since they were last changed
-            keyboard.eval(corpus);
             climbers.push(keyboard);
         }
 
@@ -138,8 +100,8 @@ impl Population {
             climber_cnt,
             climbers,
             elite_cnt,
-            cull_cnt,
             generation: 0,
+            top_score: 0.0,
         });
     }
 
@@ -157,17 +119,16 @@ impl Population {
     // climbers
     // TODO: Format string in keyboard evaluation should be based on digits in total population
     // size
+    // TODO: The probabalistic selection logic has to be something that can be outlined
     // PERF: We generate a random starting selection so the edge case doesn't always default to the
     // strongest member. Might be extra
     // PERF: For simplicity, we are currently using push/drain/clear on the various Vecs to manage
     // their contents. If this is slow, move to simply reading and writing to it directly. This
     // *should* be possible without unsafe
-    pub fn mutate_climbers(&mut self, amts: [usize; 4]) -> Result<()> {
+    pub fn mutate_climbers(&mut self, amts: [usize; 4]) {
         self.generation += 1;
 
-        if self.climbers.len() == 0 {
-            return Err(anyhow!("ERROR: No climbers to mutate!"));
-        }
+        assert!(self.climbers.len() <= self.climber_cnt);
 
         self.population.clear();
         let mut climber_score: f64 = 0.0;
@@ -176,7 +137,8 @@ impl Population {
             self.population.push(climber.clone());
         }
 
-        for _ in 0..(self.pop_size - self.climbers.len()) {
+        let to_add: usize = self.pop_size - self.climbers.len();
+        for _ in 0..to_add {
             let mut idx: usize = self.rng.random_range(0..self.climbers.len());
             let mut checked_score: f64 = 0.0;
             let r: f64 = self.rng.random_range(0.0..=climber_score);
@@ -189,39 +151,34 @@ impl Population {
                 }
             }
 
-            let this_amt_idx: usize = self.rng.random_range(0..amts.len());
-            let this_amt: usize = amts[this_amt_idx];
             let mut new_kb: Keyboard =
                 Keyboard::mutate_from(&self.climbers[idx], self.generation, self.id.get());
+            let this_amt_idx: usize = self.rng.random_range(0..amts.len());
+            let this_amt: usize = amts[this_amt_idx];
             new_kb.shuffle(&mut self.rng, this_amt);
 
             self.population.push(new_kb);
         }
 
-        if self.population.len() != self.pop_size {
-            return Err(anyhow!(
-                "ERROR: Total population of {} does not match expected {}",
-                self.population.len(),
-                self.pop_size
-            ));
-        }
-
-        return Ok(());
+        assert_eq!(self.population.len(), self.pop_size);
     }
 
-    pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), CorpusErr> {
+    // TODO: Long function signature
+    pub fn eval_gen_pop(
+        &mut self,
+        corpus: &[String],
+        display: &mut Display,
+    ) -> Result<(), CorpusErr> {
         if corpus.is_empty() {
             return Err(CorpusErr::EmptyCorpus);
         }
 
         for i in 0..self.population.len() {
-            // print!("Evaluating Keyboard {:03}\r", i + 1);
-            // stdout().flush()?; // MyError handles io errors
+            display.update_eval(i + 1);
             self.population[i].eval(corpus);
         }
 
-        // println!();
-
+        display.update_eval(0);
         return Ok(());
     }
 
@@ -234,7 +191,7 @@ impl Population {
     // intended. This is allowed to happen without error because the population is replenished
     // during the mutation phase
     // NOTE: This method assumes that the amount of elites, culls, and climbers is properly setup
-    pub fn setup_climbers(&mut self) -> Result<()> {
+    pub fn setup_climbers(&mut self, display: &mut Display) -> Result<()> {
         self.population.sort_by(|a, b| {
             return b
                 .get_score()
@@ -242,40 +199,12 @@ impl Population {
                 .unwrap_or(std::cmp::Ordering::Equal);
         });
 
-        self.population
-            .drain(self.population.len().saturating_sub(self.cull_cnt)..);
-
         self.climbers.clear();
-        // Add the first elite
+        // Pull out elite
         self.climbers.extend(self.population.drain(..1));
-
-        // Add elites deterministically
-        let mut dup_elites: usize = 0;
-        for _ in 0..self.elite_cnt - 1 {
-            let mut diff_found: bool = false;
-            let candidate_vec: &[Vec<(u8, u8)>] = self.population[0].get_vec_ref();
-            let flat_candidate: Vec<&(u8, u8)> = candidate_vec.iter().flatten().collect();
-
-            for climber in &self.climbers {
-                let climber_vec: &[Vec<(u8, u8)>] = climber.get_vec_ref();
-                let flat_climber: Vec<&(u8, u8)> = climber_vec.iter().flatten().collect();
-
-                debug_assert_eq!(flat_candidate.len(), flat_climber.len());
-
-                for i in 0..flat_climber.len() {
-                    if flat_climber[i].0 != flat_candidate[i].0 {
-                        diff_found = true;
-                        break;
-                    }
-                }
-            }
-
-            if diff_found {
-                self.climbers.extend(self.population.drain(..1));
-            } else {
-                self.population.drain(..1);
-                dup_elites += 1;
-            }
+        if self.climbers[0].get_score() > self.top_score {
+            self.top_score = self.climbers[0].get_score();
+            display.update_kb(&self.climbers[0]);
         }
 
         // Add remaining climbers probabalistically
@@ -298,37 +227,13 @@ impl Population {
             }
 
             population_score -= self.population[selection].get_score();
-
-            let mut diff_found: bool = false;
-            let candidate_vec: &[Vec<(u8, u8)>] = self.population[0].get_vec_ref();
-            let flat_candidate: Vec<&(u8, u8)> = candidate_vec.iter().flatten().collect();
-
-            for climber in &self.climbers {
-                let climber_vec: &[Vec<(u8, u8)>] = climber.get_vec_ref();
-                let flat_climber: Vec<&(u8, u8)> = climber_vec.iter().flatten().collect();
-
-                debug_assert_eq!(flat_candidate.len(), flat_climber.len());
-
-                for i in 0..flat_climber.len() {
-                    if flat_climber[i].0 != flat_candidate[i].0 {
-                        diff_found = true;
-                        break;
-                    }
-                }
-            }
-
-            if diff_found {
-                self.climbers
-                    .extend(self.population.drain(selection..=selection));
-            } else {
-                self.population.drain(selection..=selection);
-            }
+            self.climbers
+                .extend(self.population.drain(selection..=selection));
         }
 
-        let this_elite_cnt: usize = self.elite_cnt - dup_elites;
         let mut elites_set: usize = 0;
         for climber in self.climbers.iter_mut() {
-            if elites_set < this_elite_cnt {
+            if elites_set < Self::ELITE_CNT {
                 climber.set_elite();
                 elites_set += 1;
             } else {
@@ -336,67 +241,61 @@ impl Population {
             }
         }
 
-        // println!(
-        //     "{} climbers containing {this_elite_cnt} elites",
-        //     self.climbers.len()
-        // );
-
-        // println!("Top Score: {}", self.climbers[0].get_score());
-
-        let mut selection_score: f64 = 0.0;
+        let mut climber_score: f64 = 0.0;
         for climber in &self.climbers {
-            selection_score += climber.get_score();
+            climber_score += climber.get_score();
         }
-        let avg_selection_score = selection_score / self.climbers.len() as f64;
-        // println!("Average Score: {}", avg_selection_score);
+        let avg_climber_score = climber_score / self.climbers.len() as f64;
+        display.update_avg(avg_climber_score);
 
         return Ok(());
     }
 
-    pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
+    // TODO: Long function signature
+    pub fn climb_kbs(
+        &mut self,
+        corpus: &[String],
+        iter: usize,
+        display: &mut Display,
+    ) -> Result<()> {
         for i in 0..self.climbers.len() {
-            // println!();
-            // println!("Climbing Keyboard {}", i + 1,);
-            // println!(
-            //     "Gen {}, Id {}",
-            //     self.climbers[i].get_generation(),
-            //     self.climbers[i].get_id(),
-            //     // self.climbers[i].get_lineage()
-            // );
+            let climb_info: String = format!(
+                "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
+                i + 1,
+                self.climbers[i].get_generation(),
+                self.climbers[i].get_id()
+            );
+            display.update_climb_info(&climb_info);
 
-            self.climbers[i] = hill_climb(&mut self.rng, &self.climbers[i], corpus, iter)?;
+            self.climbers[i] =
+                hill_climb(&mut self.rng, &self.climbers[i], corpus, iter, display)?;
+
+            if self.climbers[0].get_score() > self.top_score {
+                self.top_score = self.climbers[0].get_score();
+                display.update_kb(&self.climbers[0]);
+            }
         }
 
+        // TODO: The climb method does indeed need to tell the display there is nothing to display,
+        // but the climb method should not have to tell the display what needs displayed
+        display.update_climb_info(&" ".repeat(155));
+        // TODO: At least for now, don't turn off climb_stats at the end of a hill climbing
+        // iteration because it makes the display flicker. Might be okay to do that once the whole
+        // line isn't being changed each time
+        display.update_climb_stats(&" ".repeat(155));
         return Ok(());
-    }
-
-    pub fn print_results(&mut self) {
-        self.climbers.sort_by(|a, b| {
-            return b
-                .get_score()
-                .partial_cmp(&a.get_score())
-                .unwrap_or(std::cmp::Ordering::Equal);
-        });
-
-        // println!();
-
-        for i in 0..self.climbers.len() {
-            // println!("Results: Keyboard {}", i + 1);
-            // println!(
-            //     "Gen {}, Id {}, Lineage: {}",
-            //     self.climbers[i].get_generation(),
-            //     self.climbers[i].get_id(),
-            //     self.climbers[i].get_lineage()
-            // );
-            // println!("Score: {}", self.climbers[i].get_score());
-            // println!("Layout:");
-            // self.climbers[i].display_keyboard();
-            // println!();
-        }
     }
 
     pub fn get_pop_size(&self) -> usize {
         return self.pop_size;
+    }
+
+    pub fn get_climb_cnt(&self) -> usize {
+        return self.climber_cnt;
+    }
+
+    pub fn get_elite_cnt(&self) -> usize {
+        return self.elite_cnt;
     }
 }
 
@@ -418,9 +317,12 @@ impl IdSpawner {
     }
 }
 
+// TODO: Re-introduce an annealing type concept back into here. We are not seeing reliable enough
+// cycling
 // PERF: Some of this calculation is per iteration and could be sectioned out
 // TODO: Function too long. But don't want to chip away too much without knowing how it will be
 // displayed
+// TODO: Long function signature
 // NOTE: Changing one key at a time works best. If you change two keys, the algorithm will find
 // bigger changes less frequently. This causes the decay to continue for about as many
 // iterations as it would if doing only one step, but fewer improvements will be found,
@@ -430,24 +332,17 @@ pub fn hill_climb(
     keyboard: &Keyboard,
     corpus: &[String],
     iter: usize,
+    display: &mut Display,
 ) -> Result<Keyboard> {
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.9999999999999999;
 
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
-
-    // if keyboard.is_elite() {
-    //     decay_factor *= decay_factor.powf(3.0);
-    //
-    //     let r: f64 = rng.random_range(0.0..=1.0);
-    //     if r >= decay_factor {
-    //         println!("Score: {}", keyboard.get_score());
-    //         println!("Positive Iterations: {}", keyboard.get_pos_iter());
-    //         keyboard.display_keyboard();
-    //         return Ok(keyboard.clone());
-    //     }
-    // }
+    if keyboard.is_elite() {
+        // Promotes more reliable global exploration
+        decay_factor *= decay_factor.powf(5.0);
+    }
 
     let mut kb: Keyboard = keyboard.clone();
     let start: f64 = kb.get_score();
@@ -473,18 +368,21 @@ pub fn hill_climb(
 
         let delta: f64 = this_improvement - last_improvement;
         last_improvement = this_improvement;
-        let weight: f64 = get_weight(delta, kb.is_elite());
+        let weight: f64 = get_weight(delta);
 
         sum_weights *= decay_factor;
         let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
         sum_weights += weight;
         weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
 
-        // print!(
-        //     "Iter: {} -- Start: {} -- Cur: {} -- Best: {} -- Avg: {} -- Weighted: {}\r",
-        //     i, start, climb_kb_score, kb_score, avg, weighted_avg
-        // );
-        // stdout().flush()?;
+        // TODO: Have hard coded blank value when this isn't active, but need more principled
+        // method
+        let climb_stats: String = format!(
+            "Iter: {:05}, Start: {:18}, Cur: {:18}, Best: {:18}, Avg: {:18}, Weighted: {:18}\r",
+            i, start, climb_kb_score, kb_score, avg, weighted_avg
+        );
+        // println!("{}", climb_info.len());
+        display.update_climb_stats(&climb_stats);
 
         if climb_kb_score > kb_score {
             climb_kb.add_pos_iter();
@@ -500,12 +398,6 @@ pub fn hill_climb(
         }
     }
 
-    // println!();
-    // if kb.is_elite() {
-    //     kb.display_keyboard();
-    //     println!("Positive Iterations: {}", kb.get_pos_iter());
-    // }
-
     return Ok(kb);
 }
 
@@ -517,19 +409,22 @@ fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     return new_value_for_new_avg + old_avg_for_new_avg;
 }
 
-fn get_weight(delta: f64, is_elite: bool) -> f64 {
+// The strong weight for positive iterations is necessary for hill climbers to catch up to the
+// elite in later iterations. This comes with the trade-off risk that an early elite can entrench
+// itself in a local optima. This risk is mitigated by giving the elite a punishing decay factor in
+// early iterations. However, the elite is not double-punished with a reduced weight for positive
+// iterations. This allows for excellent genomes to still have the opportunity to climb.
+fn get_weight(delta: f64) -> f64 {
     const K: f64 = 0.01;
 
     if delta <= 0.0 {
         return 1.0;
     }
 
-    if is_elite {
-        // return 1.0 + K * delta.ln(); // Less scaling for positive values
-        // return 1.0 + K * delta.powf(0.0001); // Even less scaling for positive values
-        return 1.0 + K * delta.powf(0.9);
-    }
-
     return 1.0 + K * delta.powf(0.9);
+
+    // Alternatives:
     // return 1.0 + K * delta.sqrt();
+    // return 1.0 + K * delta.ln();
+    // return 1.0 + K * delta.powf(0.0001);
 }

@@ -603,11 +603,6 @@ impl Keyboard {
             _ => 1.0,
         };
 
-        // Do a blanket downward adjustment rather than try micro-correcting later
-        // if row == Self::BOT {
-        //     eff_mult *= 0.8;
-        // }
-
         return eff_mult;
     }
 
@@ -639,9 +634,6 @@ impl Keyboard {
             eff *= Self::get_base_sf_penalty(is_last);
             index_mv_eff = Self::get_repeat_col_mult(key_x_col, key_y_col, is_last);
             eff *= index_mv_eff;
-        // } else if key_x_row == key_y_row {
-        //     eff *= Self::check_roll(key_x_col, key_y_col, is_last);
-        // } else {
         } else if key_x_row != key_y_row {
             // No need here to save a value to check left hand efficiency. This branch requires a
             // row move, which has already been checked
@@ -801,21 +793,6 @@ impl Keyboard {
         };
     }
 
-    // TODO: Oddity - Middle > Index rolls on the right hand aren't the best but they're fine on
-    // the left
-    // NOTE: This assumes we've verified the fingers aren't the same. We don't want a UY roll, for
-    // example
-    fn check_roll(this_col: usize, last_col: usize, last: bool) -> f64 {
-        let this_center_dist: usize = Self::get_center_distance(this_col);
-        let last_center_dist: usize = Self::get_center_distance(last_col);
-
-        return match (this_center_dist < last_center_dist, last) {
-            (true, true) => 1.2,
-            (true, false) => 1.1,
-            _ => 1.0,
-        };
-    }
-
     // NOTE: This function assumes we've already verified that we're on the same hand
     // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
     // handle using the normal rules
@@ -844,16 +821,21 @@ impl Keyboard {
         };
     }
 
-    // TODO: Better, but will still need to be redone for final display
-    pub fn display_keyboard(&self) {
+    // TODO: Very inefficient
+    pub fn get_display_chars(&self) -> Vec<Vec<char>> {
+        let mut display_chars: Vec<Vec<char>> = Vec::new();
+
         for row in &self.kb_vec {
             let mut chars: Vec<char> = Vec::new();
             for element in row {
                 let char = element.0 as char;
                 chars.push(char);
             }
-            // println!("{:?}", chars);
+
+            display_chars.push(chars);
         }
+
+        return display_chars;
     }
 
     // Info display
@@ -871,11 +853,6 @@ impl Keyboard {
 
     pub fn get_id(&self) -> usize {
         return self.id;
-    }
-
-    // For population management
-    pub fn get_vec_ref(&self) -> &[Vec<(u8, u8)>] {
-        return &self.kb_vec;
     }
 
     pub fn is_elite(&self) -> bool {

@@ -111,7 +111,7 @@ mod setup;
 mod utils;
 
 use {
-    core::str,
+    // core::str,
     std::{
         env,
         fs::{self, File, OpenOptions},
@@ -124,10 +124,11 @@ use anyhow::{Result, anyhow};
 
 use crate::{setup::setup, utils::write_err};
 
+// TODO: Should the title card be re-rendered in display?
 fn main() -> ExitCode {
-    const PROG_NAME: &str = "MA Keyboard Generator";
+    // const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
-    const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
+    // const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
     // println!();
     // println!("{NAME_DASHES}");
     // println!("{PROG_NAME}");

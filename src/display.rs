@@ -4,7 +4,9 @@ use crossterm::{
     QueueableCommand,
     cursor::{MoveTo, RestorePosition, SavePosition},
     style::Print,
-    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    // terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    // terminal::{Clear, ClearType, LeaveAlternateScreen},
+    terminal::{Clear, ClearType},
 };
 
 use crate::keyboard::Keyboard;
@@ -25,6 +27,7 @@ pub struct Display {
 // TODO: The consts should be a compile time macro
 // TODO: You could print a theoretical climb count then the actual climbers separately. For
 // simplicity, it will all go on one line for now
+// TODO: Need a better solution for preventing typing while running
 impl Display {
     const OFFSET_Y: u16 = 1;
 
@@ -83,8 +86,8 @@ impl Display {
 
             let mut new_termios = orig_termios.clone();
             new_termios.local_flags.remove(termios::LocalFlags::ECHO);
-            termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &new_termios)
-                .expect("Failed to set terminal attributes");
+            // termios::tcsetattr(&stdin, termios::SetArg::TCSANOW, &new_termios)
+            //     .expect("Failed to set terminal attributes");
 
             return Display { orig_termios };
         }
@@ -121,8 +124,8 @@ impl Display {
     // happening
     pub fn draw_initial(&self, pop: &Population) {
         stdout()
-            .queue(EnterAlternateScreen)
-            .unwrap()
+            // .queue(EnterAlternateScreen)
+            // .unwrap()
             .queue(Clear(ClearType::All))
             .unwrap()
             .queue(MoveTo(0, Self::POP_Y))
@@ -350,31 +353,31 @@ impl Display {
 }
 
 // TODO: How to make this fun on ctrl+c?
-impl Drop for Display {
-    fn drop(&mut self) {
-        stdout()
-            .queue(Clear(ClearType::All))
-            .unwrap()
-            .queue(LeaveAlternateScreen)
-            .unwrap();
-
-        stdout().flush().unwrap();
-
-        #[cfg(unix)]
-        {
-            termios::tcsetattr(stdin(), termios::SetArg::TCSANOW, &self.orig_termios)
-                .expect("Failed to restore terminal attributes");
-        }
-
-        #[cfg(windows)]
-        {
-            crossterm::execute!(
-                stdout(),
-                crossterm::terminal::SetConsoleMode(
-                    crossterm::terminal::ConsoleMode::ENABLE_ECHO_INPUT
-                )
-            )
-            .expect("Failed to restore console mode");
-        }
-    }
-}
+// impl Drop for Display {
+//     fn drop(&mut self) {
+//         stdout()
+//             .queue(Clear(ClearType::All))
+//             .unwrap()
+//             .queue(LeaveAlternateScreen)
+//             .unwrap();
+//
+//         stdout().flush().unwrap();
+//
+//         #[cfg(unix)]
+//         {
+//             termios::tcsetattr(stdin(), termios::SetArg::TCSANOW, &self.orig_termios)
+//                 .expect("Failed to restore terminal attributes");
+//         }
+//
+//         #[cfg(windows)]
+//         {
+//             crossterm::execute!(
+//                 stdout(),
+//                 crossterm::terminal::SetConsoleMode(
+//                     crossterm::terminal::ConsoleMode::ENABLE_ECHO_INPUT
+//                 )
+//             )
+//             .expect("Failed to restore console mode");
+//         }
+//     }
+// }

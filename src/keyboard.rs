@@ -1,5 +1,62 @@
 use rand::{Rng as _, rngs::SmallRng};
 
+const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
+
+// Finger
+const INDEX: char = 'i';
+const MIDDLE: char = 'm';
+const RING: char = 'r';
+const PINKY: char = 'p';
+
+// Hand
+const LEFT: char = 'l';
+const RIGHT: char = 'r';
+
+// Keyboard rows
+const NUM: usize = 0;
+const TOP: usize = 1;
+const HOME: usize = 2;
+const BOT: usize = 3;
+
+// Keyboard Columns
+const L_PINKY: usize = 0;
+const L_RING: usize = 1;
+const L_MIDDLE: usize = 2;
+const L_INDEX: usize = 3;
+const L_EXT: usize = 4;
+const R_EXT: usize = 5;
+const R_INDEX: usize = 6;
+const R_MIDDLE: usize = 7;
+const R_RING: usize = 8;
+const R_PINKY: usize = 9;
+const R_SYMBOL: usize = 10;
+const R_NETHER: usize = 11;
+
+const BASE_EFF: f64 = 1.0;
+
+// Deduct, Low, Bigram or Single key
+const D_LO_B: f64 = 0.8;
+// Deduct, Low, Skipgram
+const D_LO_S: f64 = 0.8;
+// Deduct, Medium, Bigram or Single key
+const D_ME_B: f64 = 0.6;
+// Deduct, Medium, Skipgram
+const D_ME_S: f64 = 0.8;
+// Deduct, High, Bigram or Single key
+const D_HI_B: f64 = 0.4;
+// Deduct, High, Skipgram
+const D_HI_S: f64 = 0.7;
+// Deduct, Brutal, Bigram or Single key
+const D_BU_B: f64 = 0.2;
+// Deduct, Brutal, Skipgram
+const D_BU_S: f64 = 0.6;
+
+enum KeyCompare {
+    Mult(f64),
+    MultLeft(f64),
+    Mismatch,
+}
+
 #[derive(Clone)]
 pub struct Keyboard {
     kb_vec: Vec<Vec<(u8, u8)>>,
@@ -9,7 +66,6 @@ pub struct Keyboard {
     prev_key_idx: Option<(usize, usize)>,
     generation: usize,
     id: usize,
-    lineage: String,
     evaluated: bool,
     score: f64,
     left_uses: f64,
@@ -18,12 +74,8 @@ pub struct Keyboard {
     pos_iter: usize,
 }
 
-enum KeyCompare {
-    Mult(f64),
-    MultLeft(f64),
-    Mismatch,
-}
-
+// TODO: Break out non-self but KB functions into their own file. Make sure it's marked explicitly
+// that it's tied to keyboard so we don't put inappropriate error returns in
 // TODO: A better architecture for this is to let the user bring in the valid keys from a config
 // file rather than actually altering the source code. So then error propagation would be the
 // better design
@@ -33,23 +85,6 @@ enum KeyCompare {
 // NOTE: Any impl methods that are private and/or do not take external input assume that the struct
 // data is correct. These methods are not meant to be portable
 impl Keyboard {
-    const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
-
-    const DEFAULT_EFF: f64 = 1.0;
-
-    const INDEX: char = 'i';
-    const MIDDLE: char = 'm';
-    const RING: char = 'r';
-    const PINKY: char = 'p';
-
-    const LEFT: char = 'l';
-    const RIGHT: char = 'r';
-
-    const NUM: usize = 0;
-    const TOP: usize = 1;
-    const HOME: usize = 2;
-    const BOT: usize = 3;
-
     // TODO: No assertion message
     pub fn create_origin(id_in: usize) -> Self {
         const NUM_ROW_CAPACITY: usize = 12;
@@ -58,10 +93,10 @@ impl Keyboard {
         const BOT_ROW_CAPACITY: usize = 10;
 
         let mut kb_vec: Vec<Vec<(u8, u8)>> = vec![
-            vec![Self::DEFAULT_KEY; NUM_ROW_CAPACITY],
-            vec![Self::DEFAULT_KEY; TOP_ROW_CAPACITY],
-            vec![Self::DEFAULT_KEY; HOME_ROW_CAPACITY],
-            vec![Self::DEFAULT_KEY; BOT_ROW_CAPACITY],
+            vec![DEFAULT_KEY; NUM_ROW_CAPACITY],
+            vec![DEFAULT_KEY; TOP_ROW_CAPACITY],
+            vec![DEFAULT_KEY; HOME_ROW_CAPACITY],
+            vec![DEFAULT_KEY; BOT_ROW_CAPACITY],
         ];
         let mut valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)> = Self::get_keys();
 
@@ -85,7 +120,7 @@ impl Keyboard {
         assert!(Self::place_keys(&mut kb_vec, &valid_locations, 0));
         for row in &kb_vec {
             for col in row {
-                assert!(*col != Self::DEFAULT_KEY);
+                assert!(*col != DEFAULT_KEY);
             }
         }
 
@@ -97,19 +132,14 @@ impl Keyboard {
             }
         }
 
-        let generation = 0;
-        let id: usize = id_in;
-        let lineage: String = format!("{}.{}", generation, id);
-
         return Self {
             kb_vec,
             valid_locations,
             slot_ascii,
             last_key_idx: None,
             prev_key_idx: None,
-            generation,
-            id,
-            lineage,
+            generation: 0,
+            id: id_in,
             evaluated: false,
             score: 0.0,
             left_uses: 0.0,
@@ -121,132 +151,134 @@ impl Keyboard {
 
     fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
         return vec![
-            ((b'1', b'!'), vec![(0, 0)]),
-            ((b'2', b'@'), vec![(0, 1)]),
-            ((b'3', b'#'), vec![(0, 2)]),
-            ((b'4', b'$'), vec![(0, 3)]),
-            ((b'5', b'%'), vec![(0, 4)]),
-            ((b'6', b'^'), vec![(0, 5)]),
-            ((b'7', b'&'), vec![(0, 6)]),
-            ((b'8', b'*'), vec![(0, 7)]),
-            ((b'9', b'('), vec![(0, 8)]),
-            ((b'0', b')'), vec![(0, 9)]),
-            ((b'[', b'{'), vec![(0, 10)]),
-            ((b']', b'}'), vec![(0, 11)]),
-            // ((b',', b'<'), vec![(1, 0), (3, 0)]),
-            ((b',', b'<'), Self::alpha_slots(&vec![(3, 7)])),
-            // ((b'.', b'>'), vec![(1, 1), (3, 1)]),
-            ((b'.', b'>'), Self::alpha_slots(&vec![(3, 8)])),
-            ((b'-', b'_'), vec![(1, 10)]),
-            ((b'=', b'+'), vec![(1, 11)]),
-            ((b'/', b'?'), vec![(2, 10)]),
-            // ((b';', b':'), vec![(3, 4)]),
-            ((b';', b':'), Self::alpha_slots(&vec![(2, 9)])),
-            // ((b'\'', b'"'), vec![(1, 5)]),
-            ((b'\'', b'"'), Self::alpha_slots(&vec![(2, 10)])),
+            ((b'1', b'!'), vec![(NUM, L_PINKY)]),
+            ((b'2', b'@'), vec![(NUM, L_RING)]),
+            ((b'3', b'#'), vec![(NUM, L_MIDDLE)]),
+            ((b'4', b'$'), vec![(NUM, L_INDEX)]),
+            ((b'5', b'%'), vec![(NUM, L_EXT)]),
+            ((b'6', b'^'), vec![(NUM, R_EXT)]),
+            ((b'7', b'&'), vec![(NUM, R_INDEX)]),
+            ((b'8', b'*'), vec![(NUM, R_MIDDLE)]),
+            ((b'9', b'('), vec![(NUM, R_RING)]),
+            ((b'0', b')'), vec![(NUM, R_PINKY)]),
+            ((b'[', b'{'), vec![(NUM, R_SYMBOL)]),
+            ((b']', b'}'), vec![(NUM, R_NETHER)]),
+            ((b',', b'<'), Self::alpha_slots(&vec![(BOT, R_MIDDLE)])),
+            ((b'.', b'>'), Self::alpha_slots(&vec![(BOT, R_RING)])),
+            ((b'-', b'_'), vec![(TOP, R_SYMBOL)]),
+            ((b'=', b'+'), vec![(TOP, R_NETHER)]),
+            ((b'/', b'?'), vec![(HOME, R_SYMBOL)]),
+            (
+                (b';', b':'),
+                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
+            ),
+            (
+                (b'\'', b'"'),
+                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
+            ),
             (
                 (b'a', b'A'),
-                Self::alpha_slots(&vec![(1, 0), (2, 0), (3, 0)]),
+                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
             ),
             (
                 (b'b', b'B'),
-                Self::alpha_slots(&vec![(1, 4), (2, 4), (3, 4)]),
+                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
             ),
             (
                 (b'c', b'C'),
-                Self::alpha_slots(&vec![(1, 2), (2, 2), (3, 2)]),
+                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
             ),
             (
                 (b'd', b'D'),
-                Self::alpha_slots(&vec![(1, 2), (2, 2), (3, 2)]),
+                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
             ),
             (
                 (b'e', b'E'),
-                Self::alpha_slots(&vec![(1, 2), (2, 2), (3, 2)]),
+                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
             ),
             (
                 (b'f', b'F'),
-                Self::alpha_slots(&vec![(1, 3), (2, 3), (3, 3)]),
+                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
             ),
             (
                 (b'g', b'G'),
-                Self::alpha_slots(&vec![(1, 4), (2, 4), (3, 4)]),
+                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
             ),
             (
                 (b'h', b'H'),
-                Self::alpha_slots(&vec![(1, 5), (2, 5), (3, 5)]),
+                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
             ),
             (
                 (b'i', b'I'),
-                Self::alpha_slots(&vec![(1, 7), (2, 7), (3, 7)]),
+                Self::alpha_slots(&vec![(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)]),
             ),
             (
                 (b'j', b'J'),
-                Self::alpha_slots(&vec![(1, 6), (2, 6), (3, 6)]),
+                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
             ),
             (
                 (b'k', b'K'),
-                Self::alpha_slots(&vec![(1, 7), (2, 7), (3, 7)]),
+                Self::alpha_slots(&vec![(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)]),
             ),
             (
                 (b'l', b'L'),
-                Self::alpha_slots(&vec![(1, 8), (2, 8), (3, 8)]),
+                Self::alpha_slots(&vec![(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)]),
             ),
             (
                 (b'm', b'M'),
-                Self::alpha_slots(&vec![(1, 6), (2, 6), (3, 6)]),
+                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
             ),
             (
                 (b'n', b'N'),
-                Self::alpha_slots(&vec![(1, 5), (2, 5), (3, 5)]),
+                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
             ),
             (
                 (b'o', b'O'),
-                Self::alpha_slots(&vec![(1, 8), (2, 8), (3, 8)]),
+                Self::alpha_slots(&vec![(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)]),
             ),
             (
                 (b'p', b'P'),
-                Self::alpha_slots(&vec![(1, 9), (2, 9), (3, 9)]),
+                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
             ),
             (
                 (b'q', b'Q'),
-                Self::alpha_slots(&vec![(1, 0), (2, 0), (3, 0)]),
+                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
             ),
             (
                 (b'r', b'R'),
-                Self::alpha_slots(&vec![(1, 3), (2, 3), (3, 3)]),
+                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
             ),
             (
                 (b's', b'S'),
-                Self::alpha_slots(&vec![(1, 1), (2, 1), (3, 1)]),
+                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
             ),
             (
                 (b't', b'T'),
-                Self::alpha_slots(&vec![(1, 4), (2, 4), (3, 4)]),
+                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
             ),
             (
                 (b'u', b'U'),
-                Self::alpha_slots(&vec![(1, 6), (2, 6), (3, 6)]),
+                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
             ),
             (
                 (b'v', b'V'),
-                Self::alpha_slots(&vec![(1, 3), (2, 3), (3, 3)]),
+                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
             ),
             (
                 (b'w', b'W'),
-                Self::alpha_slots(&vec![(1, 1), (2, 1), (3, 1)]),
+                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
             ),
             (
                 (b'x', b'X'),
-                Self::alpha_slots(&vec![(1, 1), (2, 1), (3, 1)]),
+                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
             ),
             (
                 (b'y', b'Y'),
-                Self::alpha_slots(&vec![(1, 5), (2, 5), (3, 5)]),
+                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
             ),
             (
                 (b'z', b'Z'),
-                Self::alpha_slots(&vec![(1, 0), (2, 0), (3, 0)]),
+                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
             ),
         ];
     }
@@ -262,36 +294,8 @@ impl Keyboard {
         return slot_groups_flat;
     }
 
-    // fn not_home(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    //     let slot_groups: Vec<Vec<(usize, usize)>> = vec![Self::top_row(), Self::bottom_row()];
-    //
-    //     let mut slot_groups_flat: Vec<(usize, usize)> =
-    //         slot_groups.into_iter().flatten().collect();
-    //     slot_groups_flat.retain(|x| return !exclusions.contains(x));
-    //
-    //     return slot_groups_flat;
-    // }
-
-    // fn power_ten(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    //     let mut power_ten = vec![
-    //         (2, 0),
-    //         (2, 1),
-    //         (2, 2),
-    //         (2, 3),
-    //         (2, 6),
-    //         (2, 7),
-    //         (2, 8),
-    //         (2, 9),
-    //     ];
-    //
-    //     power_ten.retain(|x| return !exclusions.contains(x));
-    //
-    //     return power_ten;
-    // }
-
     fn top_row() -> Vec<(usize, usize)> {
         return vec![
-            // Omitted due to , and . keys
             (1, 0),
             (1, 1),
             (1, 2),
@@ -337,11 +341,6 @@ impl Keyboard {
         ];
     }
 
-    // fn get_k() -> Vec<(usize, usize)> {
-    //     return vec![(3, 1), (3, 2), (3, 3), (1, 9), (3, 9)];
-    // }
-
-    // TODO: No assertion message
     fn place_keys(
         kb_vec: &mut Vec<Vec<(u8, u8)>>,
         keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
@@ -355,7 +354,7 @@ impl Keyboard {
 
         for placement in &keys[idx].1 {
             let (row, col) = *placement;
-            if kb_vec[row][col] != Self::DEFAULT_KEY {
+            if kb_vec[row][col] != DEFAULT_KEY {
                 continue;
             }
 
@@ -364,7 +363,7 @@ impl Keyboard {
             if Self::place_keys(kb_vec, keys, idx + 1) {
                 return true;
             } else {
-                kb_vec[row][col] = Self::DEFAULT_KEY;
+                kb_vec[row][col] = DEFAULT_KEY;
             }
         }
 
@@ -380,7 +379,6 @@ impl Keyboard {
             prev_key_idx: None,
             generation: gen_input,
             id: id_in,
-            lineage: format!("{}-{}.{}", kb.get_lineage(), gen_input, id_in),
             evaluated: kb.evaluated,
             score: kb.get_score(),
             left_uses: 0.0,
@@ -394,7 +392,7 @@ impl Keyboard {
     // one valid option to shuffle to
     // TODO: Not assertion messages
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
-        // The top row and the side symbol keys are purposefully avoided
+        // The number row and the side symbol keys are purposefully avoided
         const MIN_ROW: usize = 1;
         const MAX_ROW: usize = 4;
         const MIN_COL: usize = 0;
@@ -450,7 +448,7 @@ impl Keyboard {
         }
     }
 
-    // TODO: No panic message
+    // TODO: I think this panic message is fine
     fn get_loc_idx(
         key: (u8, u8),
         valid_locations: &mut [((u8, u8), Vec<(usize, usize)>)],
@@ -467,18 +465,12 @@ impl Keyboard {
     // TODO: Unsure of how to handle space and return
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
-    fn get_efficiency(&mut self, this_key_idx: u8) -> f64 {
-        let this_key: (usize, usize) =
-            if let Some(&Some(slot)) = self.slot_ascii.get(this_key_idx as usize) {
-                slot
-            } else {
-                return 0.0;
-            };
+    fn get_efficiency(&mut self, this_key: (usize, usize)) -> f64 {
+        let mut eff: f64 = BASE_EFF;
 
-        let mut eff: f64 = Self::DEFAULT_EFF;
         let this_col: usize = this_key.1;
         let this_hand: char = Self::get_hand(this_col);
-        if this_hand == Self::RIGHT {
+        if this_hand == RIGHT {
             self.right_uses += 1.0;
         } else {
             self.left_uses += 1.0;
@@ -536,10 +528,19 @@ impl Keyboard {
 
         for entry in corpus {
             for b in entry.as_bytes() {
-                self.score += self.get_efficiency(*b);
+                let this_key: (usize, usize) =
+                    if let Some(&Some(key)) = self.slot_ascii.get(*b as usize) {
+                        key
+                    } else {
+                        self.prev_key_idx = self.last_key_idx;
+                        self.last_key_idx = None;
+                        continue;
+                    };
+
+                self.score += self.get_efficiency(this_key);
 
                 self.prev_key_idx = self.last_key_idx;
-                self.last_key_idx = None;
+                self.last_key_idx = Some(this_key);
             }
         }
 
@@ -570,46 +571,47 @@ impl Keyboard {
         };
     }
 
-    // NOTE: The number row is not deducted here because all keys on it should be static
+    // No blanket adjustment for any particular row. The specific code for bigrams and the
+    // additional code for single keys both deduct for row movement, which necessarily results in
+    // the algo favoring the home row
     fn get_single_key_mult(key: (usize, usize)) -> f64 {
         let row: usize = key.0;
         let col: usize = key.1;
         let finger: char = Self::get_finger(col);
-
-        let mut eff_mult: f64 = Self::DEFAULT_EFF;
+        let mut mult: f64 = BASE_EFF;
 
         // Do a blanket downward adjustment rather than micro-correct in the finger comparisons
         // The ring and pinky are mostly treated the same due to different preferences per typist.
         // However, the pinky top row is given an extra penalty because the whole hand has to be
         // moved to hit it
-        if finger == Self::RING || finger == Self::PINKY {
-            if row == Self::HOME {
-                eff_mult *= 0.8;
-            } else if (row == Self::BOT) || (row == Self::TOP && finger == Self::RING) {
-                eff_mult *= 0.6;
-            } else if row == Self::TOP && finger == Self::PINKY {
-                eff_mult *= 0.4;
+        if finger == RING || finger == PINKY {
+            if row == HOME {
+                mult *= D_LO_B;
+            } else if (row == BOT) || (row == TOP && finger == RING) {
+                mult *= D_ME_B;
+            } else if row == TOP && finger == PINKY {
+                mult *= D_HI_B;
             }
         }
 
         // The algo is too willing to put high-usage keys here
-        eff_mult *= match (row, col) {
-            (Self::TOP, 4) => 0.6,
-            (Self::HOME, 4) => 0.8,
-            (Self::BOT, 4) => 0.4,
-            (Self::TOP, 5) => 0.4,
-            (Self::HOME, 5) => 0.8,
-            (Self::BOT, 5) => 0.6,
-            _ => 1.0,
+        mult *= match (row, col) {
+            (TOP, 4) => D_ME_B,
+            (HOME, 4) => D_LO_B,
+            (BOT, 4) => D_HI_B,
+            (TOP, 5) => D_HI_B,
+            (HOME, 5) => D_LO_B,
+            (BOT, 5) => D_ME_B,
+            _ => BASE_EFF,
         };
 
-        return eff_mult;
+        return mult;
     }
 
     fn compare_keys(key_x: (usize, usize), key_y: (usize, usize), is_last: bool) -> KeyCompare {
         let key_x_col: usize = key_x.1;
-        let key_x_hand: char = Self::get_hand(key_x_col);
         let key_y_col: usize = key_y.1;
+        let key_x_hand: char = Self::get_hand(key_x_col);
         let key_y_hand: char = Self::get_hand(key_y_col);
         if key_x_hand != key_y_hand {
             return KeyCompare::Mismatch;
@@ -617,18 +619,19 @@ impl Keyboard {
 
         let key_x_row: usize = key_x.0;
         let key_y_row: usize = key_y.0;
-        let key_x_finger: char = Self::get_finger(key_x_col);
-        let key_y_finger: char = Self::get_finger(key_y_col);
-        let mut eff: f64 = Self::DEFAULT_EFF;
+        let mut eff: f64 = BASE_EFF;
 
         let row_eff: f64 = Self::get_row_mult(key_x_row, key_y_row, is_last);
         eff *= row_eff;
+
         // NOTE: These extension effeciencies are meant to track the impact of moving the index or
         // the pinky off the home columns on the entire hand
         let index_ext_eff: f64 = Self::get_index_eff(key_x, key_y, is_last);
         eff *= index_ext_eff;
         eff *= Self::get_pinky_eff(key_x, key_y, is_last);
 
+        let key_x_finger: char = Self::get_finger(key_x_col);
+        let key_y_finger: char = Self::get_finger(key_y_col);
         let mut index_mv_eff: f64 = 1.0;
         if key_x_finger == key_y_finger {
             eff *= Self::get_base_sf_penalty(is_last);
@@ -642,7 +645,7 @@ impl Keyboard {
         }
 
         let did_mv: bool = row_eff < 1.0 || index_ext_eff < 1.0 || index_mv_eff < 1.0;
-        if key_x_hand == Self::LEFT && did_mv {
+        if key_x_hand == LEFT && did_mv {
             return KeyCompare::MultLeft(eff);
         }
 
@@ -663,7 +666,7 @@ impl Keyboard {
             panic!("Trying to get combo of equal rows");
         };
 
-        if bot == Self::INDEX || top == Self::MIDDLE || (top == Self::RING && bot == Self::PINKY) {
+        if bot == INDEX || top == MIDDLE || (top == RING && bot == PINKY) {
             return 1.0;
         } else if is_last {
             return 0.6;
@@ -698,40 +701,37 @@ impl Keyboard {
     }
 
     // NOTE: Assumes that both keys are on the same hand
-    fn get_index_eff(this: (usize, usize), that: (usize, usize), is_last: bool) -> f64 {
-        if !((4..=5).contains(&this.1) || (4..=5).contains(&that.1)) {
-            return Self::DEFAULT_EFF;
+    fn get_index_eff(this: (usize, usize), last: (usize, usize), is_bigram: bool) -> f64 {
+        if !((4..=5).contains(&this.1) || (4..=5).contains(&last.1)) {
+            return BASE_EFF;
         }
 
-        return match (this.0, this.1, that.0, that.1, is_last) {
-            // TV. Relatively natural movement. Already addressed by global deduction on row jumps
-            (Self::TOP, 4, 3, 3, true) | (Self::BOT, 3, Self::TOP, 4, true) => 1.0,
-            (Self::TOP, 4, 3, 3, false) | (Self::BOT, 3, Self::TOP, 4, false) => 1.0,
-            // Penalize Other T movements
-            (Self::TOP, 4, _, _, true) | (_, _, Self::TOP, 4, true) => 0.6,
-            (Self::TOP, 4, _, _, false) | (_, _, Self::TOP, 4, false) => 0.8,
+        return match (this.0, this.1, last.0, last.1, is_bigram) {
+            // T (Not penalized. No more movement than hitting R)
+            (TOP, 4, _, _, true) | (_, _, TOP, 4, true) => BASE_EFF,
+            (TOP, 4, _, _, false) | (_, _, TOP, 4, false) => BASE_EFF,
             // G
-            (Self::HOME, 4, _, _, true) | (_, _, Self::HOME, 4, true) => 0.8,
-            (Self::HOME, 4, _, _, false) | (_, _, Self::HOME, 4, false) => 0.9,
+            (HOME, 4, _, _, true) | (_, _, HOME, 4, true) => D_LO_B,
+            (HOME, 4, _, _, false) | (_, _, HOME, 4, false) => D_LO_S,
             // B
-            (Self::BOT, 4, _, _, true) | (_, _, Self::BOT, 4, true) => 0.4,
-            (Self::BOT, 4, _, _, false) | (_, _, Self::BOT, 4, false) => 0.7,
-            // UN. Same as TV
-            (Self::TOP, 5, 3, 6, true) | (Self::BOT, 6, Self::TOP, 5, true) => 1.0,
-            (Self::TOP, 5, 3, 6, false) | (Self::BOT, 6, Self::TOP, 5, false) => 1.0,
-            // Penalize Other T movements
-            (Self::TOP, 5, _, _, true) | (_, _, Self::TOP, 5, true) => 0.6,
-            (Self::TOP, 5, _, _, false) | (_, _, Self::TOP, 5, false) => 0.8,
-            // G
-            (Self::HOME, 5, _, _, true) | (_, _, Self::HOME, 5, true) => 0.8,
-            (Self::HOME, 5, _, _, false) | (_, _, Self::HOME, 5, false) => 0.9,
-            // B
-            (Self::BOT, 5, _, _, true) | (_, _, Self::BOT, 5, true) => 0.4,
-            (Self::BOT, 5, _, _, false) | (_, _, Self::BOT, 5, false) => 0.7,
+            (BOT, 4, _, _, true) | (_, _, BOT, 4, true) => D_HI_B,
+            (BOT, 4, _, _, false) | (_, _, BOT, 4, false) => D_HI_S,
+            // 5 (Not penalized, no more movement than hitting 4)
+            (NUM, 4, _, _, true) | (_, _, NUM, 4, true) => BASE_EFF,
+            (NUM, 4, _, _, false) | (_, _, NUM, 4, false) => BASE_EFF,
+            // Y
+            (TOP, 5, _, _, true) | (_, _, TOP, 5, true) => D_HI_B,
+            (TOP, 5, _, _, false) | (_, _, TOP, 5, false) => D_HI_S,
+            // H
+            (HOME, 5, _, _, true) | (_, _, HOME, 5, true) => D_LO_B,
+            (HOME, 5, _, _, false) | (_, _, HOME, 5, false) => D_LO_S,
+            // N
+            (BOT, 5, _, _, true) | (_, _, BOT, 5, true) => D_ME_B,
+            (BOT, 5, _, _, false) | (_, _, BOT, 5, false) => D_ME_S,
             // 6
-            (Self::NUM, 5, _, _, true) | (_, _, Self::NUM, 5, true) => 0.2,
-            (Self::NUM, 5, _, _, false) | (_, _, Self::NUM, 5, false) => 0.6,
-            _ => Self::DEFAULT_EFF,
+            (NUM, 5, _, _, true) | (_, _, NUM, 5, true) => D_BU_B,
+            (NUM, 5, _, _, false) | (_, _, NUM, 5, false) => D_BU_S,
+            _ => BASE_EFF,
         };
     }
 
@@ -742,25 +742,25 @@ impl Keyboard {
         }
 
         return match (this.0, this.1, that.0, that.1, is_last) {
-            (Self::NUM, 10, _, _, true) | (_, _, Self::NUM, 10, true) => 0.2,
-            (Self::NUM, 11, _, _, true) | (_, _, Self::NUM, 11, true) => 0.2,
-            (Self::TOP, 10, _, _, true) | (_, _, Self::TOP, 10, true) => 0.6,
-            (Self::TOP, 11, _, _, true) | (_, _, Self::TOP, 11, true) => 0.4,
-            (Self::HOME, 10, _, _, true) | (_, _, Self::HOME, 10, true) => 0.8,
-            (Self::NUM, 10, _, _, false) | (_, _, Self::NUM, 10, false) => 0.2,
-            (Self::NUM, 11, _, _, false) | (_, _, Self::NUM, 11, false) => 0.2,
-            (Self::TOP, 10, _, _, false) | (_, _, Self::TOP, 10, false) => 0.8,
-            (Self::TOP, 11, _, _, false) | (_, _, Self::TOP, 11, false) => 0.7,
-            (Self::HOME, 10, _, _, false) | (_, _, Self::HOME, 10, false) => 0.9,
+            (NUM, 10, _, _, true) | (_, _, NUM, 10, true) => 0.2,
+            (NUM, 11, _, _, true) | (_, _, NUM, 11, true) => 0.2,
+            (TOP, 10, _, _, true) | (_, _, TOP, 10, true) => 0.6,
+            (TOP, 11, _, _, true) | (_, _, TOP, 11, true) => 0.4,
+            (HOME, 10, _, _, true) | (_, _, HOME, 10, true) => 0.8,
+            (NUM, 10, _, _, false) | (_, _, NUM, 10, false) => 0.2,
+            (NUM, 11, _, _, false) | (_, _, NUM, 11, false) => 0.2,
+            (TOP, 10, _, _, false) | (_, _, TOP, 10, false) => 0.8,
+            (TOP, 11, _, _, false) | (_, _, TOP, 11, false) => 0.7,
+            (HOME, 10, _, _, false) | (_, _, HOME, 10, false) => 0.9,
             _ => 1.0,
         };
     }
 
     fn get_base_sf_penalty(is_last: bool) -> f64 {
         if is_last {
-            return 0.8;
+            return 0.6;
         } else {
-            return 0.9;
+            return 0.8;
         }
     }
 
@@ -799,14 +799,14 @@ impl Keyboard {
         // Left-handed scissors are punished beyond the base left-hand movement deduction because,
         // unlike right-handed scissors, you have to actually rock your hand to hit them
         return match (this_row.abs_diff(that_row), hand, is_last) {
-            (2, Self::RIGHT, true) => 0.6,
-            (3, Self::RIGHT, true) => 0.4,
-            (2, Self::RIGHT, false) => 0.8,
-            (3, Self::RIGHT, false) => 0.7,
-            (2, Self::LEFT, true) => 0.4,
-            (3, Self::LEFT, true) => 0.2,
-            (2, Self::LEFT, false) => 0.7,
-            (3, Self::LEFT, false) => 0.6,
+            (2, RIGHT, true) => 0.6,
+            (3, RIGHT, true) => 0.4,
+            (2, RIGHT, false) => 0.8,
+            (3, RIGHT, false) => 0.7,
+            (2, LEFT, true) => 0.4,
+            (3, LEFT, true) => 0.2,
+            (2, LEFT, false) => 0.7,
+            (3, LEFT, false) => 0.6,
             _ => 1.0,
         };
     }
@@ -829,10 +829,6 @@ impl Keyboard {
     }
 
     // Info display
-    pub fn get_lineage(&self) -> &str {
-        return &self.lineage;
-    }
-
     pub fn get_score(&self) -> f64 {
         return self.score;
     }

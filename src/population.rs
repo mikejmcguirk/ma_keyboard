@@ -317,6 +317,7 @@ impl IdSpawner {
     }
 }
 
+// TODO: After the swap map is added, test whether allowing the elite to climb at all is good
 // TODO: Re-introduce an annealing type concept back into here. We are not seeing reliable enough
 // cycling
 // PERF: Some of this calculation is per iteration and could be sectioned out

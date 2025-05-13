@@ -1,8 +1,8 @@
-use rand::{Rng as _, rngs::SmallRng};
+use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom};
 
 use crate::{
     kb_consts, kb_helper_consts,
-    kb_helpers::{check_spaces, get_key_locations, place_keys},
+    kb_helpers::{check_spaces, get_key_locations, get_loc_idx, place_keys},
 };
 
 kb_consts!();
@@ -103,78 +103,63 @@ impl Keyboard {
         };
     }
 
-    // NOTE: This function assumes the keys are properly setup such that there is always at least
-    // one valid option to shuffle to
-    // TODO: Not assertion messages
+    // NOTE: The shuffle constants make sure that the number row and the symbol keys to the right
+    // of the right pinky are ignored
+    // This function expects the data setup in create_origin to be correct
+    #[expect(clippy::indexing_slicing)]
+    // Check at debug that excessive shuffle values are not being sent
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
-        // The number row and the side symbol keys are purposefully avoided
         const MIN_ROW: usize = 1;
         const MAX_ROW: usize = 4;
         const MIN_COL: usize = 0;
         const MAX_COL: usize = 10;
 
         self.evaluated = false;
+        debug_assert!(amt <= 100, "{amt} is too many shuffles");
 
-        let mut s: usize = 0;
+        let mut s = 0;
         while s < amt {
-            let row_x: usize = rng.random_range(MIN_ROW..MAX_ROW);
-            let col_x: usize = rng.random_range(MIN_COL..MAX_COL);
-            let key_x: (u8, u8) = self.kb_vec[row_x][col_x];
-            let idx_x: usize = Self::get_loc_idx(key_x, &mut self.valid_locations);
-
-            debug_assert!(!self.valid_locations[idx_x].1.is_empty());
-            if self.valid_locations[idx_x].1.len() == 1 {
+            let this_row = rng.random_range(MIN_ROW..MAX_ROW);
+            let this_col = rng.random_range(MIN_COL..MAX_COL);
+            let this_key = self.kb_vec[this_row][this_col];
+            let this_idx = get_loc_idx(this_key, &self.valid_locations);
+            if self.valid_locations[this_idx].1.len() == 1 {
                 continue;
             }
 
-            for i in 0..self.valid_locations[idx_x].1.len() - 1 {
-                let j: usize = rng.random_range(1..self.valid_locations[idx_x].1.len());
-                self.valid_locations[idx_x].1.swap(i, j);
-            }
-
-            for i in 0..self.valid_locations[idx_x].1.len() {
-                let row_y: usize = self.valid_locations[idx_x].1[i].0;
-                let col_y: usize = self.valid_locations[idx_x].1[i].1;
-                let key_y: (u8, u8) = self.kb_vec[row_y][col_y];
-                let idx_y: usize = Self::get_loc_idx(key_y, &mut self.valid_locations);
-
-                debug_assert!(!self.valid_locations[idx_y].1.is_empty());
-                if self.valid_locations[idx_y].1.len() == 1 {
-                    continue;
-                }
-
-                if self.valid_locations[idx_y].1.len() == 1
-                    || !self.valid_locations[idx_y].1.contains(&(row_x, col_x))
+            self.valid_locations[this_idx].1[0..].shuffle(rng);
+            for i in 0..self.valid_locations[this_idx].1.len() {
+                let that_row = self.valid_locations[this_idx].1[i].0;
+                let that_col = self.valid_locations[this_idx].1[i].1;
+                let that_key = self.kb_vec[that_row][that_col];
+                let that_idx = get_loc_idx(that_key, &self.valid_locations);
+                if self.valid_locations[that_idx].1.len() == 1
+                    || !self.valid_locations[that_idx]
+                        .1
+                        .contains(&(this_row, this_col))
                 {
                     continue;
                 }
 
-                self.kb_vec[row_x][col_x] = key_y;
-                self.kb_vec[row_y][col_y] = key_x;
+                self.kb_vec[this_row][this_col] = that_key;
+                self.kb_vec[that_row][that_col] = this_key;
 
-                self.slot_ascii[key_y.0 as usize] = Some((row_x, col_x));
-                self.slot_ascii[key_y.1 as usize] = Some((row_x, col_x));
-                self.slot_ascii[key_x.0 as usize] = Some((row_y, col_y));
-                self.slot_ascii[key_x.1 as usize] = Some((row_y, col_y));
+                self.slot_ascii[usize::from(that_key.0)] = Some((this_row, this_col));
+                self.slot_ascii[usize::from(that_key.1)] = Some((this_row, this_col));
+                self.slot_ascii[usize::from(this_key.0)] = Some((that_row, that_col));
+                self.slot_ascii[usize::from(this_key.1)] = Some((that_row, that_col));
 
                 s += 1;
                 break;
             }
-        }
-    }
 
-    // TODO: I think this panic message is fine
-    fn get_loc_idx(
-        key: (u8, u8),
-        valid_locations: &mut [((u8, u8), Vec<(usize, usize)>)],
-    ) -> usize {
-        for i in 0..valid_locations.len() {
-            if valid_locations[i].0 == key {
-                return i;
-            }
+            debug_assert!(
+                get_loc_idx(this_key, &self.valid_locations) != this_idx,
+                "{:?} did not move from {this_idx}",
+                this_key
+            );
         }
-
-        panic!("Did not find {:?} in valid locations", key);
     }
 
     // TODO: Unsure of how to handle space and return

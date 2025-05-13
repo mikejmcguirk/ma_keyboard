@@ -33,6 +33,7 @@
 #![allow(clippy::exhaustive_structs)] // This isn't a library
 #![allow(clippy::missing_errors_doc)] // This isn't a library
 #![allow(clippy::float_arithmetic)] // Used a lot
+#![allow(clippy::panic)] // Not a server app
 #![allow(clippy::print_stderr)] // This is a terminal application
 #![allow(clippy::print_stdout)] // This is a terminal application
 
@@ -77,7 +78,6 @@
 // #![allow(clippy::needless_continue)]
 // #![allow(clippy::needless_range_loop)]
 // #![allow(clippy::new_without_default)]
-// #![allow(clippy::panic)]
 // #![allow(clippy::panic_in_result_fn)]
 // #![allow(clippy::pathbuf_init_then_push)]
 // #![allow(clippy::question_mark)]

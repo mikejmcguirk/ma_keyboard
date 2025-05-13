@@ -36,7 +36,7 @@ use crate::{display::Display, population::Population};
 // - Amount of elites
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 400;
+    const ITERATIONS: usize = 100;
 
     let corpus_dir: PathBuf = get_corpus_dir()?;
     let corpus: Vec<String> = load_corpus(&corpus_dir)?;

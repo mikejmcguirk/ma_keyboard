@@ -1,6 +1,103 @@
 use rand::{Rng as _, rngs::SmallRng};
 
-const DEFAULT_KEY: (u8, u8) = (b' ', b' ');
+const SPACE: (u8, u8) = (b' ', b' ');
+
+const ONE: (u8, u8) = (b'1', b'!');
+const TWO: (u8, u8) = (b'2', b'@');
+const THREE: (u8, u8) = (b'3', b'#');
+const FOUR: (u8, u8) = (b'4', b'$');
+const FIVE: (u8, u8) = (b'5', b'%');
+const SIX: (u8, u8) = (b'6', b'^');
+const SEVEN: (u8, u8) = (b'7', b'&');
+const EIGHT: (u8, u8) = (b'8', b'*');
+const NINE: (u8, u8) = (b'9', b'(');
+const ZERO: (u8, u8) = (b'0', b')');
+const L_BRACKET: (u8, u8) = (b'[', b'{');
+const R_BRACKET: (u8, u8) = (b']', b'}');
+const COMMA: (u8, u8) = (b',', b'<');
+const PERIOD: (u8, u8) = (b'.', b'>');
+const DASH: (u8, u8) = (b'-', b'_');
+const EQUALS: (u8, u8) = (b'=', b'+');
+const F_SLASH: (u8, u8) = (b'/', b'?');
+const SEMICOLON: (u8, u8) = (b';', b':');
+const QUOTE: (u8, u8) = (b'\'', b'"');
+const A: (u8, u8) = (b'a', b'A');
+const B: (u8, u8) = (b'b', b'B');
+const C: (u8, u8) = (b'c', b'C');
+const D: (u8, u8) = (b'd', b'D');
+const E: (u8, u8) = (b'e', b'E');
+const F: (u8, u8) = (b'f', b'F');
+const G: (u8, u8) = (b'g', b'G');
+const H: (u8, u8) = (b'h', b'H');
+const I: (u8, u8) = (b'i', b'I');
+const J: (u8, u8) = (b'j', b'J');
+const K: (u8, u8) = (b'k', b'K');
+const L: (u8, u8) = (b'l', b'L');
+const M: (u8, u8) = (b'm', b'M');
+const N: (u8, u8) = (b'n', b'N');
+const O: (u8, u8) = (b'o', b'O');
+const P: (u8, u8) = (b'p', b'P');
+const Q: (u8, u8) = (b'q', b'Q');
+const R: (u8, u8) = (b'r', b'R');
+const S: (u8, u8) = (b's', b'S');
+const T: (u8, u8) = (b't', b'T');
+const U: (u8, u8) = (b'u', b'U');
+const V: (u8, u8) = (b'v', b'V');
+const W: (u8, u8) = (b'w', b'W');
+const X: (u8, u8) = (b'x', b'X');
+const Y: (u8, u8) = (b'y', b'Y');
+const Z: (u8, u8) = (b'z', b'Z');
+
+// Number Row - Static
+const ONE_VALID: [(usize, usize); 1] = [(NUM, L_PINKY)];
+const TWO_VALID: [(usize, usize); 1] = [(NUM, L_RING)];
+const THREE_VALID: [(usize, usize); 1] = [(NUM, L_MIDDLE)];
+const FOUR_VALID: [(usize, usize); 1] = [(NUM, L_INDEX)];
+const FIVE_VALID: [(usize, usize); 1] = [(NUM, L_EXT)];
+const SIX_VALID: [(usize, usize); 1] = [(NUM, R_EXT)];
+const SEVEN_VALID: [(usize, usize); 1] = [(NUM, R_INDEX)];
+const EIGHT_VALID: [(usize, usize); 1] = [(NUM, R_MIDDLE)];
+const NINE_VALID: [(usize, usize); 1] = [(NUM, R_RING)];
+const ZERO_VALID: [(usize, usize); 1] = [(NUM, R_PINKY)];
+const L_BRACKET_VALID: [(usize, usize); 1] = [(NUM, R_SYMBOL)];
+const R_BRACKET_VALID: [(usize, usize); 1] = [(NUM, R_NETHER)];
+
+// Pinky Extension Symbol Keys - Static
+const DASH_VALID: [(usize, usize); 1] = [(TOP, R_SYMBOL)];
+const EQUALS_VALID: [(usize, usize); 1] = [(TOP, R_NETHER)];
+const F_SLASH_VALID: [(usize, usize); 1] = [(HOME, R_SYMBOL)];
+
+// ALpha Keys - Dynamic
+const Q_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
+const A_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
+const Z_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
+const W_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
+const S_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
+const X_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
+const E_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
+const D_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
+const C_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
+const R_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
+const F_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
+const V_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
+const T_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
+const G_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
+const B_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
+const Y_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
+const H_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
+const N_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
+const U_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
+const J_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
+const M_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
+const I_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
+const K_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
+const COMMA_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
+const O_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
+const L_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
+const PERIOD_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
+const P_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
+const SEMICOLON_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
+const QUOTE_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
 
 // Finger
 const INDEX: char = 'i';
@@ -93,10 +190,10 @@ impl Keyboard {
         const BOT_ROW_CAPACITY: usize = 10;
 
         let mut kb_vec: Vec<Vec<(u8, u8)>> = vec![
-            vec![DEFAULT_KEY; NUM_ROW_CAPACITY],
-            vec![DEFAULT_KEY; TOP_ROW_CAPACITY],
-            vec![DEFAULT_KEY; HOME_ROW_CAPACITY],
-            vec![DEFAULT_KEY; BOT_ROW_CAPACITY],
+            vec![SPACE; NUM_ROW_CAPACITY],
+            vec![SPACE; TOP_ROW_CAPACITY],
+            vec![SPACE; HOME_ROW_CAPACITY],
+            vec![SPACE; BOT_ROW_CAPACITY],
         ];
         let mut valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)> = Self::get_keys();
 
@@ -120,7 +217,7 @@ impl Keyboard {
         assert!(Self::place_keys(&mut kb_vec, &valid_locations, 0));
         for row in &kb_vec {
             for col in row {
-                assert!(*col != DEFAULT_KEY);
+                assert!(*col != SPACE);
             }
         }
 
@@ -149,137 +246,57 @@ impl Keyboard {
         };
     }
 
+    // The first tuple element is the key, the second is its valid slots
     fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
         return vec![
-            ((b'1', b'!'), vec![(NUM, L_PINKY)]),
-            ((b'2', b'@'), vec![(NUM, L_RING)]),
-            ((b'3', b'#'), vec![(NUM, L_MIDDLE)]),
-            ((b'4', b'$'), vec![(NUM, L_INDEX)]),
-            ((b'5', b'%'), vec![(NUM, L_EXT)]),
-            ((b'6', b'^'), vec![(NUM, R_EXT)]),
-            ((b'7', b'&'), vec![(NUM, R_INDEX)]),
-            ((b'8', b'*'), vec![(NUM, R_MIDDLE)]),
-            ((b'9', b'('), vec![(NUM, R_RING)]),
-            ((b'0', b')'), vec![(NUM, R_PINKY)]),
-            ((b'[', b'{'), vec![(NUM, R_SYMBOL)]),
-            ((b']', b'}'), vec![(NUM, R_NETHER)]),
-            ((b',', b'<'), Self::alpha_slots(&vec![(BOT, R_MIDDLE)])),
-            ((b'.', b'>'), Self::alpha_slots(&vec![(BOT, R_RING)])),
-            ((b'-', b'_'), vec![(TOP, R_SYMBOL)]),
-            ((b'=', b'+'), vec![(TOP, R_NETHER)]),
-            ((b'/', b'?'), vec![(HOME, R_SYMBOL)]),
-            (
-                (b';', b':'),
-                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
-            ),
-            (
-                (b'\'', b'"'),
-                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
-            ),
-            (
-                (b'a', b'A'),
-                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
-            ),
-            (
-                (b'b', b'B'),
-                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
-            ),
-            (
-                (b'c', b'C'),
-                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
-            ),
-            (
-                (b'd', b'D'),
-                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
-            ),
-            (
-                (b'e', b'E'),
-                Self::alpha_slots(&vec![(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)]),
-            ),
-            (
-                (b'f', b'F'),
-                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
-            ),
-            (
-                (b'g', b'G'),
-                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
-            ),
-            (
-                (b'h', b'H'),
-                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
-            ),
-            (
-                (b'i', b'I'),
-                Self::alpha_slots(&vec![(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)]),
-            ),
-            (
-                (b'j', b'J'),
-                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
-            ),
-            (
-                (b'k', b'K'),
-                Self::alpha_slots(&vec![(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)]),
-            ),
-            (
-                (b'l', b'L'),
-                Self::alpha_slots(&vec![(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)]),
-            ),
-            (
-                (b'm', b'M'),
-                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
-            ),
-            (
-                (b'n', b'N'),
-                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
-            ),
-            (
-                (b'o', b'O'),
-                Self::alpha_slots(&vec![(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)]),
-            ),
-            (
-                (b'p', b'P'),
-                Self::alpha_slots(&vec![(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)]),
-            ),
-            (
-                (b'q', b'Q'),
-                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
-            ),
-            (
-                (b'r', b'R'),
-                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
-            ),
-            (
-                (b's', b'S'),
-                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
-            ),
-            (
-                (b't', b'T'),
-                Self::alpha_slots(&vec![(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)]),
-            ),
-            (
-                (b'u', b'U'),
-                Self::alpha_slots(&vec![(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)]),
-            ),
-            (
-                (b'v', b'V'),
-                Self::alpha_slots(&vec![(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)]),
-            ),
-            (
-                (b'w', b'W'),
-                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
-            ),
-            (
-                (b'x', b'X'),
-                Self::alpha_slots(&vec![(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)]),
-            ),
-            (
-                (b'y', b'Y'),
-                Self::alpha_slots(&vec![(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)]),
-            ),
-            (
-                (b'z', b'Z'),
-                Self::alpha_slots(&vec![(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)]),
-            ),
+            // Number Row
+            (ONE, ONE_VALID.to_vec()),
+            (TWO, TWO_VALID.to_vec()),
+            (THREE, THREE_VALID.to_vec()),
+            (FOUR, FOUR_VALID.to_vec()),
+            (FIVE, FIVE_VALID.to_vec()),
+            (SIX, SIX_VALID.to_vec()),
+            (SEVEN, SEVEN_VALID.to_vec()),
+            (EIGHT, EIGHT_VALID.to_vec()),
+            (NINE, NINE_VALID.to_vec()),
+            (ZERO, ZERO_VALID.to_vec()),
+            (L_BRACKET, L_BRACKET_VALID.to_vec()),
+            (R_BRACKET, R_BRACKET_VALID.to_vec()),
+            // Pinky Extension Symbols
+            (DASH, DASH_VALID.to_vec()),
+            (EQUALS, EQUALS_VALID.to_vec()),
+            (F_SLASH, F_SLASH_VALID.to_vec()),
+            // Alpha Area Keys
+            (COMMA, Self::alpha_slots(COMMA_INVALID.as_ref())),
+            (PERIOD, Self::alpha_slots(PERIOD_INVALID.as_ref())),
+            (SEMICOLON, Self::alpha_slots(SEMICOLON_INVALID.as_ref())),
+            (QUOTE, Self::alpha_slots(QUOTE_INVALID.as_ref())),
+            (A, Self::alpha_slots(A_INVALID.as_ref())),
+            (B, Self::alpha_slots(B_INVALID.as_ref())),
+            (C, Self::alpha_slots(C_INVALID.as_ref())),
+            (D, Self::alpha_slots(D_INVALID.as_ref())),
+            (E, Self::alpha_slots(E_INVALID.as_ref())),
+            (F, Self::alpha_slots(F_INVALID.as_ref())),
+            (G, Self::alpha_slots(G_INVALID.as_ref())),
+            (H, Self::alpha_slots(H_INVALID.as_ref())),
+            (I, Self::alpha_slots(I_INVALID.as_ref())),
+            (J, Self::alpha_slots(J_INVALID.as_ref())),
+            (K, Self::alpha_slots(K_INVALID.as_ref())),
+            (L, Self::alpha_slots(L_INVALID.as_ref())),
+            (M, Self::alpha_slots(M_INVALID.as_ref())),
+            (N, Self::alpha_slots(N_INVALID.as_ref())),
+            (O, Self::alpha_slots(O_INVALID.as_ref())),
+            (P, Self::alpha_slots(P_INVALID.as_ref())),
+            (Q, Self::alpha_slots(Q_INVALID.as_ref())),
+            (R, Self::alpha_slots(R_INVALID.as_ref())),
+            (S, Self::alpha_slots(S_INVALID.as_ref())),
+            (T, Self::alpha_slots(T_INVALID.as_ref())),
+            (U, Self::alpha_slots(U_INVALID.as_ref())),
+            (V, Self::alpha_slots(V_INVALID.as_ref())),
+            (W, Self::alpha_slots(W_INVALID.as_ref())),
+            (X, Self::alpha_slots(X_INVALID.as_ref())),
+            (Y, Self::alpha_slots(Y_INVALID.as_ref())),
+            (Z, Self::alpha_slots(Z_INVALID.as_ref())),
         ];
     }
 
@@ -354,7 +371,7 @@ impl Keyboard {
 
         for placement in &keys[idx].1 {
             let (row, col) = *placement;
-            if kb_vec[row][col] != DEFAULT_KEY {
+            if kb_vec[row][col] != SPACE {
                 continue;
             }
 
@@ -363,7 +380,7 @@ impl Keyboard {
             if Self::place_keys(kb_vec, keys, idx + 1) {
                 return true;
             } else {
-                kb_vec[row][col] = DEFAULT_KEY;
+                kb_vec[row][col] = SPACE;
             }
         }
 

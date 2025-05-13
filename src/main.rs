@@ -105,6 +105,7 @@
 
 mod custom_err;
 mod display;
+mod kb_helpers;
 mod keyboard;
 mod macros;
 mod population;

@@ -1,16 +1,23 @@
 // For max edges length: Check/Allin/Bets or Call/Fold/Allin/Raises
 #[macro_export]
-macro_rules! kb_consts {
+macro_rules! row_consts {
     () => {
-        // =======================
-        // ==== Keyboard Info ====
-        // =======================
-
         // Rows
         const NUM_ROW: usize = 0;
         const TOP_ROW: usize = 1;
         const HOME_ROW: usize = 2;
         const BOT_ROW: usize = 3;
+    };
+}
+
+#[macro_export]
+macro_rules! helper_consts {
+    () => {
+        row_consts!();
+
+        // =======================
+        // ==== Keyboard Info ====
+        // =======================
 
         // Columns
         const L_PINKY: usize = 0;
@@ -26,22 +33,9 @@ macro_rules! kb_consts {
         const R_SYMBOL: usize = 10;
         const R_NETHER: usize = 11;
 
-        // Fingers
-        const INDEX: char = 'i';
-        const MIDDLE: char = 'm';
-        const RING: char = 'r';
-        const PINKY: char = 'p';
-
-        // Hands
-        const LEFT: char = 'l';
-        const RIGHT: char = 'r';
-
         // ==================
         // ==== Key Info ====
         // ==================
-
-        // Default Key
-        const SPACE: (u8, u8) = (b' ', b' ');
 
         // Keys
         const ONE: (u8, u8) = (b'1', b'!');
@@ -261,9 +255,26 @@ macro_rules! kb_consts {
             (BOT_ROW, R_PINKY)
         ];
 
-        // ======================
-        // ==== SCORING INFO ====
-        // ======================
+    };
+}
+
+#[macro_export]
+macro_rules! kb_consts {
+    () => {
+        row_consts!();
+
+        // Default Key
+        const SPACE: (u8, u8) = (b' ', b' ');
+
+        // Fingers
+        const INDEX: char = 'i';
+        const MIDDLE: char = 'm';
+        const RING: char = 'r';
+        const PINKY: char = 'p';
+
+        // Hands
+        const LEFT: char = 'l';
+        const RIGHT: char = 'r';
 
         const BASE_EFF: f64 = 1.0;
 

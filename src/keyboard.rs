@@ -1,6 +1,6 @@
 use rand::{Rng as _, rngs::SmallRng};
 
-use crate::kb_consts;
+use crate::{kb_consts, kb_helpers::get_keys, row_consts};
 
 kb_consts!();
 
@@ -38,7 +38,6 @@ pub struct Keyboard {
 // NOTE: Any impl methods that are private and/or do not take external input assume that the struct
 // data is correct. These methods are not meant to be portable
 impl Keyboard {
-    // TODO: No assertion message
     pub fn create_origin(id_in: usize) -> Self {
         const NUM_ROW_CAPACITY: usize = 12;
         const TOP_ROW_CAPACITY: usize = 12;
@@ -51,7 +50,7 @@ impl Keyboard {
             vec![SPACE; HOME_ROW_CAPACITY],
             vec![SPACE; BOT_ROW_CAPACITY],
         ];
-        let mut valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)> = Self::get_keys();
+        let mut valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)> = get_keys();
 
         let mut kb_vec_cnt: usize = 0;
         for vec in &kb_vec {
@@ -100,118 +99,6 @@ impl Keyboard {
             is_elite: false,
             pos_iter: 0,
         };
-    }
-
-    // The first tuple element is the key, the second is its valid slots
-    fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
-        return vec![
-            // Number Row
-            (ONE, ONE_VALID.to_vec()),
-            (TWO, TWO_VALID.to_vec()),
-            (THREE, THREE_VALID.to_vec()),
-            (FOUR, FOUR_VALID.to_vec()),
-            (FIVE, FIVE_VALID.to_vec()),
-            (SIX, SIX_VALID.to_vec()),
-            (SEVEN, SEVEN_VALID.to_vec()),
-            (EIGHT, EIGHT_VALID.to_vec()),
-            (NINE, NINE_VALID.to_vec()),
-            (ZERO, ZERO_VALID.to_vec()),
-            (L_BRACKET, L_BRACKET_VALID.to_vec()),
-            (R_BRACKET, R_BRACKET_VALID.to_vec()),
-            // Pinky Extension Symbols
-            (DASH, DASH_VALID.to_vec()),
-            (EQUALS, EQUALS_VALID.to_vec()),
-            (F_SLASH, F_SLASH_VALID.to_vec()),
-            // Alpha Area Keys
-            (COMMA, Self::alpha_slots(COMMA_INVALID.as_ref())),
-            (PERIOD, Self::alpha_slots(PERIOD_INVALID.as_ref())),
-            (SEMICOLON, Self::alpha_slots(SEMICOLON_INVALID.as_ref())),
-            (QUOTE, Self::alpha_slots(QUOTE_INVALID.as_ref())),
-            (A, Self::alpha_slots(A_INVALID.as_ref())),
-            (B, Self::alpha_slots(B_INVALID.as_ref())),
-            (C, Self::alpha_slots(C_INVALID.as_ref())),
-            (D, Self::alpha_slots(D_INVALID.as_ref())),
-            (E, Self::alpha_slots(E_INVALID.as_ref())),
-            (F, Self::alpha_slots(F_INVALID.as_ref())),
-            (G, Self::alpha_slots(G_INVALID.as_ref())),
-            (H, Self::alpha_slots(H_INVALID.as_ref())),
-            (I, Self::alpha_slots(I_INVALID.as_ref())),
-            (J, Self::alpha_slots(J_INVALID.as_ref())),
-            (K, Self::alpha_slots(K_INVALID.as_ref())),
-            (L, Self::alpha_slots(L_INVALID.as_ref())),
-            (M, Self::alpha_slots(M_INVALID.as_ref())),
-            (N, Self::alpha_slots(N_INVALID.as_ref())),
-            (O, Self::alpha_slots(O_INVALID.as_ref())),
-            (P, Self::alpha_slots(P_INVALID.as_ref())),
-            (Q, Self::alpha_slots(Q_INVALID.as_ref())),
-            (R, Self::alpha_slots(R_INVALID.as_ref())),
-            (S, Self::alpha_slots(S_INVALID.as_ref())),
-            (T, Self::alpha_slots(T_INVALID.as_ref())),
-            (U, Self::alpha_slots(U_INVALID.as_ref())),
-            (V, Self::alpha_slots(V_INVALID.as_ref())),
-            (W, Self::alpha_slots(W_INVALID.as_ref())),
-            (X, Self::alpha_slots(X_INVALID.as_ref())),
-            (Y, Self::alpha_slots(Y_INVALID.as_ref())),
-            (Z, Self::alpha_slots(Z_INVALID.as_ref())),
-        ];
-    }
-
-    fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
-        let slot_groups: Vec<Vec<(usize, usize)>> =
-            vec![Self::top_row(), Self::home_row(), Self::bottom_row()];
-
-        let mut slot_groups_flat: Vec<(usize, usize)> =
-            slot_groups.into_iter().flatten().collect();
-        slot_groups_flat.retain(|x| return !exclusions.contains(x));
-
-        return slot_groups_flat;
-    }
-
-    fn top_row() -> Vec<(usize, usize)> {
-        return vec![
-            (1, 0),
-            (1, 1),
-            (1, 2),
-            (1, 3),
-            (1, 4),
-            // (1, 5) is skipped so this can hold a symbol key
-            (1, 5),
-            (1, 6),
-            (1, 7),
-            (1, 8),
-            (1, 9),
-        ];
-    }
-
-    fn home_row() -> Vec<(usize, usize)> {
-        return vec![
-            (2, 0),
-            (2, 1),
-            (2, 2),
-            (2, 3),
-            (2, 4),
-            (2, 5),
-            (2, 6),
-            (2, 7),
-            (2, 8),
-            (2, 9),
-        ];
-    }
-
-    fn bottom_row() -> Vec<(usize, usize)> {
-        return vec![
-            (3, 0),
-            (3, 1),
-            (3, 2),
-            (3, 3),
-            // (3, 4) skipped so this can hold a symbol key
-            (3, 4),
-            (3, 5),
-            (3, 6),
-            (3, 7),
-            (3, 8),
-            (3, 9),
-        ];
     }
 
     fn place_keys(

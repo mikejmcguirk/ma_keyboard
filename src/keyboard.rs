@@ -1,8 +1,9 @@
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom};
+use std::collections::BTreeMap;
 
 use crate::{
     kb_consts, kb_helper_consts,
-    kb_helpers::{check_spaces, get_key_locations, get_loc_idx, place_keys},
+    kb_helpers::{check_spaces, get_key_locations, place_keys},
 };
 
 kb_consts!();
@@ -13,10 +14,13 @@ enum KeyCompare {
     Mismatch,
 }
 
+// TODO: Replace vaid_locations with a BTreeMap
+// I think maybe with a map you can also get out of slot_ascii and kb_vec.
+//
 #[derive(Clone)]
 pub struct Keyboard {
     kb_vec: Vec<Vec<(u8, u8)>>,
-    valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)>,
+    valid_locations: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
     slot_ascii: Vec<Option<(usize, usize)>>,
     last_key_idx: Option<(usize, usize)>,
     prev_key_idx: Option<(usize, usize)>,
@@ -33,6 +37,8 @@ pub struct Keyboard {
 impl Keyboard {
     // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
     // an assertion in get_key_locations that it is 127 or less
+    /// # Panics
+    /// Will panic if compile time data is incorrect
     #[expect(clippy::indexing_slicing)]
     pub fn create_origin(id_in: usize) -> Self {
         let mut kb_vec = vec![
@@ -42,23 +48,28 @@ impl Keyboard {
             vec![SPACE; BOT_ROW_CNT],
         ];
 
-        let valid_locations = get_key_locations();
+        let valid_vec = get_key_locations();
         let kb_vec_cnt: usize = kb_vec.iter().map(|v| return v.len()).sum();
         assert_eq!(
             kb_vec_cnt,
-            valid_locations.len(),
+            valid_vec.len(),
             "The amount of keys to assign ({}) is not equal to the number of keyboard slots ({})",
             kb_vec_cnt,
-            valid_locations.len()
+            valid_vec.len()
         );
 
-        place_keys(&mut kb_vec, &valid_locations, 0);
+        place_keys(&mut kb_vec, &valid_vec, 0);
         let space_keys = check_spaces(&kb_vec);
         assert!(
             space_keys.is_empty(),
             "The following kb_vec values contain spaces: {:?}",
             space_keys
         );
+
+        let mut valid_bt: BTreeMap<(u8, u8), Vec<(usize, usize)>> = BTreeMap::new();
+        for loc in &valid_vec {
+            valid_bt.insert(loc.0, loc.1.clone());
+        }
 
         let mut slot_ascii = vec![None; ASCII_CNT];
         kb_vec.iter().enumerate().for_each(|(i, row)| {
@@ -70,7 +81,7 @@ impl Keyboard {
 
         return Self {
             kb_vec,
-            valid_locations,
+            valid_locations: valid_bt,
             slot_ascii,
             last_key_idx: None,
             prev_key_idx: None,
@@ -103,41 +114,42 @@ impl Keyboard {
         };
     }
 
+    // TODO: If we start giving more keys no shuffle options (like "<" and ">"), the value of the
+    // iterative approach increases, since we can filter out keys where valid_locations == 1
     // NOTE: The shuffle constants make sure that the number row and the symbol keys to the right
     // of the right pinky are ignored
+    /// # Panics
+    /// Panics if no valid locations are found for a selected key
     // This function expects the data setup in create_origin to be correct
     #[expect(clippy::indexing_slicing)]
-    // Check at debug that excessive shuffle values are not being sent
-    #[expect(clippy::arithmetic_side_effects)]
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
         const MIN_ROW: usize = 1;
         const MAX_ROW: usize = 4;
         const MIN_COL: usize = 0;
         const MAX_COL: usize = 10;
 
-        self.evaluated = false;
         debug_assert!(amt <= 100, "{amt} is too many shuffles");
+        self.evaluated = false;
 
-        let mut s = 0;
-        while s < amt {
+        for _ in 0..amt {
             let this_row = rng.random_range(MIN_ROW..MAX_ROW);
             let this_col = rng.random_range(MIN_COL..MAX_COL);
             let this_key = self.kb_vec[this_row][this_col];
-            let this_idx = get_loc_idx(this_key, &self.valid_locations);
-            if self.valid_locations[this_idx].1.len() == 1 {
+
+            if self.valid_locations[&this_key].len() == 1 {
                 continue;
+            } else if let Some(vec) = self.valid_locations.get_mut(&this_key) {
+                vec.shuffle(rng);
+            } else {
+                panic!("Valid locations not found for key {:?}", this_key);
             }
 
-            self.valid_locations[this_idx].1[0..].shuffle(rng);
-            for i in 0..self.valid_locations[this_idx].1.len() {
-                let that_row = self.valid_locations[this_idx].1[i].0;
-                let that_col = self.valid_locations[this_idx].1[i].1;
+            for (i, _) in self.valid_locations[&this_key].iter().enumerate() {
+                let that_row = self.valid_locations[&this_key][i].0;
+                let that_col = self.valid_locations[&this_key][i].1;
                 let that_key = self.kb_vec[that_row][that_col];
-                let that_idx = get_loc_idx(that_key, &self.valid_locations);
-                if self.valid_locations[that_idx].1.len() == 1
-                    || !self.valid_locations[that_idx]
-                        .1
-                        .contains(&(this_row, this_col))
+                if self.valid_locations[&that_key].len() == 1
+                    || !self.valid_locations[&that_key].contains(&(this_row, this_col))
                 {
                     continue;
                 }
@@ -150,15 +162,8 @@ impl Keyboard {
                 self.slot_ascii[usize::from(this_key.0)] = Some((that_row, that_col));
                 self.slot_ascii[usize::from(this_key.1)] = Some((that_row, that_col));
 
-                s += 1;
                 break;
             }
-
-            debug_assert!(
-                get_loc_idx(this_key, &self.valid_locations) != this_idx,
-                "{:?} did not move from {this_idx}",
-                this_key
-            );
         }
     }
 
@@ -168,8 +173,8 @@ impl Keyboard {
     fn get_efficiency(&mut self, this_key: (usize, usize)) -> f64 {
         let mut eff: f64 = BASE_EFF;
 
-        let this_col: usize = this_key.1;
-        let this_hand: char = Self::get_hand(this_col);
+        let this_col = this_key.1;
+        let this_hand = Self::get_hand(this_col);
         if this_hand == RIGHT {
             self.right_uses += 1.0;
         } else {
@@ -201,7 +206,7 @@ impl Keyboard {
         }
 
         let this_row: usize = this_key.0;
-        let dist_from_home: usize = this_row.abs_diff(2);
+        let dist_from_home = this_row.abs_diff(2);
         if dist_from_home == 1 {
             eff *= 0.8;
         } else if dist_from_home == 2 {

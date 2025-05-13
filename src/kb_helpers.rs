@@ -197,22 +197,3 @@ pub fn check_spaces(kb_vec: &[Vec<(u8, u8)>]) -> Vec<(usize, usize)> {
         })
         .collect();
 }
-
-/// # Panics
-/// Any key sent to this function must be found in the valid locations Vec. Any key found in
-/// the valid locations Vec must have at least one valid location
-pub fn get_loc_idx(key: (u8, u8), valid_locations: &[((u8, u8), Vec<(usize, usize)>)]) -> usize {
-    for (i, location) in valid_locations.iter().enumerate() {
-        if location.0 == key {
-            debug_assert!(
-                !location.1.is_empty(),
-                "Valid location index for {:?} is empty",
-                key
-            );
-
-            return i;
-        }
-    }
-
-    panic!("Did not find {:?} in valid locations", key);
-}

@@ -1,12 +1,67 @@
+// **************
 // **** NOTE ****
+// **************
+
 // These functions are designed to work with the keyboard struct. Because the struct's properties
 // are known at compile time, these functions might not check certain edge cases
 
-use crate::{helper_consts, row_consts};
+use core::cmp;
+
+use crate::{helper_consts, kb_helper_consts};
 
 helper_consts!();
 
-pub fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
+/// # Panics
+/// Panics if the internal key data is invalid
+pub fn get_key_locations() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
+    let mut key_vec = get_key_vec();
+    key_vec.sort_by(|a, b| {
+        return a
+            .1
+            .len()
+            .partial_cmp(&b.1.len())
+            .unwrap_or(cmp::Ordering::Equal);
+    });
+
+    for key in &key_vec {
+        assert!(
+            usize::from(key.0.0) <= ASCII_CNT,
+            "Key {} is not a valid ASCII char",
+            key.0.0
+        );
+        assert!(
+            usize::from(key.0.1) <= ASCII_CNT,
+            "Key {} is not a valid ASCII char",
+            key.0.1
+        );
+
+        assert!(
+            !key.1.is_empty(),
+            "Key {:?} has no valid locations listed",
+            key.0
+        );
+
+        for location in &key.1 {
+            assert!(
+                (NUM_ROW..=BOT_ROW).contains(&location.0),
+                "Key {:?} has an invalid row of {}",
+                key.0,
+                location.0
+            );
+
+            assert!(
+                check_col(location.0, location.1),
+                "Column {} for row {} is invalid",
+                location.0,
+                location.1
+            );
+        }
+    }
+
+    return key_vec;
+}
+
+fn get_key_vec() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
     return vec![
         // Number Row
         (ONE, ONE_VALID.to_vec()),
@@ -59,8 +114,10 @@ pub fn get_keys() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
     ];
 }
 
+// This does not really need to call separate functions and flatten the results, but keeping this
+// around as a template for when I want to start mixing and matching different groups of keys
 fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    let slot_groups: Vec<Vec<(usize, usize)>> = vec![top_row(), home_row(), bottom_row()];
+    let slot_groups = vec![top_row(), home_row(), bottom_row()];
 
     let mut slot_groups_flat: Vec<(usize, usize)> = slot_groups.into_iter().flatten().collect();
     slot_groups_flat.retain(|x| return !exclusions.contains(x));
@@ -68,49 +125,75 @@ fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
     return slot_groups_flat;
 }
 
+// NOTE: Even though the functions below return constant arrays, leaving them wrapped in Vecs so
+// the function signatures don't have to be changed if the constants are changed
+
 fn top_row() -> Vec<(usize, usize)> {
-    return vec![
-        (1, 0),
-        (1, 1),
-        (1, 2),
-        (1, 3),
-        (1, 4),
-        // (1, 5) is skipped so this can hold a symbol key
-        (1, 5),
-        (1, 6),
-        (1, 7),
-        (1, 8),
-        (1, 9),
-    ];
+    return DEFAULT_TOP_ROW.to_vec();
 }
 
 fn home_row() -> Vec<(usize, usize)> {
-    return vec![
-        (2, 0),
-        (2, 1),
-        (2, 2),
-        (2, 3),
-        (2, 4),
-        (2, 5),
-        (2, 6),
-        (2, 7),
-        (2, 8),
-        (2, 9),
-    ];
+    return DEFAULT_HOME_ROW.to_vec();
 }
 
 fn bottom_row() -> Vec<(usize, usize)> {
-    return vec![
-        (3, 0),
-        (3, 1),
-        (3, 2),
-        (3, 3),
-        // (3, 4) skipped so this can hold a symbol key
-        (3, 4),
-        (3, 5),
-        (3, 6),
-        (3, 7),
-        (3, 8),
-        (3, 9),
-    ];
+    return DEFAULT_BOT_ROW.to_vec();
+}
+
+fn check_col(row: usize, col: usize) -> bool {
+    return match row {
+        NUM_ROW => (0..=NUM_ROW_CNT).contains(&col),
+        TOP_ROW => (0..=TOP_ROW_CNT).contains(&col),
+        HOME_ROW => (0..=HOME_ROW_CNT).contains(&col),
+        BOT_ROW => (0..=BOT_ROW_CNT).contains(&col),
+        _ => false,
+    };
+}
+
+// Because this function contains recursion, I don't want to hurt its readability. assertion checks
+// must have already been performed
+#[expect(clippy::arithmetic_side_effects)]
+#[expect(clippy::indexing_slicing)]
+pub fn place_keys(
+    kb_vec: &mut Vec<Vec<(u8, u8)>>,
+    keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
+    idx: usize,
+) -> bool {
+    if idx == keys.len() {
+        return true;
+    }
+
+    for location in &keys[idx].1 {
+        let (row, col) = *location;
+        if kb_vec[row][col] != SPACE {
+            continue;
+        }
+
+        kb_vec[row][col] = keys[idx].0;
+
+        let next_idx = idx + 1;
+        if place_keys(kb_vec, keys, next_idx) {
+            return true;
+        } else {
+            kb_vec[row][col] = SPACE;
+        }
+    }
+
+    return false;
+}
+
+pub fn check_spaces(kb_vec: &[Vec<(u8, u8)>]) -> Vec<(usize, usize)> {
+    return kb_vec
+        .iter()
+        .enumerate()
+        .flat_map(|(i, row)| {
+            return row.iter().enumerate().filter_map(move |(j, &col)| {
+                if col == SPACE {
+                    return Some((i, j));
+                } else {
+                    return None;
+                }
+            });
+        })
+        .collect();
 }

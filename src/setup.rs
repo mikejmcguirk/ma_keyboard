@@ -10,6 +10,9 @@ use anyhow::{Result, anyhow};
 
 use crate::{display::Display, population::Population};
 
+// TODO: A better architecture for this is to let the user bring in the valid keys from a config
+// file rather than actually altering the source code. So then error propagation would be the
+// better design
 // TODO: I think display being globally available context acutally makes sense, but not totally
 // sure how to do it
 // TODO: THe mutation amounts need to go back to ranges, given that we have further segmented out

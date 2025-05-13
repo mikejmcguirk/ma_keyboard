@@ -1,19 +1,30 @@
 // For max edges length: Check/Allin/Bets or Call/Fold/Allin/Raises
 #[macro_export]
-macro_rules! row_consts {
+macro_rules! kb_helper_consts {
     () => {
+        const ASCII_CNT: usize = 128;
+
+        // Default Key
+        const SPACE: (u8, u8) = (b' ', b' ');
+
         // Rows
         const NUM_ROW: usize = 0;
         const TOP_ROW: usize = 1;
         const HOME_ROW: usize = 2;
         const BOT_ROW: usize = 3;
+
+        // Key counts per for
+        const NUM_ROW_CNT: usize = 12;
+        const TOP_ROW_CNT: usize = 12;
+        const HOME_ROW_CNT: usize = 11;
+        const BOT_ROW_CNT: usize = 10;
     };
 }
 
 #[macro_export]
 macro_rules! helper_consts {
     () => {
-        row_consts!();
+        kb_helper_consts!();
 
         // =======================
         // ==== Keyboard Info ====
@@ -255,16 +266,52 @@ macro_rules! helper_consts {
             (BOT_ROW, R_PINKY)
         ];
 
+        const DEFAULT_TOP_ROW: [(usize, usize); 10] = [
+            (TOP_ROW, L_PINKY),
+            (TOP_ROW, L_RING),
+            (TOP_ROW, L_MIDDLE),
+            (TOP_ROW, L_INDEX),
+            (TOP_ROW, L_EXT),
+            (TOP_ROW, R_EXT),
+            (TOP_ROW, R_INDEX),
+            (TOP_ROW, R_MIDDLE),
+            (TOP_ROW, R_RING),
+            (TOP_ROW, R_PINKY),
+        ];
+
+        const DEFAULT_HOME_ROW: [(usize, usize); 10] = [
+            (HOME_ROW, L_PINKY),
+            (HOME_ROW, L_RING),
+            (HOME_ROW, L_MIDDLE),
+            (HOME_ROW, L_INDEX),
+            (HOME_ROW, L_EXT),
+            (HOME_ROW, R_EXT),
+            (HOME_ROW, R_INDEX),
+            (HOME_ROW, R_MIDDLE),
+            (HOME_ROW, R_RING),
+            (HOME_ROW, R_PINKY),
+        ];
+
+        const DEFAULT_BOT_ROW: [(usize, usize); 10] = [
+            (BOT_ROW, L_PINKY),
+            (BOT_ROW, L_RING),
+            (BOT_ROW, L_MIDDLE),
+            (BOT_ROW, L_INDEX),
+            (BOT_ROW, L_EXT),
+            (BOT_ROW, R_EXT),
+            (BOT_ROW, R_INDEX),
+            (BOT_ROW, R_MIDDLE),
+            (BOT_ROW, R_RING),
+            (BOT_ROW, R_PINKY),
+        ];
+
     };
 }
 
 #[macro_export]
 macro_rules! kb_consts {
     () => {
-        row_consts!();
-
-        // Default Key
-        const SPACE: (u8, u8) = (b' ', b' ');
+        kb_helper_consts!();
 
         // Fingers
         const INDEX: char = 'i';

@@ -1,6 +1,9 @@
 use rand::{Rng as _, rngs::SmallRng};
 
-use crate::{kb_consts, kb_helpers::get_keys, row_consts};
+use crate::{
+    kb_consts, kb_helper_consts,
+    kb_helpers::{check_spaces, get_key_locations, place_keys},
+};
 
 kb_consts!();
 
@@ -27,62 +30,43 @@ pub struct Keyboard {
     pos_iter: usize,
 }
 
-// TODO: Break out non-self but KB functions into their own file. Make sure it's marked explicitly
-// that it's tied to keyboard so we don't put inappropriate error returns in
-// TODO: A better architecture for this is to let the user bring in the valid keys from a config
-// file rather than actually altering the source code. So then error propagation would be the
-// better design
-// TODO: The meta issue with this struct is how much it relies on the KeyTemplate enum. It's
-// compile time, which is good, but it's exterior, which is bad
-// TODO: Need to rebuild the qwerty creation and add dvorak
-// NOTE: Any impl methods that are private and/or do not take external input assume that the struct
-// data is correct. These methods are not meant to be portable
 impl Keyboard {
+    // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
+    // an assertion in get_key_locations that it is 127 or less
+    #[expect(clippy::indexing_slicing)]
     pub fn create_origin(id_in: usize) -> Self {
-        const NUM_ROW_CAPACITY: usize = 12;
-        const TOP_ROW_CAPACITY: usize = 12;
-        const HOME_ROW_CAPACITY: usize = 11;
-        const BOT_ROW_CAPACITY: usize = 10;
-
-        let mut kb_vec: Vec<Vec<(u8, u8)>> = vec![
-            vec![SPACE; NUM_ROW_CAPACITY],
-            vec![SPACE; TOP_ROW_CAPACITY],
-            vec![SPACE; HOME_ROW_CAPACITY],
-            vec![SPACE; BOT_ROW_CAPACITY],
+        let mut kb_vec = vec![
+            vec![SPACE; NUM_ROW_CNT],
+            vec![SPACE; TOP_ROW_CNT],
+            vec![SPACE; HOME_ROW_CNT],
+            vec![SPACE; BOT_ROW_CNT],
         ];
-        let mut valid_locations: Vec<((u8, u8), Vec<(usize, usize)>)> = get_keys();
 
-        let mut kb_vec_cnt: usize = 0;
-        for vec in &kb_vec {
-            kb_vec_cnt += vec.len();
-        }
-        assert_eq!(kb_vec_cnt, valid_locations.len());
-        for location in &valid_locations {
-            assert!(location.1.len() > 0);
-        }
+        let valid_locations = get_key_locations();
+        let kb_vec_cnt: usize = kb_vec.iter().map(|v| return v.len()).sum();
+        assert_eq!(
+            kb_vec_cnt,
+            valid_locations.len(),
+            "The amount of keys to assign ({}) is not equal to the number of keyboard slots ({})",
+            kb_vec_cnt,
+            valid_locations.len()
+        );
 
-        valid_locations.sort_by(|a, b| {
-            return a
-                .1
-                .len()
-                .partial_cmp(&b.1.len())
-                .unwrap_or(std::cmp::Ordering::Equal);
+        place_keys(&mut kb_vec, &valid_locations, 0);
+        let space_keys = check_spaces(&kb_vec);
+        assert!(
+            space_keys.is_empty(),
+            "The following kb_vec values contain spaces: {:?}",
+            space_keys
+        );
+
+        let mut slot_ascii = vec![None; ASCII_CNT];
+        kb_vec.iter().enumerate().for_each(|(i, row)| {
+            row.iter().enumerate().for_each(|(j, &(base, shift))| {
+                slot_ascii[usize::from(base)] = Some((i, j));
+                slot_ascii[usize::from(shift)] = Some((i, j));
+            });
         });
-
-        assert!(Self::place_keys(&mut kb_vec, &valid_locations, 0));
-        for row in &kb_vec {
-            for col in row {
-                assert!(*col != SPACE);
-            }
-        }
-
-        let mut slot_ascii: Vec<Option<(usize, usize)>> = vec![None; 128];
-        for i in 0..kb_vec.len() {
-            for j in 0..kb_vec[i].len() {
-                slot_ascii[kb_vec[i][j].0 as usize] = Some((i, j));
-                slot_ascii[kb_vec[i][j].1 as usize] = Some((i, j));
-            }
-        }
 
         return Self {
             kb_vec,
@@ -99,35 +83,6 @@ impl Keyboard {
             is_elite: false,
             pos_iter: 0,
         };
-    }
-
-    fn place_keys(
-        kb_vec: &mut Vec<Vec<(u8, u8)>>,
-        keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
-        idx: usize,
-    ) -> bool {
-        if idx == keys.len() {
-            return true;
-        }
-
-        assert!(keys[idx].1.len() > 0);
-
-        for placement in &keys[idx].1 {
-            let (row, col) = *placement;
-            if kb_vec[row][col] != SPACE {
-                continue;
-            }
-
-            kb_vec[row][col] = keys[idx].0;
-
-            if Self::place_keys(kb_vec, keys, idx + 1) {
-                return true;
-            } else {
-                kb_vec[row][col] = SPACE;
-            }
-        }
-
-        return false;
     }
 
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {

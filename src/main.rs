@@ -106,6 +106,7 @@
 mod custom_err;
 mod display;
 mod keyboard;
+mod macros;
 mod population;
 mod setup;
 mod utils;

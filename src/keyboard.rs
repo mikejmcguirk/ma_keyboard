@@ -1,152 +1,8 @@
 use rand::{Rng as _, rngs::SmallRng};
 
-const SPACE: (u8, u8) = (b' ', b' ');
+use crate::kb_consts;
 
-const ONE: (u8, u8) = (b'1', b'!');
-const TWO: (u8, u8) = (b'2', b'@');
-const THREE: (u8, u8) = (b'3', b'#');
-const FOUR: (u8, u8) = (b'4', b'$');
-const FIVE: (u8, u8) = (b'5', b'%');
-const SIX: (u8, u8) = (b'6', b'^');
-const SEVEN: (u8, u8) = (b'7', b'&');
-const EIGHT: (u8, u8) = (b'8', b'*');
-const NINE: (u8, u8) = (b'9', b'(');
-const ZERO: (u8, u8) = (b'0', b')');
-const L_BRACKET: (u8, u8) = (b'[', b'{');
-const R_BRACKET: (u8, u8) = (b']', b'}');
-const COMMA: (u8, u8) = (b',', b'<');
-const PERIOD: (u8, u8) = (b'.', b'>');
-const DASH: (u8, u8) = (b'-', b'_');
-const EQUALS: (u8, u8) = (b'=', b'+');
-const F_SLASH: (u8, u8) = (b'/', b'?');
-const SEMICOLON: (u8, u8) = (b';', b':');
-const QUOTE: (u8, u8) = (b'\'', b'"');
-const A: (u8, u8) = (b'a', b'A');
-const B: (u8, u8) = (b'b', b'B');
-const C: (u8, u8) = (b'c', b'C');
-const D: (u8, u8) = (b'd', b'D');
-const E: (u8, u8) = (b'e', b'E');
-const F: (u8, u8) = (b'f', b'F');
-const G: (u8, u8) = (b'g', b'G');
-const H: (u8, u8) = (b'h', b'H');
-const I: (u8, u8) = (b'i', b'I');
-const J: (u8, u8) = (b'j', b'J');
-const K: (u8, u8) = (b'k', b'K');
-const L: (u8, u8) = (b'l', b'L');
-const M: (u8, u8) = (b'm', b'M');
-const N: (u8, u8) = (b'n', b'N');
-const O: (u8, u8) = (b'o', b'O');
-const P: (u8, u8) = (b'p', b'P');
-const Q: (u8, u8) = (b'q', b'Q');
-const R: (u8, u8) = (b'r', b'R');
-const S: (u8, u8) = (b's', b'S');
-const T: (u8, u8) = (b't', b'T');
-const U: (u8, u8) = (b'u', b'U');
-const V: (u8, u8) = (b'v', b'V');
-const W: (u8, u8) = (b'w', b'W');
-const X: (u8, u8) = (b'x', b'X');
-const Y: (u8, u8) = (b'y', b'Y');
-const Z: (u8, u8) = (b'z', b'Z');
-
-// Number Row - Static
-const ONE_VALID: [(usize, usize); 1] = [(NUM, L_PINKY)];
-const TWO_VALID: [(usize, usize); 1] = [(NUM, L_RING)];
-const THREE_VALID: [(usize, usize); 1] = [(NUM, L_MIDDLE)];
-const FOUR_VALID: [(usize, usize); 1] = [(NUM, L_INDEX)];
-const FIVE_VALID: [(usize, usize); 1] = [(NUM, L_EXT)];
-const SIX_VALID: [(usize, usize); 1] = [(NUM, R_EXT)];
-const SEVEN_VALID: [(usize, usize); 1] = [(NUM, R_INDEX)];
-const EIGHT_VALID: [(usize, usize); 1] = [(NUM, R_MIDDLE)];
-const NINE_VALID: [(usize, usize); 1] = [(NUM, R_RING)];
-const ZERO_VALID: [(usize, usize); 1] = [(NUM, R_PINKY)];
-const L_BRACKET_VALID: [(usize, usize); 1] = [(NUM, R_SYMBOL)];
-const R_BRACKET_VALID: [(usize, usize); 1] = [(NUM, R_NETHER)];
-
-// Pinky Extension Symbol Keys - Static
-const DASH_VALID: [(usize, usize); 1] = [(TOP, R_SYMBOL)];
-const EQUALS_VALID: [(usize, usize); 1] = [(TOP, R_NETHER)];
-const F_SLASH_VALID: [(usize, usize); 1] = [(HOME, R_SYMBOL)];
-
-// ALpha Keys - Dynamic
-const Q_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
-const A_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
-const Z_INVALID: [(usize, usize); 3] = [(TOP, L_PINKY), (HOME, L_PINKY), (BOT, L_PINKY)];
-const W_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
-const S_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
-const X_INVALID: [(usize, usize); 3] = [(TOP, L_RING), (HOME, L_RING), (BOT, L_RING)];
-const E_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
-const D_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
-const C_INVALID: [(usize, usize); 3] = [(TOP, L_MIDDLE), (HOME, L_MIDDLE), (BOT, L_MIDDLE)];
-const R_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
-const F_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
-const V_INVALID: [(usize, usize); 3] = [(TOP, L_INDEX), (HOME, L_INDEX), (BOT, L_INDEX)];
-const T_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
-const G_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
-const B_INVALID: [(usize, usize); 3] = [(TOP, L_EXT), (HOME, L_EXT), (BOT, L_EXT)];
-const Y_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
-const H_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
-const N_INVALID: [(usize, usize); 3] = [(TOP, R_EXT), (HOME, R_EXT), (BOT, R_EXT)];
-const U_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
-const J_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
-const M_INVALID: [(usize, usize); 3] = [(TOP, R_INDEX), (HOME, R_INDEX), (BOT, R_INDEX)];
-const I_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
-const K_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
-const COMMA_INVALID: [(usize, usize); 3] = [(TOP, R_MIDDLE), (HOME, R_MIDDLE), (BOT, R_MIDDLE)];
-const O_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
-const L_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
-const PERIOD_INVALID: [(usize, usize); 3] = [(TOP, R_RING), (HOME, R_RING), (BOT, R_RING)];
-const P_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
-const SEMICOLON_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
-const QUOTE_INVALID: [(usize, usize); 3] = [(TOP, R_PINKY), (HOME, R_PINKY), (BOT, R_PINKY)];
-
-// Finger
-const INDEX: char = 'i';
-const MIDDLE: char = 'm';
-const RING: char = 'r';
-const PINKY: char = 'p';
-
-// Hand
-const LEFT: char = 'l';
-const RIGHT: char = 'r';
-
-// Keyboard rows
-const NUM: usize = 0;
-const TOP: usize = 1;
-const HOME: usize = 2;
-const BOT: usize = 3;
-
-// Keyboard Columns
-const L_PINKY: usize = 0;
-const L_RING: usize = 1;
-const L_MIDDLE: usize = 2;
-const L_INDEX: usize = 3;
-const L_EXT: usize = 4;
-const R_EXT: usize = 5;
-const R_INDEX: usize = 6;
-const R_MIDDLE: usize = 7;
-const R_RING: usize = 8;
-const R_PINKY: usize = 9;
-const R_SYMBOL: usize = 10;
-const R_NETHER: usize = 11;
-
-const BASE_EFF: f64 = 1.0;
-
-// Deduct, Low, Bigram or Single key
-const D_LO_B: f64 = 0.8;
-// Deduct, Low, Skipgram
-const D_LO_S: f64 = 0.8;
-// Deduct, Medium, Bigram or Single key
-const D_ME_B: f64 = 0.6;
-// Deduct, Medium, Skipgram
-const D_ME_S: f64 = 0.8;
-// Deduct, High, Bigram or Single key
-const D_HI_B: f64 = 0.4;
-// Deduct, High, Skipgram
-const D_HI_S: f64 = 0.7;
-// Deduct, Brutal, Bigram or Single key
-const D_BU_B: f64 = 0.2;
-// Deduct, Brutal, Skipgram
-const D_BU_S: f64 = 0.6;
+kb_consts!();
 
 enum KeyCompare {
     Mult(f64),
@@ -602,23 +458,23 @@ impl Keyboard {
         // However, the pinky top row is given an extra penalty because the whole hand has to be
         // moved to hit it
         if finger == RING || finger == PINKY {
-            if row == HOME {
+            if row == HOME_ROW {
                 mult *= D_LO_B;
-            } else if (row == BOT) || (row == TOP && finger == RING) {
+            } else if (row == BOT_ROW) || (row == TOP_ROW && finger == RING) {
                 mult *= D_ME_B;
-            } else if row == TOP && finger == PINKY {
+            } else if row == TOP_ROW && finger == PINKY {
                 mult *= D_HI_B;
             }
         }
 
         // The algo is too willing to put high-usage keys here
         mult *= match (row, col) {
-            (TOP, 4) => D_ME_B,
-            (HOME, 4) => D_LO_B,
-            (BOT, 4) => D_HI_B,
-            (TOP, 5) => D_HI_B,
-            (HOME, 5) => D_LO_B,
-            (BOT, 5) => D_ME_B,
+            (TOP_ROW, 4) => D_ME_B,
+            (HOME_ROW, 4) => D_LO_B,
+            (BOT_ROW, 4) => D_HI_B,
+            (TOP_ROW, 5) => D_HI_B,
+            (HOME_ROW, 5) => D_LO_B,
+            (BOT_ROW, 5) => D_ME_B,
             _ => BASE_EFF,
         };
 
@@ -725,29 +581,29 @@ impl Keyboard {
 
         return match (this.0, this.1, last.0, last.1, is_bigram) {
             // T (Not penalized. No more movement than hitting R)
-            (TOP, 4, _, _, true) | (_, _, TOP, 4, true) => BASE_EFF,
-            (TOP, 4, _, _, false) | (_, _, TOP, 4, false) => BASE_EFF,
+            (TOP_ROW, 4, _, _, true) | (_, _, TOP_ROW, 4, true) => BASE_EFF,
+            (TOP_ROW, 4, _, _, false) | (_, _, TOP_ROW, 4, false) => BASE_EFF,
             // G
-            (HOME, 4, _, _, true) | (_, _, HOME, 4, true) => D_LO_B,
-            (HOME, 4, _, _, false) | (_, _, HOME, 4, false) => D_LO_S,
+            (HOME_ROW, 4, _, _, true) | (_, _, HOME_ROW, 4, true) => D_LO_B,
+            (HOME_ROW, 4, _, _, false) | (_, _, HOME_ROW, 4, false) => D_LO_S,
             // B
-            (BOT, 4, _, _, true) | (_, _, BOT, 4, true) => D_HI_B,
-            (BOT, 4, _, _, false) | (_, _, BOT, 4, false) => D_HI_S,
+            (BOT_ROW, 4, _, _, true) | (_, _, BOT_ROW, 4, true) => D_HI_B,
+            (BOT_ROW, 4, _, _, false) | (_, _, BOT_ROW, 4, false) => D_HI_S,
             // 5 (Not penalized, no more movement than hitting 4)
-            (NUM, 4, _, _, true) | (_, _, NUM, 4, true) => BASE_EFF,
-            (NUM, 4, _, _, false) | (_, _, NUM, 4, false) => BASE_EFF,
+            (NUM_ROW, 4, _, _, true) | (_, _, NUM_ROW, 4, true) => BASE_EFF,
+            (NUM_ROW, 4, _, _, false) | (_, _, NUM_ROW, 4, false) => BASE_EFF,
             // Y
-            (TOP, 5, _, _, true) | (_, _, TOP, 5, true) => D_HI_B,
-            (TOP, 5, _, _, false) | (_, _, TOP, 5, false) => D_HI_S,
+            (TOP_ROW, 5, _, _, true) | (_, _, TOP_ROW, 5, true) => D_HI_B,
+            (TOP_ROW, 5, _, _, false) | (_, _, TOP_ROW, 5, false) => D_HI_S,
             // H
-            (HOME, 5, _, _, true) | (_, _, HOME, 5, true) => D_LO_B,
-            (HOME, 5, _, _, false) | (_, _, HOME, 5, false) => D_LO_S,
+            (HOME_ROW, 5, _, _, true) | (_, _, HOME_ROW, 5, true) => D_LO_B,
+            (HOME_ROW, 5, _, _, false) | (_, _, HOME_ROW, 5, false) => D_LO_S,
             // N
-            (BOT, 5, _, _, true) | (_, _, BOT, 5, true) => D_ME_B,
-            (BOT, 5, _, _, false) | (_, _, BOT, 5, false) => D_ME_S,
+            (BOT_ROW, 5, _, _, true) | (_, _, BOT_ROW, 5, true) => D_ME_B,
+            (BOT_ROW, 5, _, _, false) | (_, _, BOT_ROW, 5, false) => D_ME_S,
             // 6
-            (NUM, 5, _, _, true) | (_, _, NUM, 5, true) => D_BU_B,
-            (NUM, 5, _, _, false) | (_, _, NUM, 5, false) => D_BU_S,
+            (NUM_ROW, 5, _, _, true) | (_, _, NUM_ROW, 5, true) => D_BU_B,
+            (NUM_ROW, 5, _, _, false) | (_, _, NUM_ROW, 5, false) => D_BU_S,
             _ => BASE_EFF,
         };
     }
@@ -759,16 +615,16 @@ impl Keyboard {
         }
 
         return match (this.0, this.1, that.0, that.1, is_last) {
-            (NUM, 10, _, _, true) | (_, _, NUM, 10, true) => 0.2,
-            (NUM, 11, _, _, true) | (_, _, NUM, 11, true) => 0.2,
-            (TOP, 10, _, _, true) | (_, _, TOP, 10, true) => 0.6,
-            (TOP, 11, _, _, true) | (_, _, TOP, 11, true) => 0.4,
-            (HOME, 10, _, _, true) | (_, _, HOME, 10, true) => 0.8,
-            (NUM, 10, _, _, false) | (_, _, NUM, 10, false) => 0.2,
-            (NUM, 11, _, _, false) | (_, _, NUM, 11, false) => 0.2,
-            (TOP, 10, _, _, false) | (_, _, TOP, 10, false) => 0.8,
-            (TOP, 11, _, _, false) | (_, _, TOP, 11, false) => 0.7,
-            (HOME, 10, _, _, false) | (_, _, HOME, 10, false) => 0.9,
+            (NUM_ROW, 10, _, _, true) | (_, _, NUM_ROW, 10, true) => 0.2,
+            (NUM_ROW, 11, _, _, true) | (_, _, NUM_ROW, 11, true) => 0.2,
+            (TOP_ROW, 10, _, _, true) | (_, _, TOP_ROW, 10, true) => 0.6,
+            (TOP_ROW, 11, _, _, true) | (_, _, TOP_ROW, 11, true) => 0.4,
+            (HOME_ROW, 10, _, _, true) | (_, _, HOME_ROW, 10, true) => 0.8,
+            (NUM_ROW, 10, _, _, false) | (_, _, NUM_ROW, 10, false) => 0.2,
+            (NUM_ROW, 11, _, _, false) | (_, _, NUM_ROW, 11, false) => 0.2,
+            (TOP_ROW, 10, _, _, false) | (_, _, TOP_ROW, 10, false) => 0.8,
+            (TOP_ROW, 11, _, _, false) | (_, _, TOP_ROW, 11, false) => 0.7,
+            (HOME_ROW, 10, _, _, false) | (_, _, HOME_ROW, 10, false) => 0.9,
             _ => 1.0,
         };
     }

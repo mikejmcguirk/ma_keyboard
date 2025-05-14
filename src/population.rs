@@ -1,14 +1,16 @@
-use std::{
-    fs::File,
-    // io::{Write as _, stdout},
-};
+use std::fs::File;
 
 use {
     anyhow::{Result, anyhow},
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::{custom_err::CorpusErr, display::Display, keyboard::Keyboard, utils::write_err};
+use crate::{
+    custom_err::CorpusErr,
+    display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
+    keyboard::Keyboard,
+    utils::write_err,
+};
 
 // TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
 // to improve the keyboard. Do this after a full clippy pass of the non-swap code
@@ -52,7 +54,7 @@ impl Population {
         write_err(log_handle, &seed_string)?;
         let mut rng = SmallRng::from_seed(seed);
 
-        let mut id: IdSpawner = IdSpawner::new();
+        let mut id = IdSpawner::new();
 
         let pop_cnt: usize = size.unwrap_or(DEFAULT_POPULATION);
         if pop_cnt == 0 {
@@ -87,7 +89,7 @@ impl Population {
         // iteration
         // TODO: The hard-coded shuffle value needs a place to live
         for _ in 0..climber_cnt {
-            let mut keyboard: Keyboard = Keyboard::create_origin(id.get());
+            let mut keyboard = Keyboard::create_origin(id.get());
             keyboard.shuffle(&mut rng, 30);
             climbers.push(keyboard);
         }
@@ -151,7 +153,7 @@ impl Population {
                 }
             }
 
-            let mut new_kb: Keyboard =
+            let mut new_kb =
                 Keyboard::mutate_from(&self.climbers[idx], self.generation, self.id.get());
             let this_amt_idx: usize = self.rng.random_range(0..amts.len());
             let this_amt: usize = amts[this_amt_idx];
@@ -164,21 +166,17 @@ impl Population {
     }
 
     // TODO: Long function signature
-    pub fn eval_gen_pop(
-        &mut self,
-        corpus: &[String],
-        display: &mut Display,
-    ) -> Result<(), CorpusErr> {
+    pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), CorpusErr> {
         if corpus.is_empty() {
             return Err(CorpusErr::EmptyCorpus);
         }
 
         for i in 0..self.population.len() {
-            display.update_eval(i + 1);
+            update_eval(i + 1)?;
             self.population[i].eval(corpus);
         }
 
-        display.update_eval(0);
+        update_eval(0)?;
         return Ok(());
     }
 
@@ -191,7 +189,7 @@ impl Population {
     // intended. This is allowed to happen without error because the population is replenished
     // during the mutation phase
     // NOTE: This method assumes that the amount of elites, culls, and climbers is properly setup
-    pub fn setup_climbers(&mut self, display: &mut Display) -> Result<()> {
+    pub fn setup_climbers(&mut self) -> Result<()> {
         self.population.sort_by(|a, b| {
             return b
                 .get_score()
@@ -204,7 +202,7 @@ impl Population {
         self.climbers.extend(self.population.drain(..1));
         if self.climbers[0].get_score() > self.top_score {
             self.top_score = self.climbers[0].get_score();
-            display.update_kb(&self.climbers[0]);
+            update_kb(&self.climbers[0])?;
         }
 
         // Add remaining climbers probabalistically
@@ -246,18 +244,13 @@ impl Population {
             climber_score += climber.get_score();
         }
         let avg_climber_score = climber_score / self.climbers.len() as f64;
-        display.update_avg(avg_climber_score);
+        update_avg(avg_climber_score)?;
 
         return Ok(());
     }
 
     // TODO: Long function signature
-    pub fn climb_kbs(
-        &mut self,
-        corpus: &[String],
-        iter: usize,
-        display: &mut Display,
-    ) -> Result<()> {
+    pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
                 "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
@@ -265,24 +258,23 @@ impl Population {
                 self.climbers[i].get_generation(),
                 self.climbers[i].get_id()
             );
-            display.update_climb_info(&climb_info);
+            update_climb_info(&climb_info)?;
 
-            self.climbers[i] =
-                hill_climb(&mut self.rng, &self.climbers[i], corpus, iter, display)?;
+            self.climbers[i] = hill_climb(&mut self.rng, &self.climbers[i], corpus, iter)?;
 
             if self.climbers[0].get_score() > self.top_score {
                 self.top_score = self.climbers[0].get_score();
-                display.update_kb(&self.climbers[0]);
+                update_kb(&self.climbers[0])?;
             }
         }
 
         // TODO: The climb method does indeed need to tell the display there is nothing to display,
         // but the climb method should not have to tell the display what needs displayed
-        display.update_climb_info(&" ".repeat(155));
+        update_climb_info(&" ".repeat(155))?;
         // TODO: At least for now, don't turn off climb_stats at the end of a hill climbing
         // iteration because it makes the display flicker. Might be okay to do that once the whole
         // line isn't being changed each time
-        display.update_climb_stats(&" ".repeat(155));
+        update_climb_stats(&" ".repeat(155))?;
         return Ok(());
     }
 
@@ -333,7 +325,6 @@ pub fn hill_climb(
     keyboard: &Keyboard,
     corpus: &[String],
     iter: usize,
-    display: &mut Display,
 ) -> Result<Keyboard> {
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
@@ -346,7 +337,7 @@ pub fn hill_climb(
     }
 
     let mut kb: Keyboard = keyboard.clone();
-    let start: f64 = kb.get_score();
+    let start = kb.get_score();
 
     let mut last_improvement: f64 = 0.0;
     let mut avg: f64 = 0.0;
@@ -355,21 +346,21 @@ pub fn hill_climb(
 
     // One indexed for averaging math and display
     for i in 1..=10000 {
-        let kb_score: f64 = kb.get_score();
+        let kb_score = kb.get_score();
 
         let mut climb_kb: Keyboard = kb.clone();
         climb_kb.shuffle(rng, 1);
         climb_kb.eval(corpus);
-        let climb_kb_score: f64 = climb_kb.get_score();
+        let climb_kb_score = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;
-        let this_improvement: f64 = (this_change).max(0.0);
+        let this_improvement = (this_change).max(0.0);
 
         avg = get_new_avg(this_improvement, avg, i);
 
         let delta: f64 = this_improvement - last_improvement;
         last_improvement = this_improvement;
-        let weight: f64 = get_weight(delta);
+        let weight = get_weight(delta);
 
         sum_weights *= decay_factor;
         let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
@@ -383,7 +374,7 @@ pub fn hill_climb(
             i, start, climb_kb_score, kb_score, avg, weighted_avg
         );
         // println!("{}", climb_info.len());
-        display.update_climb_stats(&climb_stats);
+        update_climb_stats(&climb_stats)?;
 
         if climb_kb_score > kb_score {
             climb_kb.add_pos_iter();
@@ -418,7 +409,7 @@ fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
 fn get_weight(delta: f64) -> f64 {
     const K: f64 = 0.01;
 
-    if delta <= 0.0 {
+    if delta <= 0.0_f64 {
         return 1.0;
     }
 

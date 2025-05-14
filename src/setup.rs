@@ -10,7 +10,10 @@ use {
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
-use crate::{display::Display, population::Population};
+use crate::{
+    display::{draw_initial, update_iter, update_mut_values},
+    population::Population,
+};
 
 // TODO: The second rng is quite bad
 // TODO: A better architecture for this is to let the user bring in the valid keys from a config
@@ -51,8 +54,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
 
     let mut population = Population::create(None, log_handle)?;
 
-    let mut display = Display::new();
-    display.draw_initial(&population);
+    draw_initial(&population)?;
 
     let decay_start: f64 = 30.0;
 
@@ -71,7 +73,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     #[expect(clippy::cast_precision_loss)]
     #[expect(clippy::cast_sign_loss)]
     for iter in 1..=ITERATIONS {
-        display.update_iter(iter);
+        update_iter(iter)?;
         let iter_decay: f64 = iter as f64 - 1.0;
 
         let small_value = decay_value(decay_start, iter_decay, small_value_target);
@@ -93,7 +95,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         let large_value = rng.random_range(large_bot_usize..=large_top_usize);
         let huge_value = rng.random_range(huge_bot_usize..=huge_top_usize);
 
-        display.update_mut_values(
+        update_mut_values(
             small_value_usize,
             small_value_usize,
             med_bot_usize,
@@ -102,13 +104,13 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
             large_top_usize,
             huge_bot_usize,
             huge_top_usize,
-        );
+        )?;
 
         population.mutate_climbers([small_value_usize, med_value, large_value, huge_value]);
 
-        population.eval_gen_pop(&corpus, &mut display)?;
-        population.setup_climbers(&mut display)?;
-        population.climb_kbs(&corpus, iter, &mut display)?;
+        population.eval_gen_pop(&corpus)?;
+        population.setup_climbers()?;
+        population.climb_kbs(&corpus, iter)?;
     }
 
     // TODO: use display to tell the user the program's complete

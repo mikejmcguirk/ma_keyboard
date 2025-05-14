@@ -9,6 +9,7 @@ Notes on the fitness function:
     - Some amount of SFBs are tolerated if it means avoiding scissors and other unnatural hand motions
   - Redirects are not checked. I don't find them uncomfortable
   - While the home row is favored by penalizing row movement, neither the top nor the bottom row are favored over the other. This avoids placing commonly used keys on the ring or pinky finger to avoid the disfavored row
+  - Use of the shift keys is not considered. The way it affects typing is too contextual, both in terms of the specific word being typed and the physical keyboard
 
 Resources:
 

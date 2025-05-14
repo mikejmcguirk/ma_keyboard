@@ -412,7 +412,7 @@ fn check_roll(this_col: usize, last_col: usize, is_bigram: bool) -> f64 {
 
     let this_dist = get_center_dist(this_col);
     let last_dist = get_center_dist(last_col);
-    if last_dist >= this_dist {
+    if this_dist >= last_dist {
         return BASE_EFF;
     }
 

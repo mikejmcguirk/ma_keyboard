@@ -285,7 +285,7 @@ impl Keyboard {
         for row in &self.kb_vec {
             let mut chars: Vec<char> = Vec::new();
             for element in row {
-                let char = element.0 as char;
+                let char = char::from(element.0);
                 chars.push(char);
             }
 

@@ -1,26 +1,29 @@
-use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom};
-use std::collections::BTreeMap;
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
+
+use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
-    kb_consts, kb_helper_consts,
-    kb_helpers::{check_spaces, get_key_locations, place_keys},
+    kb_helper_consts,
+    kb_helpers::{
+        check_spaces, compare_keys, get_hand, get_key_locations, get_single_key_mult, place_keys,
+    },
 };
 
-kb_consts!();
+kb_helper_consts!();
 
-enum KeyCompare {
+pub enum KeyCompare {
     Mult(f64),
-    MultLeft(f64),
     Mismatch,
 }
 
-// TODO: Replace vaid_locations with a BTreeMap
-// I think maybe with a map you can also get out of slot_ascii and kb_vec.
-//
+// FUTURE: The 2D Vec, even though it currently works, is brittle. I think, once we start adding
+// the swap table, we'll see the precise limitations and what a change needs to accomplish
 #[derive(Clone)]
 pub struct Keyboard {
     kb_vec: Vec<Vec<(u8, u8)>>,
-    valid_locations: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
+    valid: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
     slot_ascii: Vec<Option<(usize, usize)>>,
     last_key_idx: Option<(usize, usize)>,
     prev_key_idx: Option<(usize, usize)>,
@@ -35,10 +38,12 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
-    // an assertion in get_key_locations that it is 127 or less
+    // TODO: Should be a better way to handle \n, \\, and |. They really should just be added to
+    // the KB vec. They won't disrupt the slicing
     /// # Panics
     /// Will panic if compile time data is incorrect
+    // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
+    // an assertion in get_key_locations that it is 127 or less
     #[expect(clippy::indexing_slicing)]
     pub fn create_origin(id_in: usize) -> Self {
         let mut kb_vec = vec![
@@ -81,7 +86,7 @@ impl Keyboard {
 
         return Self {
             kb_vec,
-            valid_locations: valid_bt,
+            valid: valid_bt,
             slot_ascii,
             last_key_idx: None,
             prev_key_idx: None,
@@ -99,7 +104,7 @@ impl Keyboard {
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
         return Self {
             kb_vec: kb.kb_vec.clone(),
-            valid_locations: kb.valid_locations.clone(),
+            valid: kb.valid.clone(),
             slot_ascii: kb.slot_ascii.clone(),
             last_key_idx: None,
             prev_key_idx: None,
@@ -114,13 +119,15 @@ impl Keyboard {
         };
     }
 
-    // TODO: If we start giving more keys no shuffle options (like "<" and ">"), the value of the
+    // FUTURE: If we start giving more keys no shuffle options (like "<" and ">"), the value of the
     // iterative approach increases, since we can filter out keys where valid_locations == 1
+    // FUTURE: It would be better if the shuffle amounts were read from a config
     // NOTE: The shuffle constants make sure that the number row and the symbol keys to the right
     // of the right pinky are ignored
     /// # Panics
     /// Panics if no valid locations are found for a selected key
-    // This function expects the data setup in create_origin to be correct
+    /// This function expects the data setup in `create_origin` to be correct
+    /// Will also panic if the shuffle amount is too high, since these are compile time values
     #[expect(clippy::indexing_slicing)]
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
         const MIN_ROW: usize = 1;
@@ -135,21 +142,23 @@ impl Keyboard {
             let this_row = rng.random_range(MIN_ROW..MAX_ROW);
             let this_col = rng.random_range(MIN_COL..MAX_COL);
             let this_key = self.kb_vec[this_row][this_col];
-
-            if self.valid_locations[&this_key].len() == 1 {
+            if self.valid[&this_key].len() == 1 {
                 continue;
-            } else if let Some(vec) = self.valid_locations.get_mut(&this_key) {
+            }
+
+            if let Some(vec) = self.valid.get_mut(&this_key) {
                 vec.shuffle(rng);
             } else {
                 panic!("Valid locations not found for key {:?}", this_key);
             }
 
-            for (i, _) in self.valid_locations[&this_key].iter().enumerate() {
-                let that_row = self.valid_locations[&this_key][i].0;
-                let that_col = self.valid_locations[&this_key][i].1;
+            for (i, _) in self.valid[&this_key].iter().enumerate() {
+                let that_row = self.valid[&this_key][i].0;
+                let that_col = self.valid[&this_key][i].1;
                 let that_key = self.kb_vec[that_row][that_col];
-                if self.valid_locations[&that_key].len() == 1
-                    || !self.valid_locations[&that_key].contains(&(this_row, this_col))
+                if self.valid[&that_key].len() == 1
+                    || !self.valid[&that_key].contains(&(this_row, this_col))
+                    || this_key == that_key
                 {
                     continue;
                 }
@@ -164,43 +173,64 @@ impl Keyboard {
 
                 break;
             }
+
+            assert_ne!(
+                self.kb_vec[this_row][this_col], this_key,
+                "Key {:?} at {},{} not changed!",
+                this_key, this_row, this_col
+            );
         }
     }
 
-    // TODO: Unsure of how to handle space and return
+    // TODO: I just have to treat space as fully efficient. In practice, it's easier to hit space
+    // after some keys than in others, but it's too related to the specific hand position, which
+    // I'm not sure I can track in here
+    // TODO: For shift keys: If you type a word like "What", because W is on the left hand, you
+    // press shift with the right, which slows down typing the h. So for any particular character,
+    // you want to see if the last character is a shift car that requires the current key's hand,
+    // and then deduct. A reduced deduction should be applied for a word like "Wall", which still
+    // slows you down but not as much. An interesting case to consider is a word like "Who", where,
+    // when you score the o, you'll find yourself successfully in the last key logic, but then you
+    // still need to check within there to see if there was a previous key shift where the key is
+    // on the opposite hand (meaning the o strike is still negatively influenced by it). The shift
+    // penalty should be rather severe, since it requires moving the whole hand to hit. Though, the
+    // shift motion is actually far more natural on the left hand than the right, so you can
+    // balance the deductions accordingly. Because this logic is based on key position, and the
+    // shift logic functions basicaly on top of everything else, it should be outlined into a
+    // wholly different function
+    // TODO: Should be a way to account for that the middle finger moving up and to some extent
+    // down is the least bad.
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
     fn get_efficiency(&mut self, this_key: (usize, usize)) -> f64 {
-        let mut eff: f64 = BASE_EFF;
+        let mut eff = BASE_EFF;
 
         let this_col = this_key.1;
-        let this_hand = Self::get_hand(this_col);
+        let this_hand = get_hand(this_col);
         if this_hand == RIGHT {
-            self.right_uses += 1.0;
+            self.right_uses += 1.0_f64;
         } else {
-            self.left_uses += 1.0;
+            self.left_uses += 1.0_f64;
         }
 
-        eff *= Self::get_single_key_mult(this_key);
+        eff *= get_single_key_mult(this_key);
 
         let last_compare: Option<KeyCompare> = self
             .last_key_idx
-            .map(|last_key| return Self::compare_keys(this_key, last_key, true));
+            .map(|last_key| return compare_keys(this_key, last_key, true));
         if let Some(key_compare) = last_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
-                KeyCompare::MultLeft(x) => return eff * x * 0.8,
                 KeyCompare::Mismatch => {}
             }
         }
 
         let prev_compare: Option<KeyCompare> = self
             .prev_key_idx
-            .map(|prev_key| return Self::compare_keys(this_key, prev_key, true));
+            .map(|prev_key| return compare_keys(this_key, prev_key, false));
         if let Some(key_compare) = prev_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
-                KeyCompare::MultLeft(x) => return eff * x * 0.8,
                 KeyCompare::Mismatch => {}
             }
         }
@@ -258,264 +288,6 @@ impl Keyboard {
         self.evaluated = true;
     }
 
-    fn get_hand(col: usize) -> char {
-        return match col {
-            0..=4 => 'l',
-            5..=11 => 'r',
-            _ => 'u',
-        };
-    }
-
-    fn get_finger(col: usize) -> char {
-        return match col {
-            0 | 9..=11 => 'p',
-            1 | 8 => 'r',
-            2 | 7 => 'm',
-            3..=6 => 'i',
-            _ => 'u',
-        };
-    }
-
-    // No blanket adjustment for any particular row. The specific code for bigrams and the
-    // additional code for single keys both deduct for row movement, which necessarily results in
-    // the algo favoring the home row
-    fn get_single_key_mult(key: (usize, usize)) -> f64 {
-        let row: usize = key.0;
-        let col: usize = key.1;
-        let finger: char = Self::get_finger(col);
-        let mut mult: f64 = BASE_EFF;
-
-        // Do a blanket downward adjustment rather than micro-correct in the finger comparisons
-        // The ring and pinky are mostly treated the same due to different preferences per typist.
-        // However, the pinky top row is given an extra penalty because the whole hand has to be
-        // moved to hit it
-        if finger == RING || finger == PINKY {
-            if row == HOME_ROW {
-                mult *= D_LO_B;
-            } else if (row == BOT_ROW) || (row == TOP_ROW && finger == RING) {
-                mult *= D_ME_B;
-            } else if row == TOP_ROW && finger == PINKY {
-                mult *= D_HI_B;
-            }
-        }
-
-        // The algo is too willing to put high-usage keys here
-        mult *= match (row, col) {
-            (TOP_ROW, 4) => D_ME_B,
-            (HOME_ROW, 4) => D_LO_B,
-            (BOT_ROW, 4) => D_HI_B,
-            (TOP_ROW, 5) => D_HI_B,
-            (HOME_ROW, 5) => D_LO_B,
-            (BOT_ROW, 5) => D_ME_B,
-            _ => BASE_EFF,
-        };
-
-        return mult;
-    }
-
-    fn compare_keys(key_x: (usize, usize), key_y: (usize, usize), is_last: bool) -> KeyCompare {
-        let key_x_col: usize = key_x.1;
-        let key_y_col: usize = key_y.1;
-        let key_x_hand: char = Self::get_hand(key_x_col);
-        let key_y_hand: char = Self::get_hand(key_y_col);
-        if key_x_hand != key_y_hand {
-            return KeyCompare::Mismatch;
-        }
-
-        let key_x_row: usize = key_x.0;
-        let key_y_row: usize = key_y.0;
-        let mut eff: f64 = BASE_EFF;
-
-        let row_eff: f64 = Self::get_row_mult(key_x_row, key_y_row, is_last);
-        eff *= row_eff;
-
-        // NOTE: These extension effeciencies are meant to track the impact of moving the index or
-        // the pinky off the home columns on the entire hand
-        let index_ext_eff: f64 = Self::get_index_eff(key_x, key_y, is_last);
-        eff *= index_ext_eff;
-        eff *= Self::get_pinky_eff(key_x, key_y, is_last);
-
-        let key_x_finger: char = Self::get_finger(key_x_col);
-        let key_y_finger: char = Self::get_finger(key_y_col);
-        let mut index_mv_eff: f64 = 1.0;
-        if key_x_finger == key_y_finger {
-            eff *= Self::get_base_sf_penalty(is_last);
-            index_mv_eff = Self::get_repeat_col_mult(key_x_col, key_y_col, is_last);
-            eff *= index_mv_eff;
-        } else if key_x_row != key_y_row {
-            // No need here to save a value to check left hand efficiency. This branch requires a
-            // row move, which has already been checked
-            eff *= Self::check_combo(key_x, key_y, is_last);
-            eff *= Self::check_scissor(key_x, key_y, is_last);
-        }
-
-        let did_mv: bool = row_eff < 1.0 || index_ext_eff < 1.0 || index_mv_eff < 1.0;
-        if key_x_hand == LEFT && did_mv {
-            return KeyCompare::MultLeft(eff);
-        }
-
-        return KeyCompare::Mult(eff);
-    }
-
-    fn check_combo(this_key: (usize, usize), that_key: (usize, usize), is_last: bool) -> f64 {
-        let this_row: usize = this_key.0;
-        let that_row: usize = that_key.0;
-        let this_finger: char = Self::get_finger(this_key.1);
-        let that_finger: char = Self::get_finger(that_key.1);
-
-        let (top, bot): (char, char) = if this_row > that_row {
-            (this_finger, that_finger)
-        } else if that_row > this_row {
-            (that_finger, this_finger)
-        } else {
-            panic!("Trying to get combo of equal rows");
-        };
-
-        if bot == INDEX || top == MIDDLE || (top == RING && bot == PINKY) {
-            return 1.0;
-        } else if is_last {
-            return 0.6;
-        } else {
-            return 0.8;
-        }
-    }
-
-    fn get_center_distance(row: usize) -> usize {
-        return if row <= 4 {
-            4 - row
-        } else {
-            row - 5
-        };
-    }
-
-    // NOTE: Assumes that both keys are on the same hand
-    fn get_row_mult(this_row: usize, that_row: usize, is_last: bool) -> f64 {
-        let row_diff: usize = this_row.abs_diff(that_row);
-
-        return match (row_diff, is_last) {
-            (0, true) => 1.0,
-            (1, true) => 0.8,
-            (2, true) => 0.6,
-            (3, true) => 0.2,
-            (0, false) => 1.0,
-            (1, false) => 0.9,
-            (2, false) => 0.7,
-            (3, false) => 0.5,
-            _ => 1.0,
-        };
-    }
-
-    // NOTE: Assumes that both keys are on the same hand
-    fn get_index_eff(this: (usize, usize), last: (usize, usize), is_bigram: bool) -> f64 {
-        if !((4..=5).contains(&this.1) || (4..=5).contains(&last.1)) {
-            return BASE_EFF;
-        }
-
-        return match (this.0, this.1, last.0, last.1, is_bigram) {
-            // T (Not penalized. No more movement than hitting R)
-            (TOP_ROW, 4, _, _, true) | (_, _, TOP_ROW, 4, true) => BASE_EFF,
-            (TOP_ROW, 4, _, _, false) | (_, _, TOP_ROW, 4, false) => BASE_EFF,
-            // G
-            (HOME_ROW, 4, _, _, true) | (_, _, HOME_ROW, 4, true) => D_LO_B,
-            (HOME_ROW, 4, _, _, false) | (_, _, HOME_ROW, 4, false) => D_LO_S,
-            // B
-            (BOT_ROW, 4, _, _, true) | (_, _, BOT_ROW, 4, true) => D_HI_B,
-            (BOT_ROW, 4, _, _, false) | (_, _, BOT_ROW, 4, false) => D_HI_S,
-            // 5 (Not penalized, no more movement than hitting 4)
-            (NUM_ROW, 4, _, _, true) | (_, _, NUM_ROW, 4, true) => BASE_EFF,
-            (NUM_ROW, 4, _, _, false) | (_, _, NUM_ROW, 4, false) => BASE_EFF,
-            // Y
-            (TOP_ROW, 5, _, _, true) | (_, _, TOP_ROW, 5, true) => D_HI_B,
-            (TOP_ROW, 5, _, _, false) | (_, _, TOP_ROW, 5, false) => D_HI_S,
-            // H
-            (HOME_ROW, 5, _, _, true) | (_, _, HOME_ROW, 5, true) => D_LO_B,
-            (HOME_ROW, 5, _, _, false) | (_, _, HOME_ROW, 5, false) => D_LO_S,
-            // N
-            (BOT_ROW, 5, _, _, true) | (_, _, BOT_ROW, 5, true) => D_ME_B,
-            (BOT_ROW, 5, _, _, false) | (_, _, BOT_ROW, 5, false) => D_ME_S,
-            // 6
-            (NUM_ROW, 5, _, _, true) | (_, _, NUM_ROW, 5, true) => D_BU_B,
-            (NUM_ROW, 5, _, _, false) | (_, _, NUM_ROW, 5, false) => D_BU_S,
-            _ => BASE_EFF,
-        };
-    }
-
-    // NOTE: Assumes that both keys are on the same hand
-    fn get_pinky_eff(this: (usize, usize), that: (usize, usize), is_last: bool) -> f64 {
-        if !((10..=11).contains(&this.1) || (10..=11).contains(&that.1)) {
-            return 1.0;
-        }
-
-        return match (this.0, this.1, that.0, that.1, is_last) {
-            (NUM_ROW, 10, _, _, true) | (_, _, NUM_ROW, 10, true) => 0.2,
-            (NUM_ROW, 11, _, _, true) | (_, _, NUM_ROW, 11, true) => 0.2,
-            (TOP_ROW, 10, _, _, true) | (_, _, TOP_ROW, 10, true) => 0.6,
-            (TOP_ROW, 11, _, _, true) | (_, _, TOP_ROW, 11, true) => 0.4,
-            (HOME_ROW, 10, _, _, true) | (_, _, HOME_ROW, 10, true) => 0.8,
-            (NUM_ROW, 10, _, _, false) | (_, _, NUM_ROW, 10, false) => 0.2,
-            (NUM_ROW, 11, _, _, false) | (_, _, NUM_ROW, 11, false) => 0.2,
-            (TOP_ROW, 10, _, _, false) | (_, _, TOP_ROW, 10, false) => 0.8,
-            (TOP_ROW, 11, _, _, false) | (_, _, TOP_ROW, 11, false) => 0.7,
-            (HOME_ROW, 10, _, _, false) | (_, _, HOME_ROW, 10, false) => 0.9,
-            _ => 1.0,
-        };
-    }
-
-    fn get_base_sf_penalty(is_last: bool) -> f64 {
-        if is_last {
-            return 0.6;
-        } else {
-            return 0.8;
-        }
-    }
-
-    // NOTE: These are more severely devalued because the algorithm inherently likes to put
-    // important keys here
-    // TODO: But there maybe an alternative solution, if we factor in the move for the stretch back
-    // as well
-    // TODO: Does this need to handle YB specifically?
-    fn get_repeat_col_mult(this_col: usize, last_col: usize, last: bool) -> f64 {
-        let this_center_dist: usize = Self::get_center_distance(this_col);
-        let last_center_dist: usize = Self::get_center_distance(last_col);
-        let center_diff: usize = this_center_dist.abs_diff(last_center_dist);
-
-        return match (center_diff, last) {
-            (1, true) => 0.8,
-            (2, true) => 0.6,
-            (1, false) => 0.9,
-            (2, false) => 0.8,
-            _ => 1.0,
-        };
-    }
-
-    // NOTE: This function assumes we've already verified that we're on the same hand
-    // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
-    // handle using the normal rules
-    fn check_scissor(this_key: (usize, usize), that_key: (usize, usize), is_last: bool) -> f64 {
-        let this_col: usize = this_key.1;
-        let that_col: usize = that_key.1;
-        if this_col.abs_diff(that_col) > 1 {
-            return 1.0;
-        }
-
-        let this_row: usize = this_key.0;
-        let that_row: usize = that_key.0;
-        let hand: char = Self::get_hand(this_col);
-        // Left-handed scissors are punished beyond the base left-hand movement deduction because,
-        // unlike right-handed scissors, you have to actually rock your hand to hit them
-        return match (this_row.abs_diff(that_row), hand, is_last) {
-            (2, RIGHT, true) => 0.6,
-            (3, RIGHT, true) => 0.4,
-            (2, RIGHT, false) => 0.8,
-            (3, RIGHT, false) => 0.7,
-            (2, LEFT, true) => 0.4,
-            (3, LEFT, true) => 0.2,
-            (2, LEFT, false) => 0.7,
-            (3, LEFT, false) => 0.6,
-            _ => 1.0,
-        };
-    }
-
     // TODO: Very inefficient
     pub fn get_display_chars(&self) -> Vec<Vec<char>> {
         let mut display_chars: Vec<Vec<char>> = Vec::new();
@@ -563,6 +335,10 @@ impl Keyboard {
     }
 
     pub fn add_pos_iter(&mut self) {
-        self.pos_iter += 1;
+        if let Some(iter) = self.pos_iter.checked_add(1) {
+            self.pos_iter = iter;
+        } else {
+            self.pos_iter = 0;
+        }
     }
 }

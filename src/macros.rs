@@ -13,11 +13,47 @@ macro_rules! kb_helper_consts {
         const HOME_ROW: usize = 2;
         const BOT_ROW: usize = 3;
 
-        // Key counts per for
         const NUM_ROW_CNT: usize = 12;
-        const TOP_ROW_CNT: usize = 12;
-        const HOME_ROW_CNT: usize = 11;
+        const TOP_ROW_CNT: usize = 13;
+        const HOME_ROW_CNT: usize = 12;
         const BOT_ROW_CNT: usize = 10;
+
+        // Fingers
+        const INDEX: char = 'i';
+        const MIDDLE: char = 'm';
+        const RING: char = 'r';
+        const PINKY: char = 'p';
+
+        // Hands
+        const LEFT: char = 'l';
+        const RIGHT: char = 'r';
+
+        const BASE_EFF: f64 = 1.0;
+
+        // Increase, Medium, Bigram or Single Key
+        const I_ME_B: f64 = 1.4;
+        // Increase, Medium, Skipgram
+        const I_ME_S: f64 = 1.2;
+        // Increase, Low, Bigram or Single Key
+        // const I_LO_B: f64 = 1.2;
+        // Increase, Low, Skipgram
+        // const I_LO_S: f64 = 1.1;
+        // Deduct, Low, Bigram or Single key
+        const D_LO_B: f64 = 0.8;
+        // Deduct, Low, Skipgram
+        const D_LO_S: f64 = 0.8;
+        // Deduct, Medium, Bigram or Single key
+        const D_ME_B: f64 = 0.6;
+        // Deduct, Medium, Skipgram
+        const D_ME_S: f64 = 0.8;
+        // Deduct, High, Bigram or Single key
+        const D_HI_B: f64 = 0.4;
+        // Deduct, High, Skipgram
+        const D_HI_S: f64 = 0.7;
+        // Deduct, Brutal, Bigram or Single key
+        const D_BU_B: f64 = 0.2;
+        // Deduct, Brutal, Skipgram
+        const D_BU_S: f64 = 0.6;
     };
 }
 
@@ -43,12 +79,15 @@ macro_rules! helper_consts {
         const R_PINKY: usize = 9;
         const R_SYMBOL: usize = 10;
         const R_NETHER: usize = 11;
+        const R_PIPE: usize = 12;
 
         // ==================
         // ==== Key Info ====
         // ==================
 
         // Keys
+        const NEWLINE: (u8, u8) = (b'\n', b'\n');
+        const BACKSLASH: (u8, u8) = (b'\\', b'|');
         const ONE: (u8, u8) = (b'1', b'!');
         const TWO: (u8, u8) = (b'2', b'@');
         const THREE: (u8, u8) = (b'3', b'#');
@@ -113,6 +152,8 @@ macro_rules! helper_consts {
         const DASH_VALID: [(usize, usize); 1] = [(TOP_ROW, R_SYMBOL)];
         const EQUALS_VALID: [(usize, usize); 1] = [(TOP_ROW, R_NETHER)];
         const F_SLASH_VALID: [(usize, usize); 1] = [(HOME_ROW, R_SYMBOL)];
+        const NEWLINE_VALID: [(usize, usize); 1] = [(HOME_ROW, R_NETHER)];
+        const BACKSLASH_VALID: [(usize, usize); 1] = [(TOP_ROW, R_PIPE)];
 
         // ALpha Keys - Dynamic
         const Q_INVALID: [(usize, usize); 3] = [
@@ -230,7 +271,10 @@ macro_rules! helper_consts {
             (HOME_ROW, R_MIDDLE),
             (BOT_ROW, R_MIDDLE),
         ];
-        const COMMA_INVALID: [(usize, usize); 3] = [
+        const COMMA_INVALID: [(usize, usize); 6] = [
+            (TOP_ROW, R_PINKY),
+            (HOME_ROW, R_PINKY),
+            (BOT_ROW, R_PINKY),
             (TOP_ROW, R_MIDDLE),
             (HOME_ROW, R_MIDDLE),
             (BOT_ROW, R_MIDDLE),
@@ -245,10 +289,13 @@ macro_rules! helper_consts {
             (HOME_ROW, R_RING),
             (BOT_ROW, R_RING)
         ];
-        const PERIOD_INVALID: [(usize, usize); 3] = [
+        const PERIOD_INVALID: [(usize, usize); 6] = [
+            (TOP_ROW, L_PINKY),
+            (HOME_ROW, L_PINKY),
+            (BOT_ROW, L_PINKY),
             (TOP_ROW, R_RING),
             (HOME_ROW, R_RING),
-            (BOT_ROW, R_RING)
+            (BOT_ROW, R_RING),
         ];
         const P_INVALID: [(usize, usize); 3] = [
             (TOP_ROW, R_PINKY),
@@ -305,41 +352,5 @@ macro_rules! helper_consts {
             (BOT_ROW, R_PINKY),
         ];
 
-    };
-}
-
-#[macro_export]
-macro_rules! kb_consts {
-    () => {
-        kb_helper_consts!();
-
-        // Fingers
-        const INDEX: char = 'i';
-        const MIDDLE: char = 'm';
-        const RING: char = 'r';
-        const PINKY: char = 'p';
-
-        // Hands
-        const LEFT: char = 'l';
-        const RIGHT: char = 'r';
-
-        const BASE_EFF: f64 = 1.0;
-
-        // Deduct, Low, Bigram or Single key
-        const D_LO_B: f64 = 0.8;
-        // Deduct, Low, Skipgram
-        const D_LO_S: f64 = 0.8;
-        // Deduct, Medium, Bigram or Single key
-        const D_ME_B: f64 = 0.6;
-        // Deduct, Medium, Skipgram
-        const D_ME_S: f64 = 0.8;
-        // Deduct, High, Bigram or Single key
-        const D_HI_B: f64 = 0.4;
-        // Deduct, High, Skipgram
-        const D_HI_S: f64 = 0.7;
-        // Deduct, Brutal, Bigram or Single key
-        const D_BU_B: f64 = 0.2;
-        // Deduct, Brutal, Skipgram
-        const D_BU_S: f64 = 0.6;
     };
 }

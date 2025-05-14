@@ -11,6 +11,7 @@
 #![allow(clippy::allow_attributes_without_reason)] // This is what comments are for
 #![allow(clippy::arbitrary_source_item_ordering)] // Promotes illogical organization
 #![allow(clippy::blanket_clippy_restriction_lints)] // I do what I want
+#![allow(clippy::else_if_without_else)] // Flags too often in irrelevant situations
 #![allow(clippy::integer_division)] // I know
 #![allow(clippy::integer_division_remainder_used)] // I know
 #![allow(clippy::min_ident_chars)] // i, j, e, and so on are fine
@@ -19,7 +20,6 @@
 #![allow(clippy::multiple_crate_versions)] // I can't do anything about this
 #![allow(clippy::needless_return)] // I like explicit returns
 #![allow(clippy::question_mark_used)] // Good for concision
-#![allow(clippy::redundant_else)] // Conflicts with else_if_without_else
 #![allow(clippy::semicolon_outside_block)] // I prefer inside
 #![allow(clippy::separated_literal_suffix)] // I prefer separated
 #![allow(clippy::similar_names)] // Promotes contrived naming
@@ -38,68 +38,68 @@
 #![allow(clippy::print_stdout)] // This is a terminal application
 
 // Allow these when just trying to get code down
-#![allow(clippy::allow_attributes)]
-#![allow(clippy::absolute_paths)]
-#![allow(clippy::arithmetic_side_effects)]
-#![allow(clippy::as_conversions)]
-#![allow(clippy::assertions_on_result_states)] // Better than unwrap
-#![allow(clippy::bool_to_int_with_if)]
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::comparison_chain)]
-#![allow(clippy::create_dir)]
-#![allow(clippy::default_numeric_fallback)]
-#![allow(clippy::double_must_use)]
-#![allow(clippy::else_if_without_else)] // Have seen production code fail because of this
-#![allow(clippy::excessive_precision)] // Creates problems when using literals
-#![allow(clippy::expect_used)]
-#![allow(clippy::explicit_iter_loop)]
-#![allow(clippy::field_reassign_with_default)]
-#![allow(clippy::float_cmp)]
-#![allow(clippy::identity_op)]
-#![allow(clippy::indexing_slicing)]
-#![allow(clippy::items_after_statements)]
-#![allow(clippy::len_zero)]
-#![allow(clippy::let_underscore_must_use)]
-#![allow(clippy::let_underscore_untyped)]
-#![allow(clippy::manual_assert)]
-#![allow(clippy::manual_let_else)]
-#![allow(clippy::manual_string_new)]
-#![allow(clippy::match_on_vec_items)]
-#![allow(clippy::match_same_arms)]
-#![allow(clippy::missing_assert_message)]
-#![allow(clippy::missing_asserts_for_indexing)]
-#![allow(clippy::missing_panics_doc)]
-#![allow(clippy::missing_trait_methods)]
-#![allow(clippy::multiple_unsafe_ops_per_block)]
-#![allow(clippy::must_use_candidate)]
-#![allow(clippy::needless_continue)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::new_without_default)]
-#![allow(clippy::panic_in_result_fn)]
-#![allow(clippy::pathbuf_init_then_push)]
-#![allow(clippy::question_mark)]
-#![allow(clippy::redundant_type_annotations)]
-#![allow(clippy::similar_names)]
-#![allow(clippy::std_instead_of_alloc)]
-#![allow(clippy::std_instead_of_core)]
-#![allow(clippy::string_slice)]
-#![allow(clippy::str_to_string)]
-#![allow(clippy::too_many_lines)] // Encourages premature factoring
-#![allow(clippy::undocumented_unsafe_blocks)]
-#![allow(clippy::unnecessary_safety_comment)]
-#![allow(clippy::unnecessary_wraps)] // Lights up diags when trying to change code
-#![allow(clippy::unreadable_literal)] // Creates problems pasting literals
-#![allow(clippy::unused_self)]
-#![allow(clippy::unused_trait_names)]
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::useless_format)]
-#![allow(clippy::useless_vec)]
-#![allow(clippy::use_debug)]
-#![allow(clippy::vec_init_then_push)]
-#![allow(clippy::verbose_file_reads)]
+// #![allow(clippy::allow_attributes)]
+// #![allow(clippy::absolute_paths)]
+// #![allow(clippy::arithmetic_side_effects)]
+// #![allow(clippy::as_conversions)]
+// #![allow(clippy::assertions_on_result_states)] // Better than unwrap
+// #![allow(clippy::bool_to_int_with_if)]
+// #![allow(clippy::cast_possible_truncation)]
+// #![allow(clippy::cast_possible_wrap)]
+// #![allow(clippy::cast_precision_loss)]
+// #![allow(clippy::cast_sign_loss)]
+// #![allow(clippy::comparison_chain)]
+// #![allow(clippy::create_dir)]
+// #![allow(clippy::default_numeric_fallback)]
+// #![allow(clippy::double_must_use)]
+// #![allow(clippy::excessive_precision)] // Creates problems when using literals
+// #![allow(clippy::expect_used)]
+// #![allow(clippy::explicit_iter_loop)]
+// #![allow(clippy::field_reassign_with_default)]
+// #![allow(clippy::float_cmp)]
+// #![allow(clippy::identity_op)]
+// #![allow(clippy::indexing_slicing)]
+// #![allow(clippy::items_after_statements)]
+// #![allow(clippy::len_zero)]
+// #![allow(clippy::let_underscore_must_use)]
+// #![allow(clippy::let_underscore_untyped)]
+// #![allow(clippy::manual_assert)]
+// #![allow(clippy::manual_let_else)]
+// #![allow(clippy::manual_string_new)]
+// #![allow(clippy::match_on_vec_items)]
+// #![allow(clippy::match_same_arms)]
+// #![allow(clippy::missing_assert_message)]
+// #![allow(clippy::missing_asserts_for_indexing)]
+// #![allow(clippy::missing_panics_doc)]
+// #![allow(clippy::missing_trait_methods)]
+// #![allow(clippy::multiple_unsafe_ops_per_block)]
+// #![allow(clippy::must_use_candidate)]
+// #![allow(clippy::needless_continue)]
+// #![allow(clippy::needless_range_loop)]
+// #![allow(clippy::new_without_default)]
+// #![allow(clippy::panic_in_result_fn)]
+// #![allow(clippy::pathbuf_init_then_push)]
+// #![allow(clippy::question_mark)]
+// #![allow(clippy::redundant_else)]
+// #![allow(clippy::redundant_type_annotations)]
+// #![allow(clippy::similar_names)]
+// #![allow(clippy::std_instead_of_alloc)]
+// #![allow(clippy::std_instead_of_core)]
+// #![allow(clippy::string_slice)]
+// #![allow(clippy::str_to_string)]
+// #![allow(clippy::too_many_lines)] // Encourages premature factoring
+// #![allow(clippy::undocumented_unsafe_blocks)]
+// #![allow(clippy::unnecessary_safety_comment)]
+// #![allow(clippy::unnecessary_wraps)] // Lights up diags when trying to change code
+// #![allow(clippy::unreadable_literal)] // Creates problems pasting literals
+// #![allow(clippy::unused_self)]
+// #![allow(clippy::unused_trait_names)]
+// #![allow(clippy::unwrap_used)]
+// #![allow(clippy::useless_format)]
+// #![allow(clippy::useless_vec)]
+// #![allow(clippy::use_debug)]
+// #![allow(clippy::vec_init_then_push)]
+// #![allow(clippy::verbose_file_reads)]
 
 mod custom_err;
 mod display;

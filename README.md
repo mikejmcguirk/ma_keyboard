@@ -4,10 +4,11 @@ NOTE: The build script assumes you are in a bash shell and have rsync installed
 
 NOTE: The terminal display is not tested on windows.
 
-Notes on Evaluation Criteria:
+Notes on the fitness function:
   - Efficiency is not about speed per se. For all of Qwerty's problems, most typing speed records are performed with it. The fitness function is geared toward avoiding uncomfortable hand movement
-  - Rolls are not checked. If rolls are over-indexed, the algorithm will favor layouts with SFBs and/or other uncomfortable motions. If rolls are given a more reasonable value, they do not appear with any notable frequency among common bigrams, while still exerting a gravity on the overall layout that is hard to reason about
+    - Some amount of SFBs are tolerated if it means avoiding scissors and other unnatural hand motions
   - Redirects are not checked. I don't find them uncomfortable
+  - While the home row is favored by penalizing row movement, neither the top nor the bottom row are favored over the other. This avoids placing commonly used keys on the ring or pinky finger to avoid the disfavored row
 
 Resources:
 

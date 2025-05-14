@@ -1,4 +1,3 @@
-// For max edges length: Check/Allin/Bets or Call/Fold/Allin/Raises
 #[macro_export]
 macro_rules! kb_helper_consts {
     () => {
@@ -7,53 +6,16 @@ macro_rules! kb_helper_consts {
         // Default Key
         const SPACE: (u8, u8) = (b' ', b' ');
 
-        // Rows
-        const NUM_ROW: usize = 0;
-        const TOP_ROW: usize = 1;
-        const HOME_ROW: usize = 2;
-        const BOT_ROW: usize = 3;
-
         const NUM_ROW_CNT: usize = 12;
         const TOP_ROW_CNT: usize = 13;
         const HOME_ROW_CNT: usize = 12;
         const BOT_ROW_CNT: usize = 10;
-
-        // Fingers
-        const INDEX: char = 'i';
-        const MIDDLE: char = 'm';
-        const RING: char = 'r';
-        const PINKY: char = 'p';
 
         // Hands
         const LEFT: char = 'l';
         const RIGHT: char = 'r';
 
         const BASE_EFF: f64 = 1.0;
-
-        // Increase, Medium, Bigram or Single Key
-        const I_ME_B: f64 = 1.4;
-        // Increase, Medium, Skipgram
-        const I_ME_S: f64 = 1.2;
-        // Increase, Low, Bigram or Single Key
-        // const I_LO_B: f64 = 1.2;
-        // Increase, Low, Skipgram
-        // const I_LO_S: f64 = 1.1;
-        // Deduct, Low, Bigram or Single key
-        const D_LO_B: f64 = 0.8;
-        // Deduct, Low, Skipgram
-        const D_LO_S: f64 = 0.8;
-        // Deduct, Medium, Bigram or Single key
-        const D_ME_B: f64 = 0.6;
-        // Deduct, Medium, Skipgram
-        const D_ME_S: f64 = 0.8;
-        // Deduct, High, Bigram or Single key
-        const D_HI_B: f64 = 0.4;
-        // Deduct, High, Skipgram
-        const D_HI_S: f64 = 0.7;
-        // Deduct, Brutal, Bigram or Single key
-        const D_BU_B: f64 = 0.2;
-        // Deduct, Brutal, Skipgram
-        const D_BU_S: f64 = 0.6;
     };
 }
 
@@ -80,6 +42,43 @@ macro_rules! helper_consts {
         const R_SYMBOL: usize = 10;
         const R_NETHER: usize = 11;
         const R_PIPE: usize = 12;
+
+        // Rows
+        const NUM_ROW: usize = 0;
+        const TOP_ROW: usize = 1;
+        const HOME_ROW: usize = 2;
+        const BOT_ROW: usize = 3;
+
+        // Fingers
+        const INDEX: char = 'i';
+        const MIDDLE: char = 'm';
+        const RING: char = 'r';
+        const PINKY: char = 'p';
+
+        // Increase, Medium, Bigram or Single Key
+        const I_ME_B: f64 = 1.4;
+        // Increase, Medium, Skipgram
+        const I_ME_S: f64 = 1.2;
+        // Increase, Low, Bigram or Single Key
+        // const I_LO_B: f64 = 1.2;
+        // Increase, Low, Skipgram
+        // const I_LO_S: f64 = 1.1;
+        // Deduct, Low, Bigram or Single key
+        const D_LO_B: f64 = 0.8;
+        // Deduct, Low, Skipgram
+        const D_LO_S: f64 = 0.8;
+        // Deduct, Medium, Bigram or Single key
+        const D_ME_B: f64 = 0.6;
+        // Deduct, Medium, Skipgram
+        const D_ME_S: f64 = 0.8;
+        // Deduct, High, Bigram or Single key
+        const D_HI_B: f64 = 0.4;
+        // Deduct, High, Skipgram
+        const D_HI_S: f64 = 0.7;
+        // Deduct, Brutal, Bigram or Single key
+        const D_BU_B: f64 = 0.2;
+        // Deduct, Brutal, Skipgram
+        const D_BU_S: f64 = 0.6;
 
         // ==================
         // ==== Key Info ====

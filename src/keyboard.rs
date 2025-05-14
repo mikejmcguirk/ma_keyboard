@@ -7,10 +7,12 @@ use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 use crate::{
     kb_helper_consts,
     kb_helpers::{
-        check_spaces, compare_keys, get_hand, get_key_locations, get_single_key_mult, place_keys,
+        check_key_no_hist, check_spaces, compare_keys, get_hand, get_key_locations,
+        get_single_key_mult, place_keys,
     },
 };
 
+// TODO: Some of this stuff should be removed as we factor out the scoring
 kb_helper_consts!();
 
 pub enum KeyCompare {
@@ -38,8 +40,6 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    // TODO: Should be a better way to handle \n, \\, and |. They really should just be added to
-    // the KB vec. They won't disrupt the slicing
     /// # Panics
     /// Will panic if compile time data is incorrect
     // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
@@ -209,7 +209,7 @@ impl Keyboard {
         let this_hand = get_hand(this_col);
         if this_hand == RIGHT {
             self.right_uses += 1.0_f64;
-        } else {
+        } else if this_hand == LEFT {
             self.left_uses += 1.0_f64;
         }
 
@@ -235,17 +235,7 @@ impl Keyboard {
             }
         }
 
-        let this_row: usize = this_key.0;
-        let dist_from_home = this_row.abs_diff(2);
-        if dist_from_home == 1 {
-            eff *= 0.8;
-        } else if dist_from_home == 2 {
-            eff *= 0.6;
-        }
-
-        if this_hand == 'l' && dist_from_home > 0 {
-            eff *= 0.8;
-        }
+        eff *= check_key_no_hist(this_key);
 
         return eff;
     }
@@ -255,16 +245,16 @@ impl Keyboard {
             return;
         }
 
-        self.score = 0.0;
+        self.score = 0.0_f64;
         self.last_key_idx = None;
         self.prev_key_idx = None;
-        self.left_uses = 0.0;
-        self.right_uses = 0.0;
+        self.left_uses = 0.0_f64;
+        self.right_uses = 0.0_f64;
 
         for entry in corpus {
             for b in entry.as_bytes() {
                 let this_key: (usize, usize) =
-                    if let Some(&Some(key)) = self.slot_ascii.get(*b as usize) {
+                    if let Some(&Some(key)) = self.slot_ascii.get(usize::from(*b)) {
                         key
                     } else {
                         self.prev_key_idx = self.last_key_idx;

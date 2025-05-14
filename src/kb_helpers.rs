@@ -524,3 +524,28 @@ fn check_scissor(this_key: (usize, usize), last_key: (usize, usize), is_bigram: 
         _ => 1.0,
     };
 }
+
+pub fn check_key_no_hist(key: (usize, usize)) -> f64 {
+    let mut mult = BASE_EFF;
+
+    let col = key.1;
+    if get_hand(col) == LEFT {
+        mult *= D_LO_B;
+    }
+
+    let row = key.0;
+    let dist = row.abs_diff(HOME_ROW);
+    debug_assert!(
+        (NUM_ROW..=BOT_ROW).contains(&key.0),
+        "Row {row} is invalid when checking home distance",
+    );
+
+    if dist == 1 {
+        return mult * D_LO_B;
+    }
+    if dist == 2 {
+        return mult * D_ME_B;
+    }
+
+    return mult;
+}

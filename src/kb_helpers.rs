@@ -240,9 +240,7 @@ pub fn get_single_key_mult(key: (usize, usize)) -> f64 {
     // However, the pinky top row is given an extra penalty because the whole hand has to be
     // moved to hit it
     let ring_or_pinky = finger == RING || finger == PINKY;
-    if ring_or_pinky && row == HOME_ROW {
-        mult *= D_LO_B;
-    } else if (ring_or_pinky && row == BOT_ROW) || (finger == RING && row == TOP_ROW) {
+    if (ring_or_pinky && row == BOT_ROW) || (finger == RING && row == TOP_ROW) {
         mult *= D_ME_B;
     } else if finger == PINKY && row == TOP_ROW {
         mult *= D_HI_B;
@@ -296,6 +294,13 @@ pub fn compare_keys(
     if finger_match {
         mult *= get_base_sf_penalty(is_bigram);
         mult *= get_col_sf_penalty(this_col, last_col, is_bigram);
+
+        let is_ring_or_pinky = this_finger == RING || this_finger == PINKY;
+        if is_ring_or_pinky && is_bigram {
+            mult *= D_ME_B;
+        } else if is_ring_or_pinky && !is_bigram {
+            mult *= D_ME_S;
+        }
 
         return KeyCompare::Mult(mult);
     }

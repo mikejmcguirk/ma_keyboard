@@ -1,15 +1,18 @@
 use std::{
     env,
     fs::{self, File, ReadDir},
-    io::Read,
     path::PathBuf,
     process::ExitCode,
 };
 
-use anyhow::{Result, anyhow};
+use {
+    anyhow::{Result, anyhow},
+    rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
+};
 
 use crate::{display::Display, population::Population};
 
+// TODO: The second rng is quite bad
 // TODO: A better architecture for this is to let the user bring in the valid keys from a config
 // file rather than actually altering the source code. So then error propagation would be the
 // better design
@@ -38,44 +41,70 @@ use crate::{display::Display, population::Population};
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     const ITERATIONS: usize = 100;
 
-    let corpus_dir: PathBuf = get_corpus_dir()?;
-    let corpus: Vec<String> = load_corpus(&corpus_dir)?;
+    let seed: [u8; 32] = rand::random();
+    // let seed_string: String = format!("{seed:?}");
+    // write_err(log_handle, &seed_string)?;
+    let mut rng = SmallRng::from_seed(seed);
 
-    let mut population: Population = Population::create(None, log_handle)?;
+    let corpus_dir = get_corpus_dir()?;
+    let corpus = load_corpus(&corpus_dir)?;
 
-    let mut display: Display = Display::new();
+    let mut population = Population::create(None, log_handle)?;
+
+    let mut display = Display::new();
     display.draw_initial(&population);
 
     let decay_start: f64 = 30.0;
-    let small_decay_target: f64 = 2.0;
-    let med_decay_target: f64 = 3.0;
-    let large_decay_target: f64 = 4.0;
 
+    let small_value_target: f64 = 2.0;
+    let med_range_bot_target: f64 = 3.0;
+    let med_range_top_target: f64 = 12.0;
+    let large_range_bot_target: f64 = 13.0;
+    let large_range_top_target: f64 = 21.0;
+    let huge_range_bot_target: f64 = 22.0;
+    let huge_top_value: f64 = 30.0;
+
+    // TODO: You can wrap these up in debug_asserts to make sure they don't get wrong, but we have
+    // to assume the usize and f64 values are small enough here to work
+    #[expect(clippy::as_conversions)]
+    #[expect(clippy::cast_possible_truncation)]
+    #[expect(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_sign_loss)]
     for iter in 1..=ITERATIONS {
         display.update_iter(iter);
-
         let iter_decay: f64 = iter as f64 - 1.0;
-        let small_decay: f64 = decay_value(decay_start, iter_decay, small_decay_target);
-        let small_decay_usize: usize = small_decay as usize;
-        let med_decay: f64 = decay_value(decay_start, iter_decay, med_decay_target);
-        let med_decay_usize: usize = med_decay as usize;
-        let large_decay: f64 = decay_value(decay_start, iter_decay, large_decay_target);
-        let large_decay_usize: usize = large_decay as usize;
+
+        let small_value = decay_value(decay_start, iter_decay, small_value_target);
+        let med_bot_value = decay_value(decay_start, iter_decay, med_range_bot_target);
+        let med_top_value = decay_value(decay_start, iter_decay, med_range_top_target);
+        let large_bot_value = decay_value(decay_start, iter_decay, large_range_bot_target);
+        let large_top_value = decay_value(decay_start, iter_decay, large_range_top_target);
+        let huge_bot_value = decay_value(decay_start, iter_decay, huge_range_bot_target);
+
+        let small_value_usize: usize = small_value.round() as usize;
+        let med_bot_usize: usize = med_bot_value.round() as usize;
+        let med_top_usize: usize = med_top_value.round() as usize;
+        let large_bot_usize: usize = large_bot_value.round() as usize;
+        let large_top_usize: usize = large_top_value.round() as usize;
+        let huge_bot_usize: usize = huge_bot_value.round() as usize;
+        let huge_top_usize: usize = huge_top_value.round() as usize;
+
+        let med_value = rng.random_range(med_bot_usize..=med_top_usize);
+        let large_value = rng.random_range(large_bot_usize..=large_top_usize);
+        let huge_value = rng.random_range(huge_bot_usize..=huge_top_usize);
+
         display.update_mut_values(
-            small_decay_usize,
-            small_decay_usize,
-            med_decay_usize,
-            med_decay_usize,
-            large_decay_usize,
-            large_decay_usize,
+            small_value_usize,
+            small_value_usize,
+            med_bot_usize,
+            med_top_usize,
+            large_bot_usize,
+            large_top_usize,
+            huge_bot_usize,
+            huge_top_usize,
         );
 
-        population.mutate_climbers([
-            small_decay_usize,
-            small_decay_usize,
-            med_decay_usize,
-            large_decay_usize,
-        ]);
+        population.mutate_climbers([small_value_usize, med_value, large_value, huge_value]);
 
         population.eval_gen_pop(&corpus, &mut display)?;
         population.setup_climbers(&mut display)?;
@@ -120,21 +149,18 @@ fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
     for entry in corpus_content {
         let file = entry?;
 
-        let path = file.path();
+        let mut path = file.path();
         if path.is_file() {
-            let mut opened_file = File::open(&path)?;
-
-            let mut contents = String::new();
-            opened_file.read_to_string(&mut contents)?;
+            let contents = fs::read_to_string(&mut path)?;
             corpus_files.push(contents);
         }
     }
 
-    if corpus_files.len() < 1 {
+    if corpus_files.is_empty() {
         return Err(anyhow!("No corpus entries loaded"));
-    } else {
-        return Ok(corpus_files);
     }
+
+    return Ok(corpus_files);
 }
 
 fn decay_value(start: f64, iter: f64, target: f64) -> f64 {

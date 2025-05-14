@@ -314,6 +314,8 @@ impl Display {
         mid_t: usize,
         high_b: usize,
         high_t: usize,
+        huge_b: usize,
+        huge_t: usize,
     ) {
         stdout()
             .queue(SavePosition)
@@ -321,8 +323,8 @@ impl Display {
             .queue(MoveTo(Self::MUT_NUM_X, Self::MUT_Y))
             .unwrap()
             .queue(Print(format!(
-                "{:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
-                low_b, low_t, mid_b, mid_t, high_b, high_t
+                "{:02}, {:02} | {:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
+                low_b, low_t, mid_b, mid_t, high_b, high_t, huge_b, huge_t
             )))
             .unwrap()
             .queue(RestorePosition)

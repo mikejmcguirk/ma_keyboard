@@ -336,7 +336,7 @@ pub fn hill_climb(
     display: &mut Display,
 ) -> Result<Keyboard> {
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
-    const CLAMP_VALUE: f64 = 0.9999999999999999;
+    const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
 
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);

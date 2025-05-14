@@ -182,24 +182,6 @@ impl Keyboard {
         }
     }
 
-    // TODO: I just have to treat space as fully efficient. In practice, it's easier to hit space
-    // after some keys than in others, but it's too related to the specific hand position, which
-    // I'm not sure I can track in here
-    // TODO: For shift keys: If you type a word like "What", because W is on the left hand, you
-    // press shift with the right, which slows down typing the h. So for any particular character,
-    // you want to see if the last character is a shift car that requires the current key's hand,
-    // and then deduct. A reduced deduction should be applied for a word like "Wall", which still
-    // slows you down but not as much. An interesting case to consider is a word like "Who", where,
-    // when you score the o, you'll find yourself successfully in the last key logic, but then you
-    // still need to check within there to see if there was a previous key shift where the key is
-    // on the opposite hand (meaning the o strike is still negatively influenced by it). The shift
-    // penalty should be rather severe, since it requires moving the whole hand to hit. Though, the
-    // shift motion is actually far more natural on the left hand than the right, so you can
-    // balance the deductions accordingly. Because this logic is based on key position, and the
-    // shift logic functions basicaly on top of everything else, it should be outlined into a
-    // wholly different function
-    // TODO: Should be a way to account for that the middle finger moving up and to some extent
-    // down is the least bad.
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
     fn get_efficiency(&mut self, this_key: (usize, usize)) -> f64 {

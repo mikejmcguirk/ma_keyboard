@@ -11,7 +11,6 @@
 #![allow(clippy::allow_attributes_without_reason)] // This is what comments are for
 #![allow(clippy::arbitrary_source_item_ordering)] // Promotes illogical organization
 #![allow(clippy::blanket_clippy_restriction_lints)] // I do what I want
-#![allow(clippy::else_if_without_else)] // Flags too often in irrelevant situations
 #![allow(clippy::integer_division)] // I know
 #![allow(clippy::integer_division_remainder_used)] // I know
 #![allow(clippy::min_ident_chars)] // i, j, e, and so on are fine
@@ -26,18 +25,16 @@
 #![allow(clippy::single_char_lifetime_names)] // Multi-char names lead to bloated code
 #![allow(clippy::single_call_fn)] // Good for code organization
 #![allow(clippy::struct_field_names)] // Promotes contrived naming
-#![allow(clippy::type_complexity)] // I'm not sure creating type definitions is helpful
-#![allow(clippy::uninlined_format_args)] // Trips when inlining is impossible
+#![allow(clippy::type_complexity)]
 // Always Allow (Project Specific)
-#![allow(clippy::exhaustive_enums)] // This isn't a library
-#![allow(clippy::exhaustive_structs)] // This isn't a library
-#![allow(clippy::missing_errors_doc)] // This isn't a library
-#![allow(clippy::float_arithmetic)] // Used a lot
-#![allow(clippy::panic)] // Not a server app
-#![allow(clippy::print_stderr)] // This is a terminal application
-#![allow(clippy::print_stdout)] // This is a terminal application
-
-// Allow these when just trying to get code down
+// This isn't a library
+#![allow(clippy::exhaustive_enums)]
+#![allow(clippy::exhaustive_structs)]
+#![allow(clippy::missing_errors_doc)]
+// This is a terminal application
+#![allow(clippy::print_stderr)]
+#![allow(clippy::print_stdout)]
+// Lints to either fix or explicitly expect
 // #![allow(clippy::allow_attributes)]
 // #![allow(clippy::absolute_paths)]
 // #![allow(clippy::arithmetic_side_effects)]
@@ -53,7 +50,6 @@
 // #![allow(clippy::default_numeric_fallback)]
 // #![allow(clippy::double_must_use)]
 // #![allow(clippy::excessive_precision)] // Creates problems when using literals
-// #![allow(clippy::expect_used)]
 // #![allow(clippy::explicit_iter_loop)]
 // #![allow(clippy::field_reassign_with_default)]
 // #![allow(clippy::float_cmp)]
@@ -71,13 +67,11 @@
 // #![allow(clippy::missing_assert_message)]
 // #![allow(clippy::missing_asserts_for_indexing)]
 // #![allow(clippy::missing_panics_doc)]
-// #![allow(clippy::missing_trait_methods)]
 // #![allow(clippy::multiple_unsafe_ops_per_block)]
 // #![allow(clippy::must_use_candidate)]
 // #![allow(clippy::needless_continue)]
 // #![allow(clippy::needless_range_loop)]
 // #![allow(clippy::new_without_default)]
-// #![allow(clippy::panic_in_result_fn)]
 // #![allow(clippy::pathbuf_init_then_push)]
 // #![allow(clippy::question_mark)]
 // #![allow(clippy::redundant_else)]
@@ -100,6 +94,16 @@
 // #![allow(clippy::use_debug)]
 // #![allow(clippy::vec_init_then_push)]
 // #![allow(clippy::verbose_file_reads)]
+
+// Check these, but don't necessarily need to handle
+#![allow(clippy::else_if_without_else)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::float_arithmetic)]
+#![allow(clippy::missing_trait_methods)]
+#![allow(clippy::panic)]
+#![allow(clippy::panic_in_result_fn)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::unwrap_in_result)]
 
 mod custom_err;
 mod display;

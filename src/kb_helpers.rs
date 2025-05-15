@@ -458,7 +458,6 @@ fn get_col_sf_penalty(this_col: usize, last_col: usize, last: bool) -> f64 {
 }
 
 // FUTURE: As written, you can have (<=4)-4 or (>=5)-5, so no out of bounds math. But brittle
-#[expect(clippy::arithmetic_side_effects)]
 fn get_center_dist(col: usize) -> usize {
     debug_assert!(
         (L_PINKY..=R_PIPE).contains(&col),
@@ -466,9 +465,12 @@ fn get_center_dist(col: usize) -> usize {
     );
 
     return if col <= L_EXT {
-        L_EXT - col
+        L_EXT
+            .checked_sub(col)
+            .expect("{L_EXT} must be greater than {col}")
     } else {
-        col - R_EXT
+        col.checked_sub(R_EXT)
+            .expect("{col} must be greater than {R_EXT}")
     };
 }
 

@@ -1,8 +1,8 @@
-use std::fs::File;
+use {core::cmp, std::fs::File};
 
 use {
     anyhow::{Result, anyhow},
-    rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
+    rand::{Rng as _, SeedableRng as _, prelude::IndexedRandom as _, rngs::SmallRng},
 };
 
 use crate::{
@@ -11,6 +11,8 @@ use crate::{
     keyboard::Keyboard,
     utils::write_err,
 };
+
+const ELITE_CNT: usize = 1;
 
 // TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
 // to improve the keyboard. Do this after a full clippy pass of the non-swap code
@@ -21,11 +23,6 @@ use crate::{
 // understand, thread_rng uses the cryptographically secure RNG, which is slower
 // Importantly though, we want to be able to store and re-use the RNG seed, so whatever our RNG
 // solution is cannot have multiple seeds
-// PERF: When we get to multithreading stage, I think trying to process multiple keyboards at once
-// is too much nonsense. I think we're better off handing the corpus strings off to worker threads
-// or using Rayon or Tokio for parallel processing
-// NOTE: This struct manages the population of keyboards, not any particular keyboard. It also is
-// not concerned with to what end the population is managed for
 pub struct Population {
     rng: SmallRng,
     id: IdSpawner,
@@ -33,17 +30,12 @@ pub struct Population {
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
-    elite_cnt: usize,
     generation: usize,
     top_score: f64,
 }
 
 impl Population {
-    const ELITE_CNT: usize = 1;
     // TODO: Long function
-    // TODO: Current code cannot robustly handle input options
-    // TODO: long function signature
-    // TODO: This will eventually take user input, so keep the error return
     pub fn create(size: Option<usize>, log_handle: &mut File) -> Result<Self> {
         const DEFAULT_POPULATION: usize = 100;
         const DEFAULT_CLIMB_CNT: usize = 20;
@@ -78,9 +70,12 @@ impl Population {
         let mut climbers: Vec<Keyboard> = Vec::with_capacity(climber_cnt);
 
         // Having multiple elites kills genetic diversity
-        let elite_cnt: usize = Self::ELITE_CNT;
+        let elite_cnt: usize = ELITE_CNT;
         // Should be impossible to fail due to compile time constraints
-        assert!(elite_cnt <= climber_cnt);
+        debug_assert!(
+            elite_cnt <= climber_cnt,
+            "Elite count {elite_cnt} is higher than climber count {climber_cnt}"
+        );
 
         // At the end of the last iteration, it is not necessary to mutate the climbers. Therefore,
         // mutating climbers is done at the beginning of each iteration. Even though creating our
@@ -101,137 +96,133 @@ impl Population {
             population: gen_pop,
             climber_cnt,
             climbers,
-            elite_cnt,
             generation: 0,
             top_score: 0.0,
         });
     }
 
-    // NOTE: The amts argument is used to determine how many keyslots are shuffled on the keyboard.
-    // Because the amts are type usize, no amt can produce invalid behavior from the standpoint of
-    // the population. To see if certain amts are invalid, the keyboard struct must be checked
-    // NOTE: An error is returned if climbers is zero because this should never be able to happen
-    // NOTE: Probabilistically selecting which climber to mutate based on score tips the scales
-    // toward the higher scoring keyboards. This is a trade-off aimed at increasing the value of
-    // the mutation phase in later generations as the population converges on an optimal solution.
-    // This creates the downside of hurting population diversity in the earlier stages, though the
-    // amount of keys to shuffle can be increased to compensate
-    // TODO: When incrementing generations, should return an error if max usize is exceeded
-    // The caller can then do what it wants with that. The mutate function should not clear the
-    // climbers
-    // TODO: Format string in keyboard evaluation should be based on digits in total population
-    // size
+    // TODO: The checked math is fine for now, but not robust if user input is allowed
     // TODO: The probabalistic selection logic has to be something that can be outlined
-    // PERF: We generate a random starting selection so the edge case doesn't always default to the
-    // strongest member. Might be extra
     // PERF: For simplicity, we are currently using push/drain/clear on the various Vecs to manage
     // their contents. If this is slow, move to simply reading and writing to it directly. This
     // *should* be possible without unsafe
+    // PERF: Instead of clearing and rebuilding the population each time, it is theoretically
+    // faster to hold the climbers in there and iterate over a slice of the population, though that
+    // would also require rebuilding how the climbers are created. In practice, I have not seen
+    // this step take a lot of time in profiling, so probably irrelevant
     pub fn mutate_climbers(&mut self, amts: [usize; 4]) {
-        self.generation += 1;
+        self.generation
+            .checked_add(1)
+            .expect("Too many generations");
 
-        assert!(self.climbers.len() <= self.climber_cnt);
+        debug_assert!(
+            self.climbers.len() <= self.climber_cnt,
+            "Current climbers {} is higher than the climber count {}",
+            self.climbers.len(),
+            self.climber_cnt
+        );
 
         self.population.clear();
-        let mut climber_score: f64 = 0.0;
-        for climber in &self.climbers {
-            climber_score += climber.get_score();
-            self.population.push(climber.clone());
-        }
+        let tot_score = self
+            .climbers
+            .iter()
+            .fold(0.0_f64, |acc, c| return acc + c.get_score());
 
-        let to_add: usize = self.pop_size - self.climbers.len();
+        let to_add = self
+            .pop_size
+            .checked_sub(self.climbers.len())
+            .expect("Climbers greater than population size");
+
         for _ in 0..to_add {
-            let mut idx: usize = self.rng.random_range(0..self.climbers.len());
-            let mut checked_score: f64 = 0.0;
-            let r: f64 = self.rng.random_range(0.0..=climber_score);
+            let parent = {
+                let r = self.rng.random_range(0.0_f64..=tot_score);
+                let mut checked_score: f64 = 0.0;
 
-            for i in 0..self.climbers.len() {
-                checked_score += self.climbers[i].get_score();
-                if checked_score >= r {
-                    idx = i;
-                    break;
-                }
-            }
+                self.climbers
+                    .iter()
+                    .find(|climber| {
+                        checked_score += climber.get_score();
+                        return checked_score > r;
+                    })
+                    .unwrap_or_else(|| {
+                        return self.climbers.last().expect("Climbers should not be empty");
+                    })
+            };
 
-            let mut new_kb =
-                Keyboard::mutate_from(&self.climbers[idx], self.generation, self.id.get());
-            let this_amt_idx: usize = self.rng.random_range(0..amts.len());
-            let this_amt: usize = amts[this_amt_idx];
+            let this_amt = *amts
+                .choose(&mut self.rng)
+                .expect("Amts should not be empty");
+            let mut new_kb = Keyboard::mutate_from(parent, self.generation, self.id.get());
             new_kb.shuffle(&mut self.rng, this_amt);
 
             self.population.push(new_kb);
         }
 
-        assert_eq!(self.population.len(), self.pop_size);
+        assert_eq!(
+            self.population.len(),
+            self.pop_size,
+            "Population {} does not match the population size {}",
+            self.population.len(),
+            self.pop_size
+        );
     }
 
-    // TODO: Long function signature
     pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), CorpusErr> {
         if corpus.is_empty() {
             return Err(CorpusErr::EmptyCorpus);
         }
 
-        for i in 0..self.population.len() {
-            update_eval(i + 1)?;
-            self.population[i].eval(corpus);
+        for (i, kb) in self.population.iter_mut().enumerate() {
+            let display_num = i.checked_add(1).expect("Population has too many to count");
+            update_eval(display_num)?;
+
+            kb.eval(corpus);
         }
 
         update_eval(0)?;
         return Ok(());
     }
 
-    // TODO: Since we're just going with one elite, we only need to pull one out. And because only
-    // one elite creates more diversity, checking for duplicates in the general population is a
-    // waste of time, so that can be stripped out. I'm also not against getting rid of the code to
-    // cut the bottom n, since it adds complexity to the setup.
     // TODO: Long function
-    // NOTE: Removing duplicates can cause the amount of available climbers to be below what is
-    // intended. This is allowed to happen without error because the population is replenished
-    // during the mutation phase
-    // NOTE: This method assumes that the amount of elites, culls, and climbers is properly setup
     pub fn setup_climbers(&mut self) -> Result<()> {
+        self.climbers.clear();
         self.population.sort_by(|a, b| {
             return b
                 .get_score()
                 .partial_cmp(&a.get_score())
-                .unwrap_or(std::cmp::Ordering::Equal);
+                .unwrap_or(cmp::Ordering::Equal);
         });
 
-        self.climbers.clear();
-        // Pull out elite
-        self.climbers.extend(self.population.drain(..1));
-        if self.climbers[0].get_score() > self.top_score {
-            self.top_score = self.climbers[0].get_score();
-            update_kb(&self.climbers[0])?;
+        self.climbers.extend(self.population.drain(..ELITE_CNT));
+        let elite = self.climbers.first().expect("Elite climber not drained");
+        if elite.get_score() > self.top_score {
+            self.top_score = elite.get_score();
+            update_kb(elite)?;
         }
 
-        // Add remaining climbers probabalistically
-        let mut population_score: f64 = 0.0;
-        for member in &self.population {
-            population_score += member.get_score();
-        }
+        let mut population_score = self
+            .population
+            .iter()
+            .fold(0.0_f64, |acc, p| return acc + p.get_score());
 
-        while self.climbers.len() < self.climber_cnt && self.population.len() > 0 {
-            let mut selection: usize = 0;
+        while self.climbers.len() < self.climber_cnt && !self.population.is_empty() {
             let mut checked_score: f64 = 0.0;
-            let r: f64 = self.rng.random_range(0.0..=population_score);
+            let r = self.rng.random_range(0.0_f64..=population_score);
 
-            for i in 0..self.population.len() {
-                checked_score += self.population[i].get_score();
+            for (i, kb) in self.population.iter_mut().enumerate() {
+                checked_score += kb.get_score();
                 if checked_score >= r {
-                    selection = i;
+                    population_score -= kb.get_score();
+                    self.climbers.extend(self.population.drain(i..=i));
+
                     break;
                 }
             }
-
-            population_score -= self.population[selection].get_score();
-            self.climbers
-                .extend(self.population.drain(selection..=selection));
         }
 
         let mut elites_set: usize = 0;
         for climber in self.climbers.iter_mut() {
-            if elites_set < Self::ELITE_CNT {
+            if elites_set < ELITE_CNT {
                 climber.set_elite();
                 elites_set += 1;
             } else {
@@ -284,10 +275,6 @@ impl Population {
 
     pub fn get_climb_cnt(&self) -> usize {
         return self.climber_cnt;
-    }
-
-    pub fn get_elite_cnt(&self) -> usize {
-        return self.elite_cnt;
     }
 }
 

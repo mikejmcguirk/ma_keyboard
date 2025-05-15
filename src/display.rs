@@ -27,18 +27,13 @@ const CLIMB_NAME: &str = "Climber Count: ";
 // const ITER_CLIMB_X: u16 = CLIMB_LEN as u16;
 const CLIMB_Y: u16 = POP_Y + 1;
 
-const ELITE_NAME: &str = "Elite Count: ";
-// const ELITE_LEN: usize = ELITE_NAME.len();
-// const ELITE_NUM_X: u16 = ELITE_LEN as u16;
-const ELITE_Y: u16 = CLIMB_Y + 1;
-
 const AVG_NAME: &str = "Average Climber Score: ";
 const AVG_LEN: usize = AVG_NAME.len();
 // The as conversion takes place at compile time
 #[expect(clippy::as_conversions)]
 #[expect(clippy::cast_possible_truncation)]
 const AVG_NUM_X: u16 = AVG_LEN as u16;
-const AVG_Y: u16 = ELITE_Y + 1;
+const AVG_Y: u16 = POP_Y + 1;
 
 const KB_HEADER_Y: u16 = AVG_Y + 2;
 const KB_INFO_Y: u16 = KB_HEADER_Y + 1;
@@ -55,13 +50,13 @@ const ITER_LEN: usize = ITER_NAME.len();
 const ITER_NUM_X: u16 = ITER_LEN as u16;
 const ITER_Y: u16 = KB_BOT_Y + 2;
 
-const MUT_NAME: &str = "Mutation Ranges: ";
-const MUT_LEN: usize = MUT_NAME.len();
-// The as conversion takes place at compile time
-#[expect(clippy::as_conversions)]
-#[expect(clippy::cast_possible_truncation)]
-const MUT_NUM_X: u16 = MUT_LEN as u16;
-const MUT_Y: u16 = ITER_Y + 1;
+// const MUT_NAME: &str = "Mutation Ranges: ";
+// const MUT_LEN: usize = MUT_NAME.len();
+// // The as conversion takes place at compile time
+// #[expect(clippy::as_conversions)]
+// #[expect(clippy::cast_possible_truncation)]
+// const MUT_NUM_X: u16 = MUT_LEN as u16;
+// const MUT_Y: u16 = ITER_Y + 1;
 
 const EVAL_NAME: &str = "Evaluating: ";
 const EVAL_LEN: usize = EVAL_NAME.len();
@@ -69,7 +64,8 @@ const EVAL_LEN: usize = EVAL_NAME.len();
 #[expect(clippy::as_conversions)]
 #[expect(clippy::cast_possible_truncation)]
 const EVAL_NUM_X: u16 = EVAL_LEN as u16;
-const EVAL_Y: u16 = MUT_Y + 1;
+// const EVAL_Y: u16 = MUT_Y + 1;
+const EVAL_Y: u16 = ITER_Y + 1;
 
 const CLIMB_HEADER_Y: u16 = EVAL_Y + 2;
 const CLIMB_INFO_Y: u16 = CLIMB_HEADER_Y + 1;
@@ -92,8 +88,6 @@ pub fn draw_initial(pop: &Population) -> io::Result<()> {
     stdout().queue(Print(format!("{}{:03}", POP_NAME, pop.get_pop_size())))?;
     stdout().queue(MoveTo(0, CLIMB_Y))?;
     stdout().queue(Print(format!("{}{:02}", CLIMB_NAME, pop.get_climb_cnt())))?;
-    stdout().queue(MoveTo(0, ELITE_Y))?;
-    stdout().queue(Print(format!("{}{:01}", ELITE_NAME, pop.get_elite_cnt())))?;
     stdout().queue(MoveTo(0, AVG_Y))?;
     stdout().queue(Print(format!("{} --", AVG_NAME,)))?;
 
@@ -102,11 +96,11 @@ pub fn draw_initial(pop: &Population) -> io::Result<()> {
 
     stdout().queue(MoveTo(0, ITER_Y))?;
     stdout().queue(Print(format!("{}{:05}", ITER_NAME, 0_i32)))?;
-    stdout().queue(MoveTo(0, MUT_Y))?;
-    stdout().queue(Print(format!(
-        "{}{:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
-        MUT_NAME, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32,
-    )))?;
+    // stdout().queue(MoveTo(0, MUT_Y))?;
+    // stdout().queue(Print(format!(
+    //     "{}{:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
+    //     MUT_NAME, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32,
+    // )))?;
     stdout().queue(MoveTo(0, EVAL_Y))?;
     stdout().queue(Print(format!("{} --", EVAL_NAME)))?;
     stdout().queue(MoveTo(0, CLIMB_HEADER_Y))?;
@@ -145,6 +139,9 @@ pub fn update_avg(score: f64) -> io::Result<()> {
     return Ok(());
 }
 
+// At least for now, it would be more contrived to iterate through everything
+// TODO: This is not a good long term solution though
+#[expect(clippy::indexing_slicing)]
 pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
     let info: String = format!(
         "Generation: {:05}, ID: {:07}, Score: {:18}, Positive Iterations: {:05}",
@@ -208,30 +205,6 @@ pub fn update_climb_stats(stats: &str) -> io::Result<()> {
     return Ok(());
 }
 
-// TODO: Long function signature
-pub fn update_mut_values(
-    low_b: usize,
-    low_t: usize,
-    mid_b: usize,
-    mid_t: usize,
-    high_b: usize,
-    high_t: usize,
-    huge_b: usize,
-    huge_t: usize,
-) -> io::Result<()> {
-    stdout().queue(SavePosition)?;
-    stdout().queue(MoveTo(MUT_NUM_X, MUT_Y))?;
-    stdout().queue(Print(format!(
-        "{:02}, {:02} | {:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
-        low_b, low_t, mid_b, mid_t, high_b, high_t, huge_b, huge_t
-    )))?;
-    stdout().queue(RestorePosition)?;
-
-    stdout().flush()?;
-
-    return Ok(());
-}
-
 pub fn update_eval(num: usize) -> io::Result<()> {
     let to_print = if num > 0 {
         format!("{:03}", num)
@@ -248,3 +221,27 @@ pub fn update_eval(num: usize) -> io::Result<()> {
 
     return Ok(());
 }
+
+// // TODO: Long function signature
+// pub fn update_mut_values(
+//     low_b: usize,
+//     low_t: usize,
+//     mid_b: usize,
+//     mid_t: usize,
+//     high_b: usize,
+//     high_t: usize,
+//     huge_b: usize,
+//     huge_t: usize,
+// ) -> io::Result<()> {
+//     stdout().queue(SavePosition)?;
+//     stdout().queue(MoveTo(MUT_NUM_X, MUT_Y))?;
+//     stdout().queue(Print(format!(
+//         "{:02}, {:02} | {:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
+//         low_b, low_t, mid_b, mid_t, high_b, high_t, huge_b, huge_t
+//     )))?;
+//     stdout().queue(RestorePosition)?;
+//
+//     stdout().flush()?;
+//
+//     return Ok(());
+// }

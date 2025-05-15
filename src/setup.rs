@@ -11,7 +11,7 @@ use {
 };
 
 use crate::{
-    display::{draw_initial, update_iter, update_mut_values},
+    display::{draw_initial, update_iter},
     population::Population,
 };
 
@@ -42,7 +42,7 @@ use crate::{
 // - Amount of elites
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 100;
+    const ITERATIONS: usize = 400;
 
     let seed: [u8; 32] = rand::random();
     // let seed_string: String = format!("{seed:?}");
@@ -94,17 +94,6 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         let med_value = rng.random_range(med_bot_usize..=med_top_usize);
         let large_value = rng.random_range(large_bot_usize..=large_top_usize);
         let huge_value = rng.random_range(huge_bot_usize..=huge_top_usize);
-
-        update_mut_values(
-            small_value_usize,
-            small_value_usize,
-            med_bot_usize,
-            med_top_usize,
-            large_bot_usize,
-            large_top_usize,
-            huge_bot_usize,
-            huge_top_usize,
-        )?;
 
         population.mutate_climbers([small_value_usize, med_value, large_value, huge_value]);
 
@@ -170,3 +159,14 @@ fn decay_value(start: f64, iter: f64, target: f64) -> f64 {
     let z = target + (start - target) * (-K * iter).exp();
     return z.max(target); // Clamp to ensure z >= z_min
 }
+
+// update_mut_values(
+//     small_value_usize,
+//     small_value_usize,
+//     med_bot_usize,
+//     med_top_usize,
+//     large_bot_usize,
+//     large_top_usize,
+//     huge_bot_usize,
+//     huge_top_usize,
+// )?;

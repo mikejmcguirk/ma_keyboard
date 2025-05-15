@@ -1,4 +1,6 @@
-use std::{error::Error, fmt, io};
+// use std::{error::Error, fmt, io};
+use core::{error::Error, fmt};
+use std::io;
 
 #[derive(Debug)]
 pub enum CorpusErr {

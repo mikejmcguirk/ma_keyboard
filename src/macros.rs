@@ -12,7 +12,6 @@ macro_rules! kb_helper_consts {
         const BOT_ROW_CNT: usize = 10;
 
         // Hands
-        const LEFT: char = 'l';
         const RIGHT: char = 'r';
 
         const BASE_EFF: f64 = 1.0;
@@ -27,6 +26,8 @@ macro_rules! helper_consts {
         // =======================
         // ==== Keyboard Info ====
         // =======================
+        // Hands
+        const LEFT: char = 'l';
 
         // Columns
         const L_PINKY: usize = 0;

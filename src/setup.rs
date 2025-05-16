@@ -67,10 +67,6 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     let huge_top_value: f64 = 30.0;
 
     // Since these ranges are built at compile time, we can assume these conversions will succeed
-    #[expect(clippy::as_conversions)]
-    #[expect(clippy::cast_possible_truncation)]
-    #[expect(clippy::cast_precision_loss)]
-    #[expect(clippy::cast_sign_loss)]
     for iter in 1..=ITERATIONS {
         update_iter(iter)?;
         let iter_decay: f64 = iter as f64 - 1.0;

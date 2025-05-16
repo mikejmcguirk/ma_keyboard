@@ -8,8 +8,7 @@ pub enum CorpusErr {
     Io(io::Error),
 }
 
-// TODO: Is this okay?
-#[expect(clippy::pattern_type_mismatch)]
+#[expect(clippy::pattern_type_mismatch)] // Unable to unwind this because of borrowing rules
 impl fmt::Display for CorpusErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -19,14 +18,25 @@ impl fmt::Display for CorpusErr {
     }
 }
 
-// TODO: Is this okay?
-#[expect(clippy::pattern_type_mismatch)]
 impl Error for CorpusErr {
+    #[expect(clippy::pattern_type_mismatch)] // Unable to unwind this because of borrowing rules
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        return match self {
-            CorpusErr::EmptyCorpus => None,
-            CorpusErr::Io(e) => Some(e),
-        };
+        match self {
+            CorpusErr::EmptyCorpus => return None,
+            CorpusErr::Io(e) => return Some(e),
+        }
+    }
+
+    fn cause(&self) -> Option<&dyn Error> {
+        return self.source();
+    }
+
+    #[expect(clippy::pattern_type_mismatch)] // Unable to unwind this because of borrowing rules
+    fn description(&self) -> &str {
+        match self {
+            CorpusErr::EmptyCorpus => return "corpus is empty",
+            CorpusErr::Io(_) => return "IO error",
+        }
     }
 }
 

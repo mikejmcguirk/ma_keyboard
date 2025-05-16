@@ -233,7 +233,6 @@ impl Population {
         }
 
         // climbers.len() should never be big enough for this to fail
-        #[expect(clippy::as_conversions)]
         let avg_climber_score = climber_score / self.climbers.len() as f64;
         update_avg(avg_climber_score)?;
 
@@ -320,7 +319,6 @@ pub fn hill_climb(
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
 
     // Iter should never be high enough for this to fail
-    #[expect(clippy::as_conversions)]
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
     if keyboard.is_elite() {
@@ -385,8 +383,6 @@ pub fn hill_climb(
     return Ok(kb);
 }
 
-// new_count is tied to iterations, which should never be high enough for this conversion to fail
-#[expect(clippy::as_conversions)]
 fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     let new_value_for_new_avg: f64 = new_value / (new_count as f64);
     let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);

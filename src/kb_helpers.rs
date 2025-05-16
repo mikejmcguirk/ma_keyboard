@@ -156,10 +156,6 @@ fn check_col(row: usize, col: usize) -> bool {
     };
 }
 
-// Because this function contains recursion, I don't want to hurt its readability with assertion
-// checks. We assume they have already been performed
-#[expect(clippy::arithmetic_side_effects)]
-#[expect(clippy::indexing_slicing)]
 pub fn place_keys(
     kb_vec: &mut Vec<Vec<(u8, u8)>>,
     keys: &Vec<((u8, u8), Vec<(usize, usize)>)>,
@@ -457,7 +453,6 @@ fn get_col_sf_penalty(this_col: usize, last_col: usize, last: bool) -> f64 {
     };
 }
 
-// FUTURE: As written, you can have (<=4)-4 or (>=5)-5, so no out of bounds math. But brittle
 fn get_center_dist(col: usize) -> usize {
     debug_assert!(
         (L_PINKY..=R_PIPE).contains(&col),

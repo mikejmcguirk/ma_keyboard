@@ -30,8 +30,6 @@ const CLIMB_Y: u16 = POP_Y + 1;
 const AVG_NAME: &str = "Average Climber Score: ";
 const AVG_LEN: usize = AVG_NAME.len();
 // The as conversion takes place at compile time
-#[expect(clippy::as_conversions)]
-#[expect(clippy::cast_possible_truncation)]
 const AVG_NUM_X: u16 = AVG_LEN as u16;
 const AVG_Y: u16 = POP_Y + 1;
 
@@ -45,24 +43,17 @@ const KB_BOT_Y: u16 = KB_HOME_Y + 1;
 const ITER_NAME: &str = "Iteration: ";
 const ITER_LEN: usize = ITER_NAME.len();
 // The as conversion takes place at compile time
-#[expect(clippy::as_conversions)]
-#[expect(clippy::cast_possible_truncation)]
 const ITER_NUM_X: u16 = ITER_LEN as u16;
 const ITER_Y: u16 = KB_BOT_Y + 2;
 
 // const MUT_NAME: &str = "Mutation Ranges: ";
 // const MUT_LEN: usize = MUT_NAME.len();
-// // The as conversion takes place at compile time
-// #[expect(clippy::as_conversions)]
-// #[expect(clippy::cast_possible_truncation)]
 // const MUT_NUM_X: u16 = MUT_LEN as u16;
 // const MUT_Y: u16 = ITER_Y + 1;
 
 const EVAL_NAME: &str = "Evaluating: ";
 const EVAL_LEN: usize = EVAL_NAME.len();
 // The as conversion takes place at compile time
-#[expect(clippy::as_conversions)]
-#[expect(clippy::cast_possible_truncation)]
 const EVAL_NUM_X: u16 = EVAL_LEN as u16;
 // const EVAL_Y: u16 = MUT_Y + 1;
 const EVAL_Y: u16 = ITER_Y + 1;
@@ -141,7 +132,6 @@ pub fn update_avg(score: f64) -> io::Result<()> {
 
 // At least for now, it would be more contrived to iterate through everything
 // TODO: This is not a good long term solution though
-#[expect(clippy::indexing_slicing)]
 pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
     let info: String = format!(
         "Generation: {:05}, ID: {:07}, Score: {:18}, Positive Iterations: {:05}",

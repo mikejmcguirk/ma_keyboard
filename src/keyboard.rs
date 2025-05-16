@@ -44,7 +44,6 @@ impl Keyboard {
     /// Will panic if compile time data is incorrect
     // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
     // an assertion in get_key_locations that it is 127 or less
-    #[expect(clippy::indexing_slicing)]
     pub fn create_origin(id_in: usize) -> Self {
         let mut kb_vec = vec![
             vec![SPACE; NUM_ROW_CNT],
@@ -128,7 +127,6 @@ impl Keyboard {
     /// Panics if no valid locations are found for a selected key
     /// This function expects the data setup in `create_origin` to be correct
     /// Will also panic if the shuffle amount is too high, since these are compile time values
-    #[expect(clippy::indexing_slicing)]
     pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
         const MIN_ROW: usize = 1;
         const MAX_ROW: usize = 4;
@@ -191,7 +189,7 @@ impl Keyboard {
         let this_hand = get_hand(this_col);
         if this_hand == RIGHT {
             self.right_uses += 1.0_f64;
-        } else if this_hand == LEFT {
+        } else {
             self.left_uses += 1.0_f64;
         }
 

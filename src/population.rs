@@ -102,7 +102,6 @@ impl Population {
     }
 
     // TODO: The checked math is fine for now, but not robust if user input is allowed
-    // TODO: The probabalistic selection logic has to be something that can be outlined
     // PERF: For simplicity, we are currently using push/drain/clear on the various Vecs to manage
     // their contents. If this is slow, move to simply reading and writing to it directly. This
     // *should* be possible without unsafe
@@ -220,32 +219,34 @@ impl Population {
             }
         }
 
-        let mut elites_set: usize = 0;
-        for climber in self.climbers.iter_mut() {
-            if elites_set < ELITE_CNT {
-                climber.set_elite();
-                elites_set += 1;
-            } else {
-                climber.unset_elite();
-            }
+        for climber in self.climbers.iter_mut().take(ELITE_CNT) {
+            climber.set_elite();
+        }
+
+        for climber in self.climbers.iter_mut().skip(ELITE_CNT) {
+            climber.unset_elite();
         }
 
         let mut climber_score: f64 = 0.0;
         for climber in &self.climbers {
             climber_score += climber.get_score();
         }
+
+        // climbers.len() should never be big enough for this to fail
+        #[expect(clippy::as_conversions)]
         let avg_climber_score = climber_score / self.climbers.len() as f64;
         update_avg(avg_climber_score)?;
 
         return Ok(());
     }
 
-    // TODO: Long function signature
+    // TODO: Direct index access. This *should* be an iter_mut(), but that doesn't work because
+    // hill climbing is not a self method
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
                 "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
-                i + 1,
+                i.checked_add(1).expect("Too many climbers in climb_kbs"),
                 self.climbers[i].get_generation(),
                 self.climbers[i].get_id()
             );
@@ -290,7 +291,9 @@ impl IdSpawner {
     // PERF: I want to return 0 as the first id but maybe this is an extravagance
     pub fn get(&mut self) -> usize {
         let to_return: usize = self.next_id;
-        self.next_id += 1;
+        self.next_id
+            .checked_add(1)
+            .expect("Too many kbs created when getting ID");
 
         return to_return;
     }
@@ -316,6 +319,8 @@ pub fn hill_climb(
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
 
+    // Iter should never be high enough for this to fail
+    #[expect(clippy::as_conversions)]
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
     if keyboard.is_elite() {
@@ -380,7 +385,8 @@ pub fn hill_climb(
     return Ok(kb);
 }
 
-// TODO: How do make the division work with f64. Do we try to fix the truncating behavior?
+// new_count is tied to iterations, which should never be high enough for this conversion to fail
+#[expect(clippy::as_conversions)]
 fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     let new_value_for_new_avg: f64 = new_value / (new_count as f64);
     let old_avg_for_new_avg: f64 = old_avg * ((new_count as f64 - 1.0) / new_count as f64);

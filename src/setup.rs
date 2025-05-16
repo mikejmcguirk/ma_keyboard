@@ -66,8 +66,7 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     let huge_range_bot_target: f64 = 22.0;
     let huge_top_value: f64 = 30.0;
 
-    // TODO: You can wrap these up in debug_asserts to make sure they don't get wrong, but we have
-    // to assume the usize and f64 values are small enough here to work
+    // Since these ranges are built at compile time, we can assume these conversions will succeed
     #[expect(clippy::as_conversions)]
     #[expect(clippy::cast_possible_truncation)]
     #[expect(clippy::cast_precision_loss)]

@@ -3,16 +3,11 @@ use std::io::{Write as _, stdout};
 
 use crate::population::Population;
 
-use {
-    // anyhow::Result,
-    crossterm::{
-        QueueableCommand as _,
-        cursor::{MoveTo, RestorePosition, SavePosition},
-        style::Print,
-        // terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
-        // terminal::{Clear, ClearType, LeaveAlternateScreen},
-        terminal::{Clear, ClearType},
-    },
+use crossterm::{
+    QueueableCommand as _,
+    cursor::{MoveTo, RestorePosition, SavePosition},
+    style::Print,
+    terminal::{Clear, ClearType},
 };
 
 use crate::keyboard::Keyboard;

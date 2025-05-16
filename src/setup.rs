@@ -1,8 +1,12 @@
-use std::{
-    env,
-    fs::{self, File, ReadDir},
-    path::PathBuf,
-    process::ExitCode,
+use {
+    core::str,
+    std::{
+        env,
+        fs::{self, File, ReadDir},
+        io::{Write as _, stdin, stdout},
+        path::PathBuf,
+        process::ExitCode,
+    },
 };
 
 use {
@@ -43,6 +47,20 @@ use crate::{
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     const ITERATIONS: usize = 400;
+    const PROG_NAME: &str = "MA Keyboard Generator";
+    //SAFETY: PROG_NAME is defined at compile time
+    const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
+
+    println!();
+    println!("{NAME_DASHES}");
+    println!("{PROG_NAME}");
+    println!("{NAME_DASHES}");
+    println!();
+
+    // The codes here can be success or failure
+    if let Some(exit_code) = confirm_continue() {
+        return Ok(exit_code);
+    }
 
     let seed: [u8; 32] = rand::random();
     // let seed_string: String = format!("{seed:?}");
@@ -100,6 +118,37 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     // TODO: use display to tell the user the program's complete
 
     return Ok(ExitCode::SUCCESS);
+}
+
+fn confirm_continue() -> Option<ExitCode> {
+    let mut input: String = String::new();
+
+    loop {
+        print!("Continue? [Y/N]: ");
+        if let Err(e) = stdout().flush() {
+            eprintln!("Failed to flush stdout: {e}");
+            return Some(ExitCode::FAILURE);
+        }
+        if let Err(e) = stdin().read_line(&mut input) {
+            eprintln!("Failed to read input: {e}");
+            return Some(ExitCode::FAILURE);
+        }
+
+        match input.trim().to_lowercase().as_str() {
+            "y" | "yes" => {
+                println!();
+                return None;
+            }
+            "n" | "no" => {
+                println!("User chose to exit");
+                println!();
+                return Some(ExitCode::from(2));
+            }
+            _ => println!("Invalid input. Please enter 'Y' or 'N'"),
+        }
+        input.clear();
+        println!();
+    }
 }
 
 fn get_corpus_dir() -> Result<PathBuf> {

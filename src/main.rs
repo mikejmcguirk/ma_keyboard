@@ -112,14 +112,11 @@ mod population;
 mod setup;
 mod utils;
 
-use {
-    // core::str,
-    std::{
-        env,
-        fs::{self, File, OpenOptions},
-        path::{Path, PathBuf},
-        process::ExitCode,
-    },
+use std::{
+    env,
+    fs::{self, File, OpenOptions},
+    path::{Path, PathBuf},
+    process::ExitCode,
 };
 
 use anyhow::{Result, anyhow};
@@ -128,15 +125,6 @@ use crate::{setup::setup, utils::write_err};
 
 // TODO: Should the title card be re-rendered in display?
 fn main() -> ExitCode {
-    // const PROG_NAME: &str = "MA Keyboard Generator";
-    // SAFETY: PROG_NAME is defined at compile time
-    // const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
-    // println!();
-    // println!("{NAME_DASHES}");
-    // println!("{PROG_NAME}");
-    // println!("{NAME_DASHES}");
-    // println!();
-
     let log_dir: PathBuf = match create_log_dir() {
         Ok(dir) => dir,
         Err(e) => {
@@ -157,7 +145,6 @@ fn main() -> ExitCode {
     };
 
     match setup(&mut log_handle) {
-        // match setup() {
         Ok(code) => return code,
         Err(e) => {
             if let Err(log_err) = write_err(&mut log_handle, &e) {

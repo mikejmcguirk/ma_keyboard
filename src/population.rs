@@ -16,13 +16,8 @@ const ELITE_CNT: usize = 1;
 
 // TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
 // to improve the keyboard. Do this after a full clippy pass of the non-swap code
-// TODO: Maybe add some sort of health check function to make sure all the keyboards keep the same
-// parameters. Unsure to what extent this is a population vs keyboard problem
-// TODO: When incorporating multi-threading for the keyboards, unsure if we can pass a SmallRng
-// somehow, or make it global with a ref_cell, or if we should use thread_rng. From what I
-// understand, thread_rng uses the cryptographically secure RNG, which is slower
-// Importantly though, we want to be able to store and re-use the RNG seed, so whatever our RNG
-// solution is cannot have multiple seeds
+// FUTURE: If user input is allowed for population management, the underlying math needs to be
+// redone to check for errors
 pub struct Population {
     rng: SmallRng,
     id: IdSpawner,
@@ -101,37 +96,24 @@ impl Population {
         });
     }
 
-    // TODO: The checked math is fine for now, but not robust if user input is allowed
-    // PERF: For simplicity, we are currently using push/drain/clear on the various Vecs to manage
-    // their contents. If this is slow, move to simply reading and writing to it directly. This
-    // *should* be possible without unsafe
-    // PERF: Instead of clearing and rebuilding the population each time, it is theoretically
-    // faster to hold the climbers in there and iterate over a slice of the population, though that
-    // would also require rebuilding how the climbers are created. In practice, I have not seen
-    // this step take a lot of time in profiling, so probably irrelevant
     pub fn mutate_climbers(&mut self, amts: [usize; 4]) {
-        self.generation
-            .checked_add(1)
-            .expect("Too many generations");
+        self.generation += 1;
 
         debug_assert!(
-            self.climbers.len() <= self.climber_cnt,
+            self.climbers.len() >= self.climber_cnt,
             "Current climbers {} is higher than the climber count {}",
             self.climbers.len(),
             self.climber_cnt
         );
 
         self.population.clear();
-        let tot_score = self
-            .climbers
-            .iter()
-            .fold(0.0_f64, |acc, c| return acc + c.get_score());
+        let mut tot_score = 0.0;
+        for climber in &self.climbers {
+            tot_score += climber.get_score();
+            self.population.push(climber.clone());
+        }
 
-        let to_add = self
-            .pop_size
-            .checked_sub(self.climbers.len())
-            .expect("Climbers greater than population size");
-
+        let to_add = self.pop_size - self.climbers.len();
         for _ in 0..to_add {
             let parent = {
                 let r = self.rng.random_range(0.0_f64..=tot_score);

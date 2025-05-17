@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
+use {alloc::collections::BTreeMap, std::collections::HashMap};
 
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
@@ -25,6 +25,7 @@ pub enum KeyCompare {
 #[derive(Clone)]
 pub struct Keyboard {
     kb_vec: Vec<Vec<(u8, u8)>>,
+    // kb_map: BTreeMap<>
     valid: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
     slot_ascii: Vec<Option<(usize, usize)>>,
     last_key_idx: Option<(usize, usize)>,
@@ -179,6 +180,19 @@ impl Keyboard {
             );
         }
     }
+
+    // pub fn mapped_swap(&mut self, swap_map: &HashMap<((usize, usize), (u8, u8)), (f64, f64)>) {
+    //     let mut raw_out_scores: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+    //
+    //     for i in 1..self.kb_vec.len() {
+    //         for j in 0..self.kb_vec[i].len() {
+    //             let key = self.kb_vec[i][j];
+    //             let score = swap_map[&((i, j), key)].0;
+    //             // let score: f64 = swap_map[]
+    //             raw_out_scores.insert((i, j), score);
+    //         }
+    //     }
+    // }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor

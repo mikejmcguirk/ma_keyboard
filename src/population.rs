@@ -1,4 +1,7 @@
-use {core::cmp, std::fs::File};
+use {
+    core::cmp,
+    std::{collections::HashMap, fs::File},
+};
 
 use {
     anyhow::{Result, anyhow},
@@ -9,6 +12,7 @@ use crate::{
     custom_err::CorpusErr,
     display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
     keyboard::Keyboard,
+    swappable_arr, swappable_keys,
     utils::write_err,
 };
 
@@ -25,6 +29,7 @@ pub struct Population {
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
+    swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)>,
     generation: usize,
     top_score: f64,
 }
@@ -91,6 +96,7 @@ impl Population {
             population: gen_pop,
             climber_cnt,
             climbers,
+            swap_map: build_swap_map(),
             generation: 0,
             top_score: 0.0,
         });
@@ -107,11 +113,10 @@ impl Population {
         );
 
         self.population.clear();
-        let mut tot_score = 0.0;
-        for climber in &self.climbers {
-            tot_score += climber.get_score();
-            self.population.push(climber.clone());
-        }
+        let tot_score = self.climbers.iter().fold(0.0, |acc, c| {
+            self.population.push(c.clone());
+            return acc + c.get_score();
+        });
 
         let to_add = self.pop_size - self.climbers.len();
         for _ in 0..to_add {
@@ -390,4 +395,19 @@ fn get_weight(delta: f64) -> f64 {
     // return 1.0 + K * delta.sqrt();
     // return 1.0 + K * delta.ln();
     // return 1.0 + K * delta.powf(0.0001);
+}
+
+fn build_swap_map() -> HashMap<((usize, usize), (u8, u8)), (f64, f64)> {
+    swappable_arr!();
+
+    let swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)> = (1..4)
+        .flat_map(|i| return (0..10).map(move |j| return (i, j)))
+        .flat_map(|(i, j)| {
+            return SWAPPABLE_KEYS
+                .iter()
+                .map(move |&key| return (((i, j), key), (0.0, 0.0)));
+        })
+        .collect();
+
+    return swap_map;
 }

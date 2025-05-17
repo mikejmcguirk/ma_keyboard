@@ -19,6 +19,54 @@ macro_rules! kb_helper_consts {
 }
 
 #[macro_export]
+macro_rules! swappable_keys {
+    () => {
+        const COMMA: (u8, u8) = (b',', b'<');
+        const PERIOD: (u8, u8) = (b'.', b'>');
+        const SEMICOLON: (u8, u8) = (b';', b':');
+        const QUOTE: (u8, u8) = (b'\'', b'"');
+        const A: (u8, u8) = (b'a', b'A');
+        const B: (u8, u8) = (b'b', b'B');
+        const C: (u8, u8) = (b'c', b'C');
+        const D: (u8, u8) = (b'd', b'D');
+        const E: (u8, u8) = (b'e', b'E');
+        const F: (u8, u8) = (b'f', b'F');
+        const G: (u8, u8) = (b'g', b'G');
+        const H: (u8, u8) = (b'h', b'H');
+        const I: (u8, u8) = (b'i', b'I');
+        const J: (u8, u8) = (b'j', b'J');
+        const K: (u8, u8) = (b'k', b'K');
+        const L: (u8, u8) = (b'l', b'L');
+        const M: (u8, u8) = (b'm', b'M');
+        const N: (u8, u8) = (b'n', b'N');
+        const O: (u8, u8) = (b'o', b'O');
+        const P: (u8, u8) = (b'p', b'P');
+        const Q: (u8, u8) = (b'q', b'Q');
+        const R: (u8, u8) = (b'r', b'R');
+        const S: (u8, u8) = (b's', b'S');
+        const T: (u8, u8) = (b't', b'T');
+        const U: (u8, u8) = (b'u', b'U');
+        const V: (u8, u8) = (b'v', b'V');
+        const W: (u8, u8) = (b'w', b'W');
+        const X: (u8, u8) = (b'x', b'X');
+        const Y: (u8, u8) = (b'y', b'Y');
+        const Z: (u8, u8) = (b'z', b'Z');
+    };
+}
+
+#[macro_export]
+macro_rules! swappable_arr {
+    () => {
+        swappable_keys!();
+
+        const SWAPPABLE_KEYS: [(u8, u8); 30] = [
+            COMMA, PERIOD, SEMICOLON, QUOTE, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,
+            S, T, U, V, W, X, Y, Z,
+        ];
+    };
+}
+
+#[macro_export]
 macro_rules! helper_consts {
     () => {
         kb_helper_consts!();
@@ -100,39 +148,10 @@ macro_rules! helper_consts {
         const ZERO: (u8, u8) = (b'0', b')');
         const L_BRACKET: (u8, u8) = (b'[', b'{');
         const R_BRACKET: (u8, u8) = (b']', b'}');
-        const COMMA: (u8, u8) = (b',', b'<');
-        const PERIOD: (u8, u8) = (b'.', b'>');
         const DASH: (u8, u8) = (b'-', b'_');
         const EQUALS: (u8, u8) = (b'=', b'+');
         const F_SLASH: (u8, u8) = (b'/', b'?');
-        const SEMICOLON: (u8, u8) = (b';', b':');
-        const QUOTE: (u8, u8) = (b'\'', b'"');
-        const A: (u8, u8) = (b'a', b'A');
-        const B: (u8, u8) = (b'b', b'B');
-        const C: (u8, u8) = (b'c', b'C');
-        const D: (u8, u8) = (b'd', b'D');
-        const E: (u8, u8) = (b'e', b'E');
-        const F: (u8, u8) = (b'f', b'F');
-        const G: (u8, u8) = (b'g', b'G');
-        const H: (u8, u8) = (b'h', b'H');
-        const I: (u8, u8) = (b'i', b'I');
-        const J: (u8, u8) = (b'j', b'J');
-        const K: (u8, u8) = (b'k', b'K');
-        const L: (u8, u8) = (b'l', b'L');
-        const M: (u8, u8) = (b'm', b'M');
-        const N: (u8, u8) = (b'n', b'N');
-        const O: (u8, u8) = (b'o', b'O');
-        const P: (u8, u8) = (b'p', b'P');
-        const Q: (u8, u8) = (b'q', b'Q');
-        const R: (u8, u8) = (b'r', b'R');
-        const S: (u8, u8) = (b's', b'S');
-        const T: (u8, u8) = (b't', b'T');
-        const U: (u8, u8) = (b'u', b'U');
-        const V: (u8, u8) = (b'v', b'V');
-        const W: (u8, u8) = (b'w', b'W');
-        const X: (u8, u8) = (b'x', b'X');
-        const Y: (u8, u8) = (b'y', b'Y');
-        const Z: (u8, u8) = (b'z', b'Z');
+        swappable_keys!();
 
         // Number Row - Static
         const ONE_VALID: [(usize, usize); 1] = [(NUM_ROW, L_PINKY)];

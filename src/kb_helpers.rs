@@ -9,7 +9,7 @@ use core::cmp;
 
 use crate::{
     keyboard::KeyCompare,
-    {helper_consts, kb_helper_consts},
+    {helper_consts, kb_helper_consts, swappable_keys},
 };
 
 helper_consts!();

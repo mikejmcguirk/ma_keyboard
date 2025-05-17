@@ -5,10 +5,10 @@
 // These functions are designed to work with the keyboard struct. Because the struct's properties
 // are known at compile time, these functions might not check certain edge cases
 
-use core::cmp;
+use {core::cmp, std::collections::BTreeMap};
 
 use crate::{
-    keyboard::KeyCompare,
+    keyboard::{Key, KeyCompare, Slot},
     {helper_consts, kb_helper_consts, swappable_keys},
 };
 
@@ -65,6 +65,55 @@ pub fn get_key_locations() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
     return key_vec;
 }
 
+pub fn get_key_locations_tree() -> Vec<(Key, Vec<Slot>)> {
+    let mut key_vec = get_key_vec_tree();
+    key_vec.sort_by(|a, b| {
+        return a
+            .1
+            .len()
+            .partial_cmp(&b.1.len())
+            .unwrap_or(cmp::Ordering::Equal);
+    });
+
+    for key in &key_vec {
+        assert!(
+            usize::from(key.0.get_base()) <= ASCII_CNT,
+            "Key {} is not a valid ASCII char",
+            key.0.get_base()
+        );
+
+        assert!(
+            usize::from(key.0.get_shift()) <= ASCII_CNT,
+            "Key {} is not a valid ASCII char",
+            key.0.get_shift()
+        );
+
+        assert!(
+            !key.1.is_empty(),
+            "Key {:?} has no valid locations listed",
+            key.0
+        );
+
+        for location in &key.1 {
+            assert!(
+                (NUM_ROW..=BOT_ROW).contains(&location.get_row()),
+                "Key {:?} has an invalid row of {}",
+                key.0,
+                location.get_row()
+            );
+
+            assert!(
+                check_col(location.get_row(), location.get_col()),
+                "Row {} for column {} is invalid",
+                location.get_row(),
+                location.get_col()
+            );
+        }
+    }
+
+    return key_vec;
+}
+
 fn get_key_vec() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
     return vec![
         // Number Row
@@ -86,6 +135,7 @@ fn get_key_vec() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
         (F_SLASH, F_SLASH_VALID.to_vec()),
         (BACKSLASH, BACKSLASH_VALID.to_vec()),
         (NEWLINE, NEWLINE_VALID.to_vec()),
+        // Pinky Extension Symbols
         // Alpha Area Keys
         (COMMA, alpha_slots(COMMA_INVALID.as_ref())),
         (PERIOD, alpha_slots(PERIOD_INVALID.as_ref())),
@@ -120,6 +170,91 @@ fn get_key_vec() -> Vec<((u8, u8), Vec<(usize, usize)>)> {
     ];
 }
 
+fn get_key_vec_tree() -> Vec<(Key, Vec<Slot>)> {
+    return vec![
+        // Number Row
+        (Key::from_tuple(ONE), make_slot_vec(ONE_VALID.to_vec())),
+        (Key::from_tuple(TWO), make_slot_vec(TWO_VALID.to_vec())),
+        (Key::from_tuple(THREE), make_slot_vec(THREE_VALID.to_vec())),
+        (Key::from_tuple(FOUR), make_slot_vec(FOUR_VALID.to_vec())),
+        (Key::from_tuple(FIVE), make_slot_vec(FIVE_VALID.to_vec())),
+        (Key::from_tuple(SIX), make_slot_vec(SIX_VALID.to_vec())),
+        (Key::from_tuple(SEVEN), make_slot_vec(SEVEN_VALID.to_vec())),
+        (Key::from_tuple(EIGHT), make_slot_vec(EIGHT_VALID.to_vec())),
+        (Key::from_tuple(NINE), make_slot_vec(NINE_VALID.to_vec())),
+        (Key::from_tuple(ZERO), make_slot_vec(ZERO_VALID.to_vec())),
+        (
+            Key::from_tuple(L_BRACKET),
+            make_slot_vec(L_BRACKET_VALID.to_vec()),
+        ),
+        (
+            Key::from_tuple(R_BRACKET),
+            make_slot_vec(R_BRACKET_VALID.to_vec()),
+        ),
+        // Pinky Extension Symbols
+        (Key::from_tuple(DASH), make_slot_vec(DASH_VALID.to_vec())),
+        (
+            Key::from_tuple(EQUALS),
+            make_slot_vec(EQUALS_VALID.to_vec()),
+        ),
+        (
+            Key::from_tuple(F_SLASH),
+            make_slot_vec(F_SLASH_VALID.to_vec()),
+        ),
+        (
+            Key::from_tuple(BACKSLASH),
+            make_slot_vec(BACKSLASH_VALID.to_vec()),
+        ),
+        (
+            Key::from_tuple(NEWLINE),
+            make_slot_vec(NEWLINE_VALID.to_vec()),
+        ),
+        // Alpha Area Keys
+        (
+            Key::from_tuple(COMMA),
+            alpha_slots_tree(COMMA_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(PERIOD),
+            alpha_slots_tree(PERIOD_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(SEMICOLON),
+            alpha_slots_tree(SEMICOLON_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(QUOTE),
+            alpha_slots_tree(QUOTE_INVALID.as_ref()),
+        ),
+        (Key::from_tuple(A), alpha_slots_tree(A_INVALID.as_ref())),
+        (Key::from_tuple(B), alpha_slots_tree(B_INVALID.as_ref())),
+        (Key::from_tuple(C), alpha_slots_tree(C_INVALID.as_ref())),
+        (Key::from_tuple(D), alpha_slots_tree(D_INVALID.as_ref())),
+        (Key::from_tuple(E), alpha_slots_tree(E_INVALID.as_ref())),
+        (Key::from_tuple(F), alpha_slots_tree(F_INVALID.as_ref())),
+        (Key::from_tuple(G), alpha_slots_tree(G_INVALID.as_ref())),
+        (Key::from_tuple(H), alpha_slots_tree(H_INVALID.as_ref())),
+        (Key::from_tuple(I), alpha_slots_tree(I_INVALID.as_ref())),
+        (Key::from_tuple(J), alpha_slots_tree(J_INVALID.as_ref())),
+        (Key::from_tuple(K), alpha_slots_tree(K_INVALID.as_ref())),
+        (Key::from_tuple(L), alpha_slots_tree(L_INVALID.as_ref())),
+        (Key::from_tuple(M), alpha_slots_tree(M_INVALID.as_ref())),
+        (Key::from_tuple(N), alpha_slots_tree(N_INVALID.as_ref())),
+        (Key::from_tuple(O), alpha_slots_tree(O_INVALID.as_ref())),
+        (Key::from_tuple(P), alpha_slots_tree(P_INVALID.as_ref())),
+        (Key::from_tuple(Q), alpha_slots_tree(Q_INVALID.as_ref())),
+        (Key::from_tuple(R), alpha_slots_tree(R_INVALID.as_ref())),
+        (Key::from_tuple(S), alpha_slots_tree(S_INVALID.as_ref())),
+        (Key::from_tuple(T), alpha_slots_tree(T_INVALID.as_ref())),
+        (Key::from_tuple(U), alpha_slots_tree(U_INVALID.as_ref())),
+        (Key::from_tuple(V), alpha_slots_tree(V_INVALID.as_ref())),
+        (Key::from_tuple(W), alpha_slots_tree(W_INVALID.as_ref())),
+        (Key::from_tuple(X), alpha_slots_tree(X_INVALID.as_ref())),
+        (Key::from_tuple(Y), alpha_slots_tree(Y_INVALID.as_ref())),
+        (Key::from_tuple(Z), alpha_slots_tree(Z_INVALID.as_ref())),
+    ];
+}
+
 // This does not really need to call separate functions and flatten the results, but keeping this
 // around as a template for when I want to start mixing and matching different groups of keys
 fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
@@ -127,6 +262,19 @@ fn alpha_slots(exclusions: &[(usize, usize)]) -> Vec<(usize, usize)> {
 
     let mut slot_groups_flat: Vec<(usize, usize)> = slot_groups.into_iter().flatten().collect();
     slot_groups_flat.retain(|x| return !exclusions.contains(x));
+
+    return slot_groups_flat;
+}
+
+fn alpha_slots_tree(exclusions: &[(usize, usize)]) -> Vec<Slot> {
+    let slot_groups = vec![top_row_tree(), home_row_tree(), bottom_row_tree()];
+
+    let mut slot_groups_flat: Vec<Slot> = slot_groups.into_iter().flatten().collect();
+    let slot_exclusions: Vec<Slot> = exclusions
+        .iter()
+        .map(|x| return Slot::from_tuple(*x))
+        .collect();
+    slot_groups_flat.retain(|x| return !slot_exclusions.contains(x));
 
     return slot_groups_flat;
 }
@@ -144,6 +292,18 @@ fn home_row() -> Vec<(usize, usize)> {
 
 fn bottom_row() -> Vec<(usize, usize)> {
     return DEFAULT_BOT_ROW.to_vec();
+}
+
+fn top_row_tree() -> Vec<Slot> {
+    return make_slot_vec(DEFAULT_TOP_ROW.to_vec());
+}
+
+fn home_row_tree() -> Vec<Slot> {
+    return make_slot_vec(DEFAULT_HOME_ROW.to_vec());
+}
+
+fn bottom_row_tree() -> Vec<Slot> {
+    return make_slot_vec(DEFAULT_BOT_ROW.to_vec());
 }
 
 fn check_col(row: usize, col: usize) -> bool {
@@ -179,6 +339,33 @@ pub fn place_keys(
         }
 
         kb_vec[row][col] = SPACE;
+    }
+
+    return false;
+}
+
+pub fn place_keys_tree(
+    kb_tree: &mut BTreeMap<Slot, Key>,
+    key_locs: &Vec<(Key, Vec<Slot>)>,
+    idx: usize,
+) -> bool {
+    if idx == key_locs.len() {
+        return true;
+    }
+
+    for location in &key_locs[idx].1 {
+        if kb_tree.contains_key(location) {
+            continue;
+        }
+
+        kb_tree.insert(*location, key_locs[idx].0);
+
+        let next_idx = idx + 1;
+        if place_keys_tree(kb_tree, key_locs, next_idx) {
+            return true;
+        }
+
+        kb_tree.remove(location);
     }
 
     return false;
@@ -550,4 +737,8 @@ pub fn check_key_no_hist(key: (usize, usize)) -> f64 {
     }
 
     return mult;
+}
+
+fn make_slot_vec(input: Vec<(usize, usize)>) -> Vec<Slot> {
+    return input.iter().map(|i| return Slot::from_tuple(*i)).collect();
 }

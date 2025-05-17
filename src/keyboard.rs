@@ -25,7 +25,7 @@ pub enum KeyCompare {
 #[derive(Clone)]
 pub struct Keyboard {
     kb_vec: Vec<Vec<(u8, u8)>>,
-    // kb_map: BTreeMap<>
+    // kb_map: BTreeMap<(usize, usize), Key>,
     valid: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
     slot_ascii: Vec<Option<(usize, usize)>>,
     last_key_idx: Option<(usize, usize)>,
@@ -46,6 +46,8 @@ impl Keyboard {
     // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
     // an assertion in get_key_locations that it is 127 or less
     pub fn create_origin(id_in: usize) -> Self {
+        let kb_map: BTreeMap<(usize, usize), Key> = BTreeMap::new();
+
         let mut kb_vec = vec![
             vec![SPACE; NUM_ROW_CNT],
             vec![SPACE; TOP_ROW_CNT],
@@ -324,5 +326,51 @@ impl Keyboard {
         } else {
             self.pos_iter = 0;
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Slot {
+    row: usize,
+    col: usize,
+}
+
+impl Slot {
+    pub fn from_tuple(source: (usize, usize)) -> Self {
+        return Self {
+            row: source.0,
+            col: source.1,
+        };
+    }
+
+    pub fn get_row(&self) -> usize {
+        return self.row;
+    }
+
+    pub fn get_col(&self) -> usize {
+        return self.col;
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Key {
+    base: u8,
+    shift: u8,
+}
+
+impl Key {
+    pub fn from_tuple(source: (u8, u8)) -> Self {
+        return Self {
+            base: source.0,
+            shift: source.1,
+        };
+    }
+
+    pub fn get_base(&self) -> u8 {
+        return self.base;
+    }
+
+    pub fn get_shift(&self) -> u8 {
+        return self.shift;
     }
 }

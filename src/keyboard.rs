@@ -8,7 +8,7 @@ use crate::{
     kb_helper_consts,
     kb_helpers::{
         check_key_no_hist, check_spaces, compare_keys, get_hand, get_key_locations,
-        get_single_key_mult, place_keys,
+        get_key_locations_tree, get_single_key_mult, place_keys, place_keys_tree,
     },
 };
 
@@ -46,7 +46,17 @@ impl Keyboard {
     // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
     // an assertion in get_key_locations that it is 127 or less
     pub fn create_origin(id_in: usize) -> Self {
-        let kb_map: BTreeMap<(usize, usize), Key> = BTreeMap::new();
+        let mut kb_map: BTreeMap<Slot, Key> = BTreeMap::new();
+        let valid_vec_tree: Vec<(Key, Vec<Slot>)> = get_key_locations_tree();
+        // The valid vec assertion isnt' useful here becuse no property of the valid vec tree can
+        // produce invalid behavior in the map. So if you wan to make sure the valid vec tree is
+        // correct, that needs to be checked there
+        assert!(
+            place_keys_tree(&mut kb_map, &valid_vec_tree, 0),
+            "Unable to place all keys"
+        );
+        // valid_bt needs to be redone to be key/slot
+        // and then you need to make slot ascii from the map and this is good to go
 
         let mut kb_vec = vec![
             vec![SPACE; NUM_ROW_CNT],

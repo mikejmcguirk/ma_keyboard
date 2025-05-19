@@ -1,14 +1,15 @@
 extern crate alloc;
 
-use {alloc::collections::BTreeMap, std::collections::HashMap};
+use alloc::collections::BTreeMap;
+// use {alloc::collections::BTreeMap, std::collections::HashMap};
 
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
     kb_helper_consts,
     kb_helpers::{
-        check_key_no_hist, check_spaces, compare_keys, get_hand, get_key_locations,
-        get_key_locations_tree, get_single_key_mult, place_keys, place_keys_tree,
+        check_key_no_hist, compare_keys, get_hand, get_key_locations_tree, get_single_key_mult,
+        place_keys_tree,
     },
 };
 
@@ -20,16 +21,13 @@ pub enum KeyCompare {
     Mismatch,
 }
 
-// FUTURE: The 2D Vec, even though it currently works, is brittle. I think, once we start adding
-// the swap table, we'll see the precise limitations and what a change needs to accomplish
 #[derive(Clone)]
 pub struct Keyboard {
-    kb_vec: Vec<Vec<(u8, u8)>>,
-    // kb_map: BTreeMap<(usize, usize), Key>,
-    valid: BTreeMap<(u8, u8), Vec<(usize, usize)>>,
-    slot_ascii: Vec<Option<(usize, usize)>>,
-    last_key_idx: Option<(usize, usize)>,
-    prev_key_idx: Option<(usize, usize)>,
+    kb_map: BTreeMap<Slot, Key>,
+    valid: BTreeMap<Key, Vec<Slot>>,
+    slot_ascii: Vec<Option<Slot>>,
+    last_key_idx: Option<Slot>,
+    prev_key_idx: Option<Slot>,
     generation: usize,
     id: usize,
     evaluated: bool,
@@ -47,58 +45,29 @@ impl Keyboard {
     // an assertion in get_key_locations that it is 127 or less
     pub fn create_origin(id_in: usize) -> Self {
         let mut kb_map: BTreeMap<Slot, Key> = BTreeMap::new();
-        let valid_vec_tree: Vec<(Key, Vec<Slot>)> = get_key_locations_tree();
+        let valid_vec: Vec<(Key, Vec<Slot>)> = get_key_locations_tree();
         // The valid vec assertion isnt' useful here becuse no property of the valid vec tree can
         // produce invalid behavior in the map. So if you wan to make sure the valid vec tree is
         // correct, that needs to be checked there
         assert!(
-            place_keys_tree(&mut kb_map, &valid_vec_tree, 0),
+            place_keys_tree(&mut kb_map, &valid_vec, 0),
             "Unable to place all keys"
         );
-        // valid_bt needs to be redone to be key/slot
-        // and then you need to make slot ascii from the map and this is good to go
 
-        let mut kb_vec = vec![
-            vec![SPACE; NUM_ROW_CNT],
-            vec![SPACE; TOP_ROW_CNT],
-            vec![SPACE; HOME_ROW_CNT],
-            vec![SPACE; BOT_ROW_CNT],
-        ];
-
-        let valid_vec = get_key_locations();
-        let kb_vec_cnt: usize = kb_vec.iter().map(|v| return v.len()).sum();
-        assert_eq!(
-            kb_vec_cnt,
-            valid_vec.len(),
-            "The amount of keys to assign ({}) is not equal to the number of keyboard slots ({})",
-            kb_vec_cnt,
-            valid_vec.len()
-        );
-
-        place_keys(&mut kb_vec, &valid_vec, 0);
-        let space_keys = check_spaces(&kb_vec);
-        assert!(
-            space_keys.is_empty(),
-            "The following kb_vec values contain spaces: {:?}",
-            space_keys
-        );
-
-        let mut valid_bt: BTreeMap<(u8, u8), Vec<(usize, usize)>> = BTreeMap::new();
+        let mut valid: BTreeMap<Key, Vec<Slot>> = BTreeMap::new();
         for loc in &valid_vec {
-            valid_bt.insert(loc.0, loc.1.clone());
+            valid.insert(loc.0, loc.1.clone());
         }
 
-        let mut slot_ascii = vec![None; ASCII_CNT];
-        kb_vec.iter().enumerate().for_each(|(i, row)| {
-            row.iter().enumerate().for_each(|(j, &(base, shift))| {
-                slot_ascii[usize::from(base)] = Some((i, j));
-                slot_ascii[usize::from(shift)] = Some((i, j));
-            });
-        });
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &kb_map {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
 
         return Self {
-            kb_vec,
-            valid: valid_bt,
+            kb_map,
+            valid,
             slot_ascii,
             last_key_idx: None,
             prev_key_idx: None,
@@ -115,7 +84,7 @@ impl Keyboard {
 
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
         return Self {
-            kb_vec: kb.kb_vec.clone(),
+            kb_map: kb.kb_map.clone(),
             valid: kb.valid.clone(),
             slot_ascii: kb.slot_ascii.clone(),
             last_key_idx: None,
@@ -152,7 +121,8 @@ impl Keyboard {
         for _ in 0..amt {
             let this_row = rng.random_range(MIN_ROW..MAX_ROW);
             let this_col = rng.random_range(MIN_COL..MAX_COL);
-            let this_key = self.kb_vec[this_row][this_col];
+            let this_slot = Slot::from_tuple((this_row, this_col));
+            let this_key = self.kb_map[&this_slot];
             if self.valid[&this_key].len() == 1 {
                 continue;
             }
@@ -164,29 +134,30 @@ impl Keyboard {
             }
 
             for (i, _) in self.valid[&this_key].iter().enumerate() {
-                let that_row = self.valid[&this_key][i].0;
-                let that_col = self.valid[&this_key][i].1;
-                let that_key = self.kb_vec[that_row][that_col];
+                let that_row = self.valid[&this_key][i].get_row();
+                let that_col = self.valid[&this_key][i].get_col();
+                let that_slot = Slot::from_tuple((that_row, that_col));
+                let that_key = self.kb_map[&that_slot];
                 if self.valid[&that_key].len() == 1
-                    || !self.valid[&that_key].contains(&(this_row, this_col))
+                    || !self.valid[&that_key].contains(&this_slot)
                     || this_key == that_key
                 {
                     continue;
                 }
 
-                self.kb_vec[this_row][this_col] = that_key;
-                self.kb_vec[that_row][that_col] = this_key;
+                self.kb_map.insert(this_slot, that_key);
+                self.slot_ascii[usize::from(that_key.get_base())] = Some(this_slot);
+                self.slot_ascii[usize::from(that_key.get_shift())] = Some(this_slot);
 
-                self.slot_ascii[usize::from(that_key.0)] = Some((this_row, this_col));
-                self.slot_ascii[usize::from(that_key.1)] = Some((this_row, this_col));
-                self.slot_ascii[usize::from(this_key.0)] = Some((that_row, that_col));
-                self.slot_ascii[usize::from(this_key.1)] = Some((that_row, that_col));
+                self.kb_map.insert(that_slot, this_key);
+                self.slot_ascii[usize::from(this_key.get_base())] = Some(that_slot);
+                self.slot_ascii[usize::from(this_key.get_shift())] = Some(that_slot);
 
                 break;
             }
 
             assert_ne!(
-                self.kb_vec[this_row][this_col], this_key,
+                self.kb_map[&this_slot], this_key,
                 "Key {:?} at {},{} not changed!",
                 this_key, this_row, this_col
             );
@@ -208,10 +179,10 @@ impl Keyboard {
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
-    fn get_efficiency(&mut self, this_key: (usize, usize)) -> f64 {
+    fn get_efficiency(&mut self, this_key: Slot) -> f64 {
         let mut eff = BASE_EFF;
 
-        let this_col = this_key.1;
+        let this_col = this_key.get_col();
         let this_hand = get_hand(this_col);
         if this_hand == RIGHT {
             self.right_uses += 1.0_f64;
@@ -259,14 +230,14 @@ impl Keyboard {
 
         for entry in corpus {
             for b in entry.as_bytes() {
-                let this_key: (usize, usize) =
-                    if let Some(&Some(key)) = self.slot_ascii.get(usize::from(*b)) {
-                        key
-                    } else {
-                        self.prev_key_idx = self.last_key_idx;
-                        self.last_key_idx = None;
-                        continue;
-                    };
+                let this_key: Slot = if let Some(&Some(key)) = self.slot_ascii.get(usize::from(*b))
+                {
+                    key
+                } else {
+                    self.prev_key_idx = self.last_key_idx;
+                    self.last_key_idx = None;
+                    continue;
+                };
 
                 self.score += self.get_efficiency(this_key);
 
@@ -286,17 +257,28 @@ impl Keyboard {
 
     // TODO: Very inefficient
     pub fn get_display_chars(&self) -> Vec<Vec<char>> {
-        let mut display_chars: Vec<Vec<char>> = Vec::new();
+        let mut num_row: Vec<char> = Vec::new();
+        let mut top_row: Vec<char> = Vec::new();
+        let mut home_row: Vec<char> = Vec::new();
+        let mut bot_row: Vec<char> = Vec::new();
 
-        for row in &self.kb_vec {
-            let mut chars: Vec<char> = Vec::new();
-            for element in row {
-                let char = char::from(element.0);
-                chars.push(char);
+        for (slot, key) in &self.kb_map {
+            if slot.get_row() == 0 {
+                num_row.push(char::from(key.get_base()));
+            } else if slot.get_row() == 1 {
+                top_row.push(char::from(key.get_base()));
+            } else if slot.get_row() == 2 {
+                home_row.push(char::from(key.get_base()));
+            } else if slot.get_row() == 3 {
+                bot_row.push(char::from(key.get_base()));
             }
-
-            display_chars.push(chars);
         }
+
+        let mut display_chars: Vec<Vec<char>> = Vec::new();
+        display_chars.push(num_row);
+        display_chars.push(top_row);
+        display_chars.push(home_row);
+        display_chars.push(bot_row);
 
         return display_chars;
     }
@@ -362,7 +344,7 @@ impl Slot {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Key {
     base: u8,
     shift: u8,
@@ -376,11 +358,11 @@ impl Key {
         };
     }
 
-    pub fn get_base(&self) -> u8 {
+    pub fn get_base(self) -> u8 {
         return self.base;
     }
 
-    pub fn get_shift(&self) -> u8 {
+    pub fn get_shift(self) -> u8 {
         return self.shift;
     }
 }

@@ -1,6 +1,7 @@
 use {
     core::cmp,
-    std::{collections::HashMap, fs::File},
+    std::fs::File,
+    // std::{collections::HashMap, fs::File},
 };
 
 use {
@@ -12,7 +13,7 @@ use crate::{
     custom_err::CorpusErr,
     display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
     keyboard::Keyboard,
-    swappable_arr, swappable_keys,
+    // swappable_arr, swappable_keys,
     utils::write_err,
 };
 
@@ -29,7 +30,7 @@ pub struct Population {
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
-    swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)>,
+    // swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)>,
     generation: usize,
     top_score: f64,
 }
@@ -96,7 +97,7 @@ impl Population {
             population: gen_pop,
             climber_cnt,
             climbers,
-            swap_map: build_swap_map(),
+            // swap_map: build_swap_map(),
             generation: 0,
             top_score: 0.0,
         });
@@ -397,17 +398,17 @@ fn get_weight(delta: f64) -> f64 {
     // return 1.0 + K * delta.powf(0.0001);
 }
 
-fn build_swap_map() -> HashMap<((usize, usize), (u8, u8)), (f64, f64)> {
-    swappable_arr!();
-
-    let swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)> = (1..4)
-        .flat_map(|i| return (0..10).map(move |j| return (i, j)))
-        .flat_map(|(i, j)| {
-            return SWAPPABLE_KEYS
-                .iter()
-                .map(move |&key| return (((i, j), key), (0.0, 0.0)));
-        })
-        .collect();
-
-    return swap_map;
-}
+// fn build_swap_map() -> HashMap<((usize, usize), (u8, u8)), (f64, f64)> {
+//     swappable_arr!();
+//
+//     let swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)> = (1..4)
+//         .flat_map(|i| return (0..10).map(move |j| return (i, j)))
+//         .flat_map(|(i, j)| {
+//             return SWAPPABLE_KEYS
+//                 .iter()
+//                 .map(move |&key| return (((i, j), key), (0.0, 0.0)));
+//         })
+//         .collect();
+//
+//     return swap_map;
+// }

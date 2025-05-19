@@ -4,12 +4,7 @@ macro_rules! kb_helper_consts {
         const ASCII_CNT: usize = 128;
 
         // Default Key
-        const SPACE: (u8, u8) = (b' ', b' ');
-
-        const NUM_ROW_CNT: usize = 12;
-        const TOP_ROW_CNT: usize = 13;
-        const HOME_ROW_CNT: usize = 12;
-        const BOT_ROW_CNT: usize = 10;
+        // const SPACE: (u8, u8) = (b' ', b' ');
 
         // Hands
         const RIGHT: char = 'r';
@@ -71,9 +66,15 @@ macro_rules! helper_consts {
     () => {
         kb_helper_consts!();
 
+        const NUM_ROW_CNT: usize = 12;
+        const TOP_ROW_CNT: usize = 13;
+        const HOME_ROW_CNT: usize = 12;
+        const BOT_ROW_CNT: usize = 10;
+
         // =======================
         // ==== Keyboard Info ====
         // =======================
+
         // Hands
         const LEFT: char = 'l';
 

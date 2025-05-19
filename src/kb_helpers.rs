@@ -8,23 +8,11 @@
 use {core::cmp, std::collections::BTreeMap};
 
 use crate::{
-    keyboard::{Hand, Key, KeyCompare, Slot},
+    keyboard::{Finger, Hand, Key, KeyCompare, Slot},
     {helper_consts, kb_helper_consts, swappable_keys},
 };
 
 helper_consts!();
-
-impl Hand {
-    /// # Panics
-    /// Panics if the input col is invalid
-    pub fn from_slot(slot: Slot) -> Self {
-        return match slot.get_col() {
-            L_PINKY..=L_EXT => Hand::Left,
-            R_EXT..=R_PIPE => Hand::Right,
-            _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
-        };
-    }
-}
 
 pub fn get_valid_key_locs_sorted() -> Vec<(Key, Vec<Slot>)> {
     let mut key_locs: Vec<(Key, Vec<Slot>)> = vec![
@@ -179,35 +167,23 @@ pub fn place_keys(
 //     };
 // }
 
-/// # Panics
-/// Panics if the input col is invalid
-pub fn get_finger(col: usize) -> char {
-    return match col {
-        L_PINKY | R_PINKY..=R_PIPE => 'p',
-        L_RING | R_RING => 'r',
-        L_MIDDLE | R_MIDDLE => 'm',
-        L_INDEX..=R_INDEX => 'i',
-        _ => panic!("Col {col} is invalid in get_hand"),
-    };
-}
-
 // No blanket adjustment for any particular row. The specific code for bigrams and the
 // additional code for single keys both deduct for row movement, which necessarily results in
 // the algo favoring the home row
-pub fn get_single_key_mult(key: Slot) -> f64 {
-    let row = key.get_row();
-    let col = key.get_col();
-    let finger = get_finger(col);
+pub fn get_single_key_mult(slot: Slot) -> f64 {
+    let row = slot.get_row();
+    let col = slot.get_col();
+    let finger = Finger::from_slot(slot);
     let mut mult = BASE_EFF;
 
     // Do a blanket downward adjustment rather than micro-correct in the finger comparisons
     // The ring and pinky are mostly treated the same due to different preferences per typist.
     // However, the pinky top row is given an extra penalty because the whole hand has to be
     // moved to hit it
-    let ring_or_pinky = finger == RING || finger == PINKY;
-    if (ring_or_pinky && row == BOT_ROW) || (finger == RING && row == TOP_ROW) {
+    let ring_or_pinky = finger == Finger::Ring || finger == Finger::Pinky;
+    if (ring_or_pinky && row == BOT_ROW) || (finger == Finger::Ring && row == TOP_ROW) {
         mult *= D_ME_B;
-    } else if finger == PINKY && row == TOP_ROW {
+    } else if finger == Finger::Pinky && row == TOP_ROW {
         mult *= D_HI_B;
     }
 
@@ -223,8 +199,6 @@ pub fn get_single_key_mult(key: Slot) -> f64 {
 }
 
 pub fn compare_keys(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCompare {
-    let this_col: usize = this_slot.get_col();
-    let last_col: usize = last_slot.get_col();
     let this_hand = Hand::from_slot(this_slot);
     let last_hand = Hand::from_slot(last_slot);
     if this_hand != last_hand {
@@ -249,14 +223,14 @@ pub fn compare_keys(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCom
         }
     }
 
-    let this_finger = get_finger(this_col);
-    let last_finger = get_finger(last_col);
+    let this_finger = Finger::from_slot(this_slot);
+    let last_finger = Finger::from_slot(last_slot);
     let finger_match: bool = this_finger == last_finger;
     if finger_match {
         mult *= get_base_sf_penalty(is_bigram);
-        mult *= get_col_sf_penalty(this_col, last_col, is_bigram);
+        mult *= get_col_sf_penalty(this_slot, last_slot, is_bigram);
 
-        let is_ring_or_pinky = this_finger == RING || this_finger == PINKY;
+        let is_ring_or_pinky = this_finger == Finger::Ring || this_finger == Finger::Pinky;
         if is_ring_or_pinky && is_bigram {
             mult *= D_ME_B;
         } else if is_ring_or_pinky && !is_bigram {
@@ -414,11 +388,14 @@ fn get_base_sf_penalty(is_last: bool) -> f64 {
     return D_ME_S;
 }
 
-fn get_col_sf_penalty(this_col: usize, last_col: usize, last: bool) -> f64 {
+fn get_col_sf_penalty(this_slot: Slot, last_slot: Slot, last: bool) -> f64 {
+    let this_col = this_slot.get_col();
+    let last_col = last_slot.get_col();
+
     debug_assert_eq!(
-        get_finger(this_col),
-        get_finger(last_col),
-        "ERROR: {this_col} and {last_col} are on different fingers when getting SF penalty",
+        Finger::from_slot(this_slot),
+        Finger::from_slot(last_slot),
+        "ERROR: Cols {this_col} and {last_col} are on different fingers when getting SF penalty",
     );
 
     let col_diff = this_col.abs_diff(last_col);
@@ -455,19 +432,22 @@ fn get_center_dist(slot: Slot) -> usize {
 
 /// # Panics
 /// Panics if the rows of each key are the same
-fn check_combo(this_key: Slot, last_key: Slot, is_bigram: bool) -> f64 {
-    let this_row: usize = this_key.get_row();
-    let last_row: usize = last_key.get_row();
-    let this_finger = get_finger(this_key.get_col());
-    let last_finger = get_finger(last_key.get_col());
+fn check_combo(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
+    let this_row: usize = this_slot.get_row();
+    let last_row: usize = last_slot.get_row();
+    let this_finger = Finger::from_slot(this_slot);
+    let last_finger = Finger::from_slot(last_slot);
 
-    let (top, bot): (char, char) = match this_row.cmp(&last_row) {
+    let (top, bot): (Finger, Finger) = match this_row.cmp(&last_row) {
         cmp::Ordering::Greater => (this_finger, last_finger),
         cmp::Ordering::Less => (last_finger, this_finger),
         cmp::Ordering::Equal => panic!("Trying to get combo of equal rows"),
     };
 
-    if bot == INDEX || top == MIDDLE || (top == RING && bot == PINKY) {
+    if bot == Finger::Index
+        || top == Finger::Middle
+        || (top == Finger::Ring && bot == Finger::Pinky)
+    {
         return BASE_EFF;
     } else if is_bigram {
         return D_ME_B;

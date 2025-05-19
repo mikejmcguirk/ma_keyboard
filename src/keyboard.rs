@@ -13,7 +13,6 @@ use crate::{
     },
 };
 
-// TODO: Some of this stuff should be removed as we factor out the scoring
 kb_consts!();
 
 pub enum KeyCompare {
@@ -25,6 +24,38 @@ pub enum KeyCompare {
 pub enum Hand {
     Left,
     Right,
+}
+
+impl Hand {
+    /// # Panics
+    /// Panics if the input col is invalid
+    pub fn from_slot(slot: Slot) -> Self {
+        return match slot.get_col() {
+            L_PINKY..=L_EXT => Hand::Left,
+            R_EXT..=R_PIPE => Hand::Right,
+            _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
+        };
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Finger {
+    Pinky,
+    Ring,
+    Middle,
+    Index,
+}
+
+impl Finger {
+    pub fn from_slot(slot: Slot) -> Self {
+        return match slot.get_col() {
+            L_PINKY | R_PINKY..=R_PIPE => Finger::Pinky,
+            L_RING | R_RING => Finger::Ring,
+            L_MIDDLE | R_MIDDLE => Finger::Middle,
+            L_INDEX..=R_INDEX => Finger::Index,
+            _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
+        };
+    }
 }
 
 #[derive(Clone)]

@@ -11,7 +11,16 @@ macro_rules! kb_helper_consts {
 
         // Cols
         const L_PINKY: usize = 0;
+        const L_RING: usize = 1;
+        const L_MIDDLE: usize = 2;
+        const L_INDEX: usize = 3;
+        const L_EXT: usize = 4;
+        const R_EXT: usize = 5;
+        const R_INDEX: usize = 6;
+        const R_MIDDLE: usize = 7;
+        const R_RING: usize = 8;
         const R_PINKY: usize = 9;
+        const R_PIPE: usize = 12;
 
         const BASE_EFF: f64 = 1.0;
     };
@@ -88,27 +97,12 @@ macro_rules! helper_consts {
         // ==== Keyboard Info ====
         // =======================
 
-        // Columns
-        const L_RING: usize = 1;
-        const L_MIDDLE: usize = 2;
-        const L_INDEX: usize = 3;
-        const L_EXT: usize = 4;
-        const R_EXT: usize = 5;
-        const R_INDEX: usize = 6;
-        const R_MIDDLE: usize = 7;
-        const R_RING: usize = 8;
-        const R_SYMBOL: usize = 10;
-        const R_NETHER: usize = 11;
-        const R_PIPE: usize = 12;
-
         // Rows
         const HOME_ROW: usize = 2;
 
-        // Fingers
-        const INDEX: char = 'i';
-        const MIDDLE: char = 'm';
-        const RING: char = 'r';
-        const PINKY: char = 'p';
+        // Cols
+        const R_SYMBOL: usize = 10;
+        const R_NETHER: usize = 11;
 
         // Increase, Medium, Bigram or Single Key
         const I_ME_B: f64 = 1.4;

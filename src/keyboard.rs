@@ -8,7 +8,7 @@ use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
-        check_col, check_key_no_hist, compare_keys, get_hand, get_single_key_mult,
+        check_col, check_key_no_hist, compare_keys, get_single_key_mult,
         get_valid_key_locs_sorted, place_keys,
     },
 };
@@ -19,6 +19,12 @@ kb_consts!();
 pub enum KeyCompare {
     Mult(f64),
     Mismatch,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Hand {
+    Left,
+    Right,
 }
 
 #[derive(Clone)]
@@ -173,22 +179,21 @@ impl Keyboard {
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
-    fn get_efficiency(&mut self, this_key: Slot) -> f64 {
+    fn get_efficiency(&mut self, this_slot: Slot) -> f64 {
         let mut eff = BASE_EFF;
 
-        let this_col = this_key.get_col();
-        let this_hand = get_hand(this_col);
-        if this_hand == RIGHT {
+        let this_hand = Hand::from_slot(this_slot);
+        if this_hand == Hand::Right {
             self.right_uses += 1.0_f64;
         } else {
             self.left_uses += 1.0_f64;
         }
 
-        eff *= get_single_key_mult(this_key);
+        eff *= get_single_key_mult(this_slot);
 
         let last_compare: Option<KeyCompare> = self
             .last_slot_idx
-            .map(|last_key| return compare_keys(this_key, last_key, true));
+            .map(|last_key| return compare_keys(this_slot, last_key, true));
         if let Some(key_compare) = last_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
@@ -198,7 +203,7 @@ impl Keyboard {
 
         let prev_compare: Option<KeyCompare> = self
             .prev_slot_idx
-            .map(|prev_key| return compare_keys(this_key, prev_key, false));
+            .map(|prev_key| return compare_keys(this_slot, prev_key, false));
         if let Some(key_compare) = prev_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
@@ -206,7 +211,7 @@ impl Keyboard {
             }
         }
 
-        eff *= check_key_no_hist(this_key);
+        eff *= check_key_no_hist(this_slot);
 
         return eff;
     }

@@ -8,11 +8,23 @@
 use {core::cmp, std::collections::BTreeMap};
 
 use crate::{
-    keyboard::{Key, KeyCompare, Slot},
+    keyboard::{Hand, Key, KeyCompare, Slot},
     {helper_consts, kb_helper_consts, swappable_keys},
 };
 
 helper_consts!();
+
+impl Hand {
+    /// # Panics
+    /// Panics if the input col is invalid
+    pub fn from_slot(slot: Slot) -> Self {
+        return match slot.get_col() {
+            L_PINKY..=L_EXT => Hand::Left,
+            R_EXT..=R_PIPE => Hand::Right,
+            _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
+        };
+    }
+}
 
 pub fn get_valid_key_locs_sorted() -> Vec<(Key, Vec<Slot>)> {
     let mut key_locs: Vec<(Key, Vec<Slot>)> = vec![
@@ -159,15 +171,13 @@ pub fn place_keys(
     return false;
 }
 
-/// # Panics
-/// Panics if the input col is invalid
-pub fn get_hand(col: usize) -> char {
-    return match col {
-        L_PINKY..=L_EXT => LEFT,
-        R_EXT..=R_PIPE => RIGHT,
-        _ => panic!("Col {col} is invalid in get_hand"),
-    };
-}
+// pub fn get_hand(slot: Slot) -> char {
+//     return match slot.get_col() {
+//         L_PINKY..=L_EXT => LEFT,
+//         R_EXT..=R_PIPE => RIGHT,
+//         _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
+//     };
+// }
 
 /// # Panics
 /// Panics if the input col is invalid
@@ -212,29 +222,29 @@ pub fn get_single_key_mult(key: Slot) -> f64 {
     return mult;
 }
 
-pub fn compare_keys(this_key: Slot, last_key: Slot, is_bigram: bool) -> KeyCompare {
-    let this_col: usize = this_key.get_col();
-    let last_col: usize = last_key.get_col();
-    let this_hand = get_hand(this_col);
-    let last_hand = get_hand(last_col);
+pub fn compare_keys(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCompare {
+    let this_col: usize = this_slot.get_col();
+    let last_col: usize = last_slot.get_col();
+    let this_hand = Hand::from_slot(this_slot);
+    let last_hand = Hand::from_slot(last_slot);
     if this_hand != last_hand {
         return KeyCompare::Mismatch;
     }
 
     let mut mult: f64 = BASE_EFF;
-    mult *= check_index_ext(this_key, last_key, is_bigram);
-    mult *= check_pinky_ext(this_key, last_key, is_bigram);
+    mult *= check_index_ext(this_slot, last_slot, is_bigram);
+    mult *= check_pinky_ext(this_slot, last_slot, is_bigram);
 
-    let this_row: usize = this_key.get_row();
-    let last_row: usize = last_key.get_row();
+    let this_row: usize = this_slot.get_row();
+    let last_row: usize = last_slot.get_row();
     let row_match: bool = this_row == last_row;
     if !row_match {
         mult *= get_row_mult(this_row, last_row, is_bigram);
 
         // The slope of the keyboard columns goes against the shape of the left hand
-        if this_hand == LEFT && is_bigram {
+        if this_hand == Hand::Left && is_bigram {
             mult *= D_LO_B;
-        } else if this_hand == LEFT && !is_bigram {
+        } else if this_hand == Hand::Left && !is_bigram {
             mult *= D_LO_S;
         }
     }
@@ -257,12 +267,12 @@ pub fn compare_keys(this_key: Slot, last_key: Slot, is_bigram: bool) -> KeyCompa
     }
 
     if row_match {
-        mult *= check_roll(this_col, last_col, is_bigram);
+        mult *= check_roll(this_slot, last_slot, is_bigram);
         return KeyCompare::Mult(mult);
     }
 
-    mult *= check_combo(this_key, last_key, is_bigram);
-    mult *= check_scissor(this_key, last_key, is_bigram);
+    mult *= check_combo(this_slot, last_slot, is_bigram);
+    mult *= check_scissor(this_slot, last_slot, is_bigram);
 
     return KeyCompare::Mult(mult);
 }
@@ -282,20 +292,20 @@ fn get_row_mult(this_row: usize, last_row: usize, is_bigram: bool) -> f64 {
     };
 }
 
-fn check_index_ext(this: Slot, last: Slot, is_bigram: bool) -> f64 {
+fn check_index_ext(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
     debug_assert_eq!(
-        get_hand(this.get_col()),
-        get_hand(last.get_col()),
+        Hand::from_slot(this_slot),
+        Hand::from_slot(last_slot),
         "Cols {} and {} are on different hands",
-        this.get_col(),
-        last.get_col()
+        this_slot.get_col(),
+        last_slot.get_col()
     );
 
     return match (
-        this.get_row(),
-        this.get_col(),
-        last.get_row(),
-        last.get_col(),
+        this_slot.get_row(),
+        this_slot.get_col(),
+        last_slot.get_row(),
+        last_slot.get_col(),
         is_bigram,
     ) {
         // T and 5 (Not penalized. No more movement than hitting R and 4)
@@ -326,20 +336,20 @@ fn check_index_ext(this: Slot, last: Slot, is_bigram: bool) -> f64 {
     };
 }
 
-fn check_pinky_ext(this: Slot, last: Slot, is_bigram: bool) -> f64 {
+fn check_pinky_ext(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
     debug_assert_eq!(
-        get_hand(this.get_col()),
-        get_hand(last.get_col()),
+        Hand::from_slot(this_slot),
+        Hand::from_slot(last_slot),
         "Cols {} and {} are on different hands",
-        this.get_col(),
-        last.get_col()
+        this_slot.get_col(),
+        last_slot.get_col()
     );
 
     return match (
-        this.get_row(),
-        this.get_col(),
-        last.get_row(),
-        last.get_col(),
+        this_slot.get_row(),
+        this_slot.get_col(),
+        last_slot.get_row(),
+        last_slot.get_col(),
         is_bigram,
     ) {
         (NUM_ROW, R_SYMBOL | R_NETHER, _, _, true)
@@ -366,20 +376,25 @@ fn check_pinky_ext(this: Slot, last: Slot, is_bigram: bool) -> f64 {
     };
 }
 
-fn check_roll(this_col: usize, last_col: usize, is_bigram: bool) -> f64 {
+fn check_roll(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
     debug_assert_eq!(
-        get_hand(this_col),
-        get_hand(last_col),
-        "cols {this_col} and {last_col} are on different hands"
+        Hand::from_slot(this_slot),
+        Hand::from_slot(last_slot),
+        "cols {} and {} are on different hands",
+        this_slot.get_col(),
+        last_slot.get_col()
     );
 
     debug_assert_ne!(
-        this_col, last_col,
-        "{this_col} and {last_col} are the same col"
+        this_slot.get_col(),
+        last_slot.get_col(),
+        "{} and {} are the same col",
+        this_slot.get_col(),
+        last_slot.get_col()
     );
 
-    let this_dist = get_center_dist(this_col);
-    let last_dist = get_center_dist(last_col);
+    let this_dist = get_center_dist(this_slot);
+    let last_dist = get_center_dist(last_slot);
     if this_dist >= last_dist {
         return BASE_EFF;
     }
@@ -420,18 +435,20 @@ fn get_col_sf_penalty(this_col: usize, last_col: usize, last: bool) -> f64 {
     };
 }
 
-fn get_center_dist(col: usize) -> usize {
+fn get_center_dist(slot: Slot) -> usize {
     debug_assert!(
-        (L_PINKY..=R_PIPE).contains(&col),
-        "Col {col} invalid in get_center_dist"
+        (L_PINKY..=R_PIPE).contains(&slot.get_col()),
+        "Col {} invalid in get_center_dist",
+        slot.get_col()
     );
 
-    return if col <= L_EXT {
+    return if slot.get_col() <= L_EXT {
         L_EXT
-            .checked_sub(col)
+            .checked_sub(slot.get_col())
             .expect("{L_EXT} must be greater than {col}")
     } else {
-        col.checked_sub(R_EXT)
+        slot.get_col()
+            .checked_sub(R_EXT)
             .expect("{col} must be greater than {R_EXT}")
     };
 }
@@ -461,13 +478,13 @@ fn check_combo(this_key: Slot, last_key: Slot, is_bigram: bool) -> f64 {
 
 // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
 // handle using the normal rules
-fn check_scissor(this_key: Slot, last_key: Slot, is_bigram: bool) -> f64 {
-    let this_col: usize = this_key.get_col();
-    let last_col: usize = last_key.get_col();
+fn check_scissor(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
+    let this_col: usize = this_slot.get_col();
+    let last_col: usize = last_slot.get_col();
 
     debug_assert_eq!(
-        get_hand(this_col),
-        get_hand(last_col),
+        Hand::from_slot(this_slot),
+        Hand::from_slot(last_slot),
         "Same hands when checking for scissor",
     );
 
@@ -475,44 +492,42 @@ fn check_scissor(this_key: Slot, last_key: Slot, is_bigram: bool) -> f64 {
         return 1.0;
     }
 
-    let this_row: usize = this_key.get_row();
-    let last_row: usize = last_key.get_row();
+    let this_row: usize = this_slot.get_row();
+    let last_row: usize = last_slot.get_row();
 
     debug_assert_ne!(this_row, last_row, "Same rows when checking for scissor",);
 
-    let hand = get_hand(this_col);
+    let hand = Hand::from_slot(this_slot);
     // Left-handed scissors are penalized beyond the base left-hand movement deduction because,
     // unlike right-handed scissors, you have to actually rock your hand to hit them
     return match (this_row.abs_diff(last_row), hand, is_bigram) {
-        (2, RIGHT, true) => D_ME_B,
-        (2, RIGHT, false) => D_ME_S,
-        (3, RIGHT, true) | (2, LEFT, true) => D_HI_B,
-        (3, RIGHT, false) | (2, LEFT, false) => D_HI_S,
-        (3, LEFT, true) => D_BU_B,
-        (3, LEFT, false) => D_BU_S,
+        (2, Hand::Right, true) => D_ME_B,
+        (2, Hand::Right, false) => D_ME_S,
+        (3, Hand::Right, true) | (2, Hand::Left, true) => D_HI_B,
+        (3, Hand::Right, false) | (2, Hand::Left, false) => D_HI_S,
+        (3, Hand::Left, true) => D_BU_B,
+        (3, Hand::Left, false) => D_BU_S,
         _ => 1.0,
     };
 }
 
-pub fn check_key_no_hist(key: Slot) -> f64 {
+pub fn check_key_no_hist(slot: Slot) -> f64 {
     let mut mult = BASE_EFF;
 
-    let col = key.get_col();
-    if get_hand(col) == LEFT {
+    if Hand::from_slot(slot) == Hand::Left {
         mult *= D_LO_B;
     }
 
-    let row = key.get_row();
+    let row = slot.get_row();
     let dist = row.abs_diff(HOME_ROW);
     debug_assert!(
-        (NUM_ROW..=BOT_ROW).contains(&key.get_row()),
+        (NUM_ROW..=BOT_ROW).contains(&slot.get_row()),
         "Row {row} is invalid when checking home distance",
     );
 
     if dist == 1 {
         return mult * D_LO_B;
-    }
-    if dist == 2 {
+    } else if dist == 2 {
         return mult * D_ME_B;
     }
 

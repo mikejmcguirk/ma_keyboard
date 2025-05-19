@@ -13,9 +13,6 @@ macro_rules! kb_helper_consts {
         const L_PINKY: usize = 0;
         const R_PINKY: usize = 9;
 
-        // Hands
-        const RIGHT: char = 'r';
-
         const BASE_EFF: f64 = 1.0;
     };
 }
@@ -90,9 +87,6 @@ macro_rules! helper_consts {
         // =======================
         // ==== Keyboard Info ====
         // =======================
-
-        // Hands
-        const LEFT: char = 'l';
 
         // Columns
         const L_RING: usize = 1;

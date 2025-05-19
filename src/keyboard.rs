@@ -6,15 +6,15 @@ use alloc::collections::BTreeMap;
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
-    kb_helper_consts,
+    kb_consts, kb_helper_consts,
     kb_helpers::{
-        check_key_no_hist, compare_keys, get_hand, get_key_locations_tree, get_single_key_mult,
-        place_keys_tree,
+        check_col, check_key_no_hist, compare_keys, get_hand, get_single_key_mult,
+        get_valid_key_locs_sorted, place_keys,
     },
 };
 
 // TODO: Some of this stuff should be removed as we factor out the scoring
-kb_helper_consts!();
+kb_consts!();
 
 pub enum KeyCompare {
     Mult(f64),
@@ -23,11 +23,11 @@ pub enum KeyCompare {
 
 #[derive(Clone)]
 pub struct Keyboard {
-    kb_map: BTreeMap<Slot, Key>,
-    valid: BTreeMap<Key, Vec<Slot>>,
+    key_slots: BTreeMap<Slot, Key>,
+    valid_slots: BTreeMap<Key, Vec<Slot>>,
     slot_ascii: Vec<Option<Slot>>,
-    last_key_idx: Option<Slot>,
-    prev_key_idx: Option<Slot>,
+    last_slot_idx: Option<Slot>,
+    prev_slot_idx: Option<Slot>,
     generation: usize,
     id: usize,
     evaluated: bool,
@@ -40,37 +40,30 @@ pub struct Keyboard {
 
 impl Keyboard {
     /// # Panics
-    /// Will panic if compile time data is incorrect
-    // slot_ascii has a compile time length of 128. Every char in valid_locations is checked with
-    // an assertion in get_key_locations that it is 127 or less
-    pub fn create_origin(id_in: usize) -> Self {
-        let mut kb_map: BTreeMap<Slot, Key> = BTreeMap::new();
-        let valid_vec: Vec<(Key, Vec<Slot>)> = get_key_locations_tree();
-        // The valid vec assertion isnt' useful here becuse no property of the valid vec tree can
-        // produce invalid behavior in the map. So if you wan to make sure the valid vec tree is
-        // correct, that needs to be checked there
+    /// The specs to build the keyboard properly are defined at compile time. If the specs are
+    /// incorrect, this function or one of its sub-functions will panic
+    pub fn create_primo(id_in: usize) -> Self {
+        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
+        let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         assert!(
-            place_keys_tree(&mut kb_map, &valid_vec, 0),
+            place_keys(&mut key_slots, &valid_key_locs_sorted, 0),
             "Unable to place all keys"
         );
 
-        let mut valid: BTreeMap<Key, Vec<Slot>> = BTreeMap::new();
-        for loc in &valid_vec {
-            valid.insert(loc.0, loc.1.clone());
-        }
+        let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
 
         let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
-        for (slot, key) in &kb_map {
+        for (slot, key) in &key_slots {
             slot_ascii[usize::from(key.get_base())] = Some(*slot);
             slot_ascii[usize::from(key.get_shift())] = Some(*slot);
         }
 
         return Self {
-            kb_map,
-            valid,
+            key_slots,
+            valid_slots,
             slot_ascii,
-            last_key_idx: None,
-            prev_key_idx: None,
+            last_slot_idx: None,
+            prev_slot_idx: None,
             generation: 0,
             id: id_in,
             evaluated: false,
@@ -84,11 +77,11 @@ impl Keyboard {
 
     pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
         return Self {
-            kb_map: kb.kb_map.clone(),
-            valid: kb.valid.clone(),
+            key_slots: kb.key_slots.clone(),
+            valid_slots: kb.valid_slots.clone(),
             slot_ascii: kb.slot_ascii.clone(),
-            last_key_idx: None,
-            prev_key_idx: None,
+            last_slot_idx: None,
+            prev_slot_idx: None,
             generation: gen_input,
             id: id_in,
             evaluated: kb.evaluated,
@@ -100,65 +93,66 @@ impl Keyboard {
         };
     }
 
-    // FUTURE: If we start giving more keys no shuffle options (like "<" and ">"), the value of the
-    // iterative approach increases, since we can filter out keys where valid_locations == 1
+    // FUTURE: Right now, shuffling is restricted using constants. If we start adding unmovable
+    // keys to the alpha area, perhaps we break key_slots into movable and unmovable keys. This
+    // will speed up shuffling, but potentially slow down the ASCII lookup since two BTrees need to
+    // be checked
     // FUTURE: It would be better if the shuffle amounts were read from a config
-    // NOTE: The shuffle constants make sure that the number row and the symbol keys to the right
-    // of the right pinky are ignored
+    // PERF: When getting this_key and that_key, the borrows are de-referenced and moved out of
+    // scope so that the borrow checker doesn't complain when doing the swap. If this is a
+    // performance issue, could hold onto the borrows until it is actually time to swap, then
+    // figure out how to handle
     /// # Panics
-    /// Panics if no valid locations are found for a selected key
-    /// This function expects the data setup in `create_origin` to be correct
-    /// Will also panic if the shuffle amount is too high, since these are compile time values
-    pub fn shuffle(&mut self, rng: &mut SmallRng, amt: usize) {
-        const MIN_ROW: usize = 1;
-        const MAX_ROW: usize = 4;
-        const MIN_COL: usize = 0;
-        const MAX_COL: usize = 10;
-
-        debug_assert!(amt <= 100, "{amt} is too many shuffles");
+    /// This function panics under the following conditions:
+    /// - A valid key slot does not exist for the selected row and column
+    /// - A key has no valid locations
+    /// - If a valid key cannot be found in any of the valid slots
+    /// - The swap key does not have any valid slots
+    pub fn shuffle(&mut self, rng: &mut SmallRng, cnt: usize) {
         self.evaluated = false;
 
-        for _ in 0..amt {
-            let this_row = rng.random_range(MIN_ROW..MAX_ROW);
-            let this_col = rng.random_range(MIN_COL..MAX_COL);
+        for _ in 0..cnt {
+            let this_row = rng.random_range(TOP_ROW..=BOT_ROW);
+            let this_col = rng.random_range(L_PINKY..=R_PINKY);
             let this_slot = Slot::from_tuple((this_row, this_col));
-            let this_key = self.kb_map[&this_slot];
-            if self.valid[&this_key].len() == 1 {
-                continue;
-            }
+            let this_key = self.key_slots[&this_slot];
 
-            if let Some(vec) = self.valid.get_mut(&this_key) {
+            if let Some(vec) = self.valid_slots.get_mut(&this_key) {
                 vec.shuffle(rng);
+                if vec.len() == 1 {
+                    continue;
+                }
             } else {
-                panic!("Valid locations not found for key {:?}", this_key);
+                panic!("Valid slots not found for key {:?}", this_key);
             }
 
-            for (i, _) in self.valid[&this_key].iter().enumerate() {
-                let that_row = self.valid[&this_key][i].get_row();
-                let that_col = self.valid[&this_key][i].get_col();
+            let these_valid_slots = &self.valid_slots[&this_key];
+            for slot in these_valid_slots {
+                let that_row = slot.get_row();
+                let that_col = slot.get_col();
                 let that_slot = Slot::from_tuple((that_row, that_col));
-                let that_key = self.kb_map[&that_slot];
-                if self.valid[&that_key].len() == 1
-                    || !self.valid[&that_key].contains(&this_slot)
-                    || this_key == that_key
+                let that_key = self.key_slots[&that_slot];
+                if this_key == that_key
+                    || !self.valid_slots[&that_key].contains(&this_slot)
+                    || self.valid_slots[&that_key].len() == 1
                 {
                     continue;
                 }
 
-                self.kb_map.insert(this_slot, that_key);
+                self.key_slots.insert(this_slot, that_key);
                 self.slot_ascii[usize::from(that_key.get_base())] = Some(this_slot);
                 self.slot_ascii[usize::from(that_key.get_shift())] = Some(this_slot);
 
-                self.kb_map.insert(that_slot, this_key);
+                self.key_slots.insert(that_slot, this_key);
                 self.slot_ascii[usize::from(this_key.get_base())] = Some(that_slot);
                 self.slot_ascii[usize::from(this_key.get_shift())] = Some(that_slot);
 
                 break;
             }
 
-            assert_ne!(
-                self.kb_map[&this_slot], this_key,
-                "Key {:?} at {},{} not changed!",
+            debug_assert_ne!(
+                self.key_slots[&this_slot], this_key,
+                "ERROR: Key {:?} at {},{} not changed",
                 this_key, this_row, this_col
             );
         }
@@ -193,7 +187,7 @@ impl Keyboard {
         eff *= get_single_key_mult(this_key);
 
         let last_compare: Option<KeyCompare> = self
-            .last_key_idx
+            .last_slot_idx
             .map(|last_key| return compare_keys(this_key, last_key, true));
         if let Some(key_compare) = last_compare {
             match key_compare {
@@ -203,7 +197,7 @@ impl Keyboard {
         }
 
         let prev_compare: Option<KeyCompare> = self
-            .prev_key_idx
+            .prev_slot_idx
             .map(|prev_key| return compare_keys(this_key, prev_key, false));
         if let Some(key_compare) = prev_compare {
             match key_compare {
@@ -223,8 +217,8 @@ impl Keyboard {
         }
 
         self.score = 0.0_f64;
-        self.last_key_idx = None;
-        self.prev_key_idx = None;
+        self.last_slot_idx = None;
+        self.prev_slot_idx = None;
         self.left_uses = 0.0_f64;
         self.right_uses = 0.0_f64;
 
@@ -234,15 +228,15 @@ impl Keyboard {
                 {
                     key
                 } else {
-                    self.prev_key_idx = self.last_key_idx;
-                    self.last_key_idx = None;
+                    self.prev_slot_idx = self.last_slot_idx;
+                    self.last_slot_idx = None;
                     continue;
                 };
 
                 self.score += self.get_efficiency(this_key);
 
-                self.prev_key_idx = self.last_key_idx;
-                self.last_key_idx = Some(this_key);
+                self.prev_slot_idx = self.last_slot_idx;
+                self.last_slot_idx = Some(this_key);
             }
         }
 
@@ -262,7 +256,7 @@ impl Keyboard {
         let mut home_row: Vec<char> = Vec::new();
         let mut bot_row: Vec<char> = Vec::new();
 
-        for (slot, key) in &self.kb_map {
+        for (slot, key) in &self.key_slots {
             if slot.get_row() == 0 {
                 num_row.push(char::from(key.get_base()));
             } else if slot.get_row() == 1 {
@@ -328,7 +322,23 @@ pub struct Slot {
 }
 
 impl Slot {
+    // PERF: If this is used in a hot loop, change to debug_assert
     pub fn from_tuple(source: (usize, usize)) -> Self {
+        assert!(
+            (NUM_ROW..=BOT_ROW).contains(&source.0),
+            "Source row ({}) < num_row ({}) or > bottom row ({}) in slot.from_tuple",
+            NUM_ROW,
+            BOT_ROW,
+            source.0,
+        );
+
+        assert!(
+            check_col(source.0, source.1),
+            "Col {} invalid for row {} in slot.from_tuple",
+            source.0,
+            source.1
+        );
+
         return Self {
             row: source.0,
             col: source.1,
@@ -351,7 +361,20 @@ pub struct Key {
 }
 
 impl Key {
+    // PERF: If this is run in a hot loop, change to debug_assert
     pub fn from_tuple(source: (u8, u8)) -> Self {
+        assert!(
+            usize::from(source.0) <= ASCII_CNT,
+            "Base key {} is not a valid ASCII char in Key::from_tuple",
+            source.0
+        );
+
+        assert!(
+            usize::from(source.1) <= ASCII_CNT,
+            "Shift key {} is not a valid ASCII char in Key::from_tuple",
+            source.0
+        );
+
         return Self {
             base: source.0,
             shift: source.1,

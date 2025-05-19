@@ -14,57 +14,8 @@ use crate::{
 
 helper_consts!();
 
-pub fn get_key_locations_tree() -> Vec<(Key, Vec<Slot>)> {
-    let mut key_vec = get_key_vec_tree();
-    key_vec.sort_by(|a, b| {
-        return a
-            .1
-            .len()
-            .partial_cmp(&b.1.len())
-            .unwrap_or(cmp::Ordering::Equal);
-    });
-
-    for key in &key_vec {
-        assert!(
-            usize::from(key.0.get_base()) <= ASCII_CNT,
-            "Key {} is not a valid ASCII char",
-            key.0.get_base()
-        );
-
-        assert!(
-            usize::from(key.0.get_shift()) <= ASCII_CNT,
-            "Key {} is not a valid ASCII char",
-            key.0.get_shift()
-        );
-
-        assert!(
-            !key.1.is_empty(),
-            "Key {:?} has no valid locations listed",
-            key.0
-        );
-
-        for location in &key.1 {
-            assert!(
-                (NUM_ROW..=BOT_ROW).contains(&location.get_row()),
-                "Key {:?} has an invalid row of {}",
-                key.0,
-                location.get_row()
-            );
-
-            assert!(
-                check_col(location.get_row(), location.get_col()),
-                "Row {} for column {} is invalid",
-                location.get_row(),
-                location.get_col()
-            );
-        }
-    }
-
-    return key_vec;
-}
-
-fn get_key_vec_tree() -> Vec<(Key, Vec<Slot>)> {
-    return vec![
+pub fn get_valid_key_locs_sorted() -> Vec<(Key, Vec<Slot>)> {
+    let mut key_locs: Vec<(Key, Vec<Slot>)> = vec![
         // Number Row
         (Key::from_tuple(ONE), make_slot_vec(&ONE_VALID)),
         (Key::from_tuple(TWO), make_slot_vec(&TWO_VALID)),
@@ -128,6 +79,16 @@ fn get_key_vec_tree() -> Vec<(Key, Vec<Slot>)> {
         (Key::from_tuple(Y), alpha_slots_tree(Y_INVALID.as_ref())),
         (Key::from_tuple(Z), alpha_slots_tree(Z_INVALID.as_ref())),
     ];
+
+    key_locs.sort_by(|a, b| {
+        return a
+            .1
+            .len()
+            .partial_cmp(&b.1.len())
+            .unwrap_or(cmp::Ordering::Equal);
+    });
+
+    return key_locs;
 }
 
 // This does not really need to call separate functions and flatten the results, but keeping this
@@ -160,7 +121,7 @@ fn bottom_row_tree() -> Vec<Slot> {
     return make_slot_vec(&DEFAULT_BOT_ROW);
 }
 
-fn check_col(row: usize, col: usize) -> bool {
+pub fn check_col(row: usize, col: usize) -> bool {
     return match row {
         NUM_ROW => (0..=NUM_ROW_CNT).contains(&col),
         TOP_ROW => (0..=TOP_ROW_CNT).contains(&col),
@@ -170,28 +131,29 @@ fn check_col(row: usize, col: usize) -> bool {
     };
 }
 
-pub fn place_keys_tree(
-    kb_tree: &mut BTreeMap<Slot, Key>,
-    key_locs: &Vec<(Key, Vec<Slot>)>,
+pub fn place_keys(
+    slots: &mut BTreeMap<Slot, Key>,
+    valid_slots: &Vec<(Key, Vec<Slot>)>,
     idx: usize,
 ) -> bool {
-    if idx == key_locs.len() {
+    if idx == valid_slots.len() {
         return true;
     }
 
-    for location in &key_locs[idx].1 {
-        if kb_tree.contains_key(location) {
+    for slot in &valid_slots[idx].1 {
+        if slots.contains_key(slot) {
             continue;
         }
 
-        kb_tree.insert(*location, key_locs[idx].0);
+        let key: Key = valid_slots[idx].0;
+        slots.insert(*slot, key);
 
         let next_idx = idx + 1;
-        if place_keys_tree(kb_tree, key_locs, next_idx) {
+        if place_keys(slots, valid_slots, next_idx) {
             return true;
         }
 
-        kb_tree.remove(location);
+        slots.remove(slot);
     }
 
     return false;

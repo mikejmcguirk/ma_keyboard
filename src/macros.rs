@@ -1,15 +1,31 @@
 #[macro_export]
 macro_rules! kb_helper_consts {
     () => {
-        const ASCII_CNT: usize = 128;
-
         // Default Key
         // const SPACE: (u8, u8) = (b' ', b' ');
+
+        // Rows
+        const NUM_ROW: usize = 0;
+        const TOP_ROW: usize = 1;
+        const BOT_ROW: usize = 3;
+
+        // Cols
+        const L_PINKY: usize = 0;
+        const R_PINKY: usize = 9;
 
         // Hands
         const RIGHT: char = 'r';
 
         const BASE_EFF: f64 = 1.0;
+    };
+}
+
+#[macro_export]
+macro_rules! kb_consts {
+    () => {
+        kb_helper_consts!();
+
+        const ASCII_CNT: usize = 128;
     };
 }
 
@@ -79,7 +95,6 @@ macro_rules! helper_consts {
         const LEFT: char = 'l';
 
         // Columns
-        const L_PINKY: usize = 0;
         const L_RING: usize = 1;
         const L_MIDDLE: usize = 2;
         const L_INDEX: usize = 3;
@@ -88,16 +103,12 @@ macro_rules! helper_consts {
         const R_INDEX: usize = 6;
         const R_MIDDLE: usize = 7;
         const R_RING: usize = 8;
-        const R_PINKY: usize = 9;
         const R_SYMBOL: usize = 10;
         const R_NETHER: usize = 11;
         const R_PIPE: usize = 12;
 
         // Rows
-        const NUM_ROW: usize = 0;
-        const TOP_ROW: usize = 1;
         const HOME_ROW: usize = 2;
-        const BOT_ROW: usize = 3;
 
         // Fingers
         const INDEX: char = 'i';

@@ -37,6 +37,10 @@ use crate::{
 // TODO: Run qwerty and dvorak controls for scoring
 // TODO: Args:
 // TODO: write seed to log not error
+// TODO: The amount of mutation should depend on how old the elite is. So if you're on generation
+// 20 and the elite is from generation 10, we would want more mutation than if we're on generation
+// 20 and the elite is from generation 15. Doing this by % would get awkward in later generations
+//    though, and doing it by a static number would be unprincipled.
 // TODO: The usize conversions on the decays are still bad
 // - Population size
 // - Layout to rate

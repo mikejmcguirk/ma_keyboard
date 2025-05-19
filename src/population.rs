@@ -85,7 +85,7 @@ impl Population {
         // iteration
         // TODO: The hard-coded shuffle value needs a place to live
         for _ in 0..climber_cnt {
-            let mut keyboard = Keyboard::create_origin(id.get());
+            let mut keyboard = Keyboard::create_primo(id.get());
             keyboard.shuffle(&mut rng, 30);
             climbers.push(keyboard);
         }

@@ -1,7 +1,6 @@
 use {
     core::cmp,
-    std::fs::File,
-    // std::{collections::HashMap, fs::File},
+    std::{collections::HashMap, fs::File},
 };
 
 use {
@@ -12,8 +11,8 @@ use {
 use crate::{
     custom_err::CorpusErr,
     display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
-    keyboard::Keyboard,
-    // swappable_arr, swappable_keys,
+    keyboard::{Key, Keyboard, Slot},
+    swappable_arr, swappable_keys,
     utils::write_err,
 };
 
@@ -30,7 +29,7 @@ pub struct Population {
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
-    // swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)>,
+    swap_map: HashMap<(Slot, Key), SwapScore>,
     generation: usize,
     top_score: f64,
 }
@@ -97,7 +96,7 @@ impl Population {
             population: gen_pop,
             climber_cnt,
             climbers,
-            // swap_map: build_swap_map(),
+            swap_map: build_swap_map(),
             generation: 0,
             top_score: 0.0,
         });
@@ -239,7 +238,13 @@ impl Population {
             );
             update_climb_info(&climb_info)?;
 
-            self.climbers[i] = hill_climb(&mut self.rng, &self.climbers[i], corpus, iter)?;
+            self.climbers[i] = hill_climb(
+                &mut self.rng,
+                &self.climbers[i],
+                corpus,
+                iter,
+                &mut self.swap_map,
+            )?;
 
             if self.climbers[0].get_score() > self.top_score {
                 self.top_score = self.climbers[0].get_score();
@@ -302,6 +307,7 @@ pub fn hill_climb(
     keyboard: &Keyboard,
     corpus: &[String],
     iter: usize,
+    swap_map: &mut HashMap<(Slot, Key), SwapScore>,
 ) -> Result<Keyboard> {
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
@@ -327,8 +333,10 @@ pub fn hill_climb(
         let kb_score = kb.get_score();
 
         let mut climb_kb: Keyboard = kb.clone();
-        climb_kb.shuffle(rng, 1);
+        // climb_kb.shuffle(rng, 1);
+        climb_kb.mapped_swap(swap_map);
         climb_kb.eval(corpus);
+        climb_kb.check_swap(swap_map);
         let climb_kb_score = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;
@@ -398,17 +406,47 @@ fn get_weight(delta: f64) -> f64 {
     // return 1.0 + K * delta.powf(0.0001);
 }
 
-// fn build_swap_map() -> HashMap<((usize, usize), (u8, u8)), (f64, f64)> {
-//     swappable_arr!();
-//
-//     let swap_map: HashMap<((usize, usize), (u8, u8)), (f64, f64)> = (1..4)
-//         .flat_map(|i| return (0..10).map(move |j| return (i, j)))
-//         .flat_map(|(i, j)| {
-//             return SWAPPABLE_KEYS
-//                 .iter()
-//                 .map(move |&key| return (((i, j), key), (0.0, 0.0)));
-//         })
-//         .collect();
-//
-//     return swap_map;
-// }
+fn build_swap_map() -> HashMap<(Slot, Key), SwapScore> {
+    swappable_arr!();
+
+    let swap_map: HashMap<(Slot, Key), SwapScore> = (1..=3)
+        .flat_map(|i| return (0..=9).map(move |j| return (i, j)))
+        .flat_map(|(i, j)| {
+            return SWAPPABLE_KEYS.iter().map(move |&key| {
+                return (
+                    (Slot::from_tuple((i, j)), Key::from_tuple(key)),
+                    SwapScore::new(),
+                );
+            });
+        })
+        .collect();
+
+    // println!("{:?}", swap_map);
+    // panic!();
+
+    return swap_map;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SwapScore {
+    w_avg: f64,
+    weights: f64,
+}
+
+impl SwapScore {
+    pub fn new() -> Self {
+        return Self {
+            w_avg: 0.0,
+            weights: 0.0,
+        };
+    }
+
+    pub fn get_w_avg(&self) -> f64 {
+        return self.w_avg;
+    }
+
+    // TODO: Test function for greedy algo
+    pub fn add_w_avg(&mut self, addition: f64) {
+        self.w_avg += addition;
+    }
+}

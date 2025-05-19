@@ -105,13 +105,13 @@ macro_rules! helper_consts {
         const R_NETHER: usize = 11;
 
         // Increase, Medium, Bigram or Single Key
-        const I_ME_B: f64 = 1.4;
+        // const I_ME_B: f64 = 1.4;
         // Increase, Medium, Skipgram
-        const I_ME_S: f64 = 1.2;
+        // const I_ME_S: f64 = 1.2;
         // Increase, Low, Bigram or Single Key
-        // const I_LO_B: f64 = 1.2;
+        const I_LO_B: f64 = 1.2;
         // Increase, Low, Skipgram
-        // const I_LO_S: f64 = 1.1;
+        const I_LO_S: f64 = 1.1;
         // Deduct, Low, Bigram or Single key
         const D_LO_B: f64 = 0.8;
         // Deduct, Low, Skipgram

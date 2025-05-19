@@ -121,6 +121,10 @@ fn bottom_row_tree() -> Vec<Slot> {
     return make_slot_vec(&DEFAULT_BOT_ROW);
 }
 
+fn make_slot_vec(input: &[(usize, usize)]) -> Vec<Slot> {
+    return input.iter().map(|i| return Slot::from_tuple(*i)).collect();
+}
+
 pub fn check_col(row: usize, col: usize) -> bool {
     return match row {
         NUM_ROW => (0..=NUM_ROW_CNT).contains(&col),
@@ -159,110 +163,102 @@ pub fn place_keys(
     return false;
 }
 
-// pub fn get_hand(slot: Slot) -> char {
-//     return match slot.get_col() {
-//         L_PINKY..=L_EXT => LEFT,
-//         R_EXT..=R_PIPE => RIGHT,
-//         _ => panic!("Col {} is invalid in get_hand", slot.get_col()),
-//     };
-// }
-
-// No blanket adjustment for any particular row. The specific code for bigrams and the
-// additional code for single keys both deduct for row movement, which necessarily results in
-// the algo favoring the home row
-pub fn get_single_key_mult(slot: Slot) -> f64 {
-    let row = slot.get_row();
-    let col = slot.get_col();
-    let finger = Finger::from_slot(slot);
+pub fn global_adjustments(slot: Slot) -> f64 {
     let mut mult = BASE_EFF;
+    let finger = Finger::from_slot(slot);
+    let row = slot.get_row();
 
-    // Do a blanket downward adjustment rather than micro-correct in the finger comparisons
-    // The ring and pinky are mostly treated the same due to different preferences per typist.
-    // However, the pinky top row is given an extra penalty because the whole hand has to be
-    // moved to hit it
+    // The algo doesn't intrinsically know these fingers are less dexterous
+    // Top row pinky gets extra deduction because it requires hand movement
     let ring_or_pinky = finger == Finger::Ring || finger == Finger::Pinky;
     if (ring_or_pinky && row == BOT_ROW) || (finger == Finger::Ring && row == TOP_ROW) {
-        mult *= D_ME_B;
+        mult *= D_LO_B;
     } else if finger == Finger::Pinky && row == TOP_ROW {
-        mult *= D_HI_B;
+        mult *= D_ME_B;
     }
-
-    // The algo is too willing to put high-usage keys here
-    mult *= match (row, col) {
-        (HOME_ROW, 4 | 5) => D_LO_B,
-        (TOP_ROW, 4) | (BOT_ROW, 5) => D_ME_B,
-        (BOT_ROW, 4) | (TOP_ROW, 5) => D_HI_B,
-        _ => BASE_EFF,
-    };
 
     return mult;
 }
 
-pub fn compare_keys(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCompare {
+pub fn compare_slots(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCompare {
     let this_hand = Hand::from_slot(this_slot);
     let last_hand = Hand::from_slot(last_slot);
     if this_hand != last_hand {
         return KeyCompare::Mismatch;
     }
 
-    let mut mult: f64 = BASE_EFF;
+    let mut mult = BASE_EFF;
     mult *= check_index_ext(this_slot, last_slot, is_bigram);
     mult *= check_pinky_ext(this_slot, last_slot, is_bigram);
-
-    let this_row: usize = this_slot.get_row();
-    let last_row: usize = last_slot.get_row();
-    let row_match: bool = this_row == last_row;
-    if !row_match {
-        mult *= get_row_mult(this_row, last_row, is_bigram);
-
-        // The slope of the keyboard columns goes against the shape of the left hand
-        if this_hand == Hand::Left && is_bigram {
-            mult *= D_LO_B;
-        } else if this_hand == Hand::Left && !is_bigram {
-            mult *= D_LO_S;
-        }
-    }
+    mult *= check_num_ext(this_slot, last_slot, is_bigram);
 
     let this_finger = Finger::from_slot(this_slot);
     let last_finger = Finger::from_slot(last_slot);
     let finger_match: bool = this_finger == last_finger;
+    let this_row: usize = this_slot.get_row();
+    let last_row: usize = last_slot.get_row();
+    let row_match: bool = this_row == last_row;
+
     if finger_match {
         mult *= get_base_sf_penalty(is_bigram);
         mult *= get_col_sf_penalty(this_slot, last_slot, is_bigram);
 
-        let is_ring_or_pinky = this_finger == Finger::Ring || this_finger == Finger::Pinky;
-        if is_ring_or_pinky && is_bigram {
-            mult *= D_ME_B;
-        } else if is_ring_or_pinky && !is_bigram {
-            mult *= D_ME_S;
+        if !row_match {
+            mult *= get_row_mult(this_slot, last_slot, is_bigram);
         }
 
         return KeyCompare::Mult(mult);
     }
 
-    if row_match {
-        mult *= check_roll(this_slot, last_slot, is_bigram);
+    if !row_match {
+        mult *= get_row_mult(this_slot, last_slot, is_bigram);
+
+        mult *= check_combo(this_slot, last_slot, is_bigram);
+        mult *= check_scissor(this_slot, last_slot, is_bigram);
+
         return KeyCompare::Mult(mult);
     }
 
-    mult *= check_combo(this_slot, last_slot, is_bigram);
-    mult *= check_scissor(this_slot, last_slot, is_bigram);
+    mult *= check_roll(this_slot, last_slot, is_bigram);
 
     return KeyCompare::Mult(mult);
 }
 
-// NOTE: Assumes that both keys are on the same hand
-fn get_row_mult(this_row: usize, last_row: usize, is_bigram: bool) -> f64 {
-    let row_diff = this_row.abs_diff(last_row);
+fn get_row_mult(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
+    let this_hand = Hand::from_slot(this_slot);
+    let last_hand = Hand::from_slot(last_slot);
+    debug_assert_eq!(
+        this_hand,
+        last_hand,
+        "Cols {} and {} are on different hands",
+        this_slot.get_col(),
+        last_slot.get_col()
+    );
 
+    let mut mult = BASE_EFF;
+    // The slope of the keys works against the left hand
+    if this_hand == Hand::Left && is_bigram {
+        mult *= D_LO_B;
+    } else if this_hand == Hand::Left && !is_bigram {
+        mult *= D_LO_S;
+    }
+
+    let this_row = this_slot.get_row();
+    let last_row = last_slot.get_row();
+    debug_assert_ne!(
+        this_row, last_row,
+        "Rows {this_row} and {last_row} are the same in get_row_mult"
+    );
+
+    let row_diff = this_row.abs_diff(last_row);
     return match (row_diff, is_bigram) {
-        (1, true) => D_LO_B,
-        (2, true) => D_ME_B,
-        (3, true) => D_HI_B,
-        (1, false) => D_LO_S,
-        (2, false) => D_ME_S,
-        (3, false) => D_HI_S,
-        _ => 1.0,
+        (1, true) => mult * D_LO_B,
+        (2, true) => mult * D_ME_B,
+        (3, true) => mult * D_HI_B,
+        (1, false) => mult * D_LO_S,
+        (2, false) => mult * D_ME_S,
+        (3, false) => mult * D_HI_S,
+        _ => BASE_EFF,
     };
 }
 
@@ -326,27 +322,47 @@ fn check_pinky_ext(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
         last_slot.get_col(),
         is_bigram,
     ) {
-        (NUM_ROW, R_SYMBOL | R_NETHER, _, _, true)
-        | (_, _, NUM_ROW, R_SYMBOL | R_NETHER, true)
-        | (TOP_ROW, R_PIPE, _, _, true)
-        | (_, _, TOP_ROW, R_PIPE, true) => D_BU_B,
+        // '
+        (HOME_ROW, R_SYMBOL, _, _, true) | (_, _, HOME_ROW, R_SYMBOL, true) => D_LO_B,
+        (HOME_ROW, R_SYMBOL, _, _, false) | (_, _, HOME_ROW, R_SYMBOL, false) => D_LO_S,
+        // [ or \n
         (TOP_ROW, R_SYMBOL, _, _, true)
         | (_, _, TOP_ROW, R_SYMBOL, true)
         | (HOME_ROW, R_NETHER, _, _, true)
         | (_, _, HOME_ROW, R_NETHER, true) => D_ME_B,
-        (TOP_ROW, R_NETHER, _, _, true) | (_, _, TOP_ROW, R_NETHER, true) => D_HI_B,
-        (HOME_ROW, R_SYMBOL, _, _, true) | (_, _, HOME_ROW, R_SYMBOL, true) => D_LO_B,
-        (NUM_ROW, R_SYMBOL | R_NETHER, _, _, false)
-        | (_, _, NUM_ROW, R_SYMBOL | R_NETHER, false)
-        | (TOP_ROW, R_PIPE, _, _, false)
-        | (_, _, TOP_ROW, R_PIPE, false) => D_BU_S,
         (TOP_ROW, R_SYMBOL, _, _, false)
         | (_, _, TOP_ROW, R_SYMBOL, false)
         | (HOME_ROW, R_NETHER, _, _, false)
         | (_, _, HOME_ROW, R_NETHER, false) => D_ME_S,
+        // ]
+        (TOP_ROW, R_NETHER, _, _, true) | (_, _, TOP_ROW, R_NETHER, true) => D_HI_B,
         (TOP_ROW, R_NETHER, _, _, false) | (_, _, TOP_ROW, R_NETHER, false) => D_HI_S,
-        (HOME_ROW, R_SYMBOL, _, _, false) | (_, _, HOME_ROW, R_SYMBOL, false) => D_LO_S,
+        // -/= or |
+        (NUM_ROW, R_SYMBOL | R_NETHER, _, _, true)
+        | (_, _, NUM_ROW, R_SYMBOL | R_NETHER, true)
+        | (TOP_ROW, R_PIPE, _, _, true)
+        | (_, _, TOP_ROW, R_PIPE, true) => D_BU_B,
+        (NUM_ROW, R_SYMBOL | R_NETHER, _, _, false)
+        | (_, _, NUM_ROW, R_SYMBOL | R_NETHER, false)
+        | (TOP_ROW, R_PIPE, _, _, false)
+        | (_, _, TOP_ROW, R_PIPE, false) => D_BU_S,
         _ => 1.0,
+    };
+}
+
+fn check_num_ext(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
+    debug_assert_eq!(
+        Hand::from_slot(this_slot),
+        Hand::from_slot(last_slot),
+        "Cols {} and {} are on different hands",
+        this_slot.get_col(),
+        last_slot.get_col()
+    );
+
+    return match (this_slot.get_row(), last_slot.get_row(), is_bigram) {
+        (NUM_ROW, _, true) | (_, NUM_ROW, true) => D_BU_B,
+        (NUM_ROW, _, false) | (_, NUM_ROW, false) => D_BU_S,
+        _ => BASE_EFF,
     };
 }
 
@@ -374,18 +390,18 @@ fn check_roll(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
     }
 
     if is_bigram {
-        return I_ME_B;
+        return I_LO_B;
     }
 
-    return I_ME_S;
+    return I_LO_S;
 }
 
 fn get_base_sf_penalty(is_last: bool) -> f64 {
     if is_last {
-        return D_ME_B;
+        return D_LO_B;
     }
 
-    return D_ME_S;
+    return D_LO_S;
 }
 
 fn get_col_sf_penalty(this_slot: Slot, last_slot: Slot, last: bool) -> f64 {
@@ -400,14 +416,12 @@ fn get_col_sf_penalty(this_slot: Slot, last_slot: Slot, last: bool) -> f64 {
 
     let col_diff = this_col.abs_diff(last_col);
     return match (col_diff, last) {
-        (1, true) => D_LO_B,
-        (2, true) => D_ME_B,
-        (3, true) => D_HI_B,
-        (4, true) => D_BU_B,
-        (1, false) => D_LO_S,
-        (2, false) => D_ME_S,
-        (3, false) => D_HI_S,
-        (4, false) => D_BU_S,
+        (1, true) => D_ME_B,
+        (2, true) => D_HI_B,
+        (3, true) => D_BU_B,
+        (1, false) => D_ME_S,
+        (2, false) => D_HI_S,
+        (3, false) => D_BU_S,
         _ => 1.0,
     };
 }
@@ -437,6 +451,13 @@ fn check_combo(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
     let last_row: usize = last_slot.get_row();
     let this_finger = Finger::from_slot(this_slot);
     let last_finger = Finger::from_slot(last_slot);
+    debug_assert_ne!(
+        this_finger,
+        last_finger,
+        "Cols {} and {} are on the same finger",
+        this_slot.get_col(),
+        last_slot.get_col()
+    );
 
     let (top, bot): (Finger, Finger) = match this_row.cmp(&last_row) {
         cmp::Ordering::Greater => (this_finger, last_finger),
@@ -448,8 +469,14 @@ fn check_combo(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
         || top == Finger::Middle
         || (top == Finger::Ring && bot == Finger::Pinky)
     {
-        return BASE_EFF;
-    } else if is_bigram {
+        if is_bigram {
+            return I_LO_B;
+        } else {
+            return I_LO_S;
+        }
+    }
+
+    if is_bigram {
         return D_ME_B;
     }
 
@@ -459,13 +486,17 @@ fn check_combo(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
 // NOTE: I've seen "non-adjacent" scissors described before, but that should be possible to
 // handle using the normal rules
 fn check_scissor(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
-    let this_col: usize = this_slot.get_col();
-    let last_col: usize = last_slot.get_col();
-
     debug_assert_eq!(
         Hand::from_slot(this_slot),
         Hand::from_slot(last_slot),
         "Same hands when checking for scissor",
+    );
+
+    let this_col: usize = this_slot.get_col();
+    let last_col: usize = last_slot.get_col();
+    debug_assert!(
+        this_col.abs_diff(last_col) > 0,
+        "{this_col} and {last_col} are the same in check_scissor"
     );
 
     if this_col.abs_diff(last_col) > 1 {
@@ -494,26 +525,33 @@ fn check_scissor(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
 pub fn check_key_no_hist(slot: Slot) -> f64 {
     let mut mult = BASE_EFF;
 
-    if Hand::from_slot(slot) == Hand::Left {
-        mult *= D_LO_B;
-    }
-
     let row = slot.get_row();
-    let dist = row.abs_diff(HOME_ROW);
     debug_assert!(
         (NUM_ROW..=BOT_ROW).contains(&slot.get_row()),
         "Row {row} is invalid when checking home distance",
     );
 
-    if dist == 1 {
+    let row_dist = row.abs_diff(HOME_ROW);
+    if row_dist == 1 {
         return mult * D_LO_B;
-    } else if dist == 2 {
+    } else if row_dist == 2 {
         return mult * D_ME_B;
     }
 
-    return mult;
-}
+    if row_dist > 0 && Hand::from_slot(slot) == Hand::Left {
+        mult *= D_LO_B;
+    }
 
-fn make_slot_vec(input: &[(usize, usize)]) -> Vec<Slot> {
-    return input.iter().map(|i| return Slot::from_tuple(*i)).collect();
+    let col = slot.get_col();
+    if col == L_EXT || col == R_EXT {
+        mult *= D_LO_B;
+    } else if col == R_SYMBOL {
+        mult *= D_ME_B;
+    } else if col == R_NETHER {
+        mult *= D_HI_B;
+    } else if col == R_PIPE {
+        mult *= D_BU_B;
+    }
+
+    return mult;
 }

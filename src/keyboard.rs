@@ -1,16 +1,16 @@
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
-// use {alloc::collections::BTreeMap, std::collections::HashMap};
+use {alloc::collections::BTreeMap, std::collections::HashMap};
 
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
-        check_col, check_key_no_hist, compare_keys, get_single_key_mult,
-        get_valid_key_locs_sorted, place_keys,
+        check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
+        global_adjustments, place_keys,
     },
+    population::SwapScore,
 };
 
 kb_consts!();
@@ -73,6 +73,9 @@ pub struct Keyboard {
     right_uses: f64,
     is_elite: bool,
     pos_iter: usize,
+    last_score: f64,
+    last_swap_a: (Slot, Key),
+    last_swap_b: (Slot, Key),
 }
 
 impl Keyboard {
@@ -109,6 +112,9 @@ impl Keyboard {
             right_uses: 0.0,
             is_elite: false,
             pos_iter: 0,
+            last_score: 0.0,
+            last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+            last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
         };
     }
 
@@ -127,6 +133,9 @@ impl Keyboard {
             right_uses: 0.0,
             is_elite: false,
             pos_iter: kb.pos_iter,
+            last_score: kb.last_score,
+            last_swap_a: kb.last_swap_a,
+            last_swap_b: kb.last_swap_b,
         };
     }
 
@@ -195,18 +204,81 @@ impl Keyboard {
         }
     }
 
-    // pub fn mapped_swap(&mut self, swap_map: &HashMap<((usize, usize), (u8, u8)), (f64, f64)>) {
-    //     let mut raw_out_scores: BTreeMap<(usize, usize), f64> = BTreeMap::new();
-    //
-    //     for i in 1..self.kb_vec.len() {
-    //         for j in 0..self.kb_vec[i].len() {
-    //             let key = self.kb_vec[i][j];
-    //             let score = swap_map[&((i, j), key)].0;
-    //             // let score: f64 = swap_map[]
-    //             raw_out_scores.insert((i, j), score);
-    //         }
-    //     }
-    // }
+    pub fn mapped_swap(&mut self, swap_map: &HashMap<(Slot, Key), SwapScore>) {
+        self.evaluated = false;
+        self.last_score = self.score;
+
+        let mut wants_out: Option<(Slot, Key, f64)> = None;
+        for (slot, key) in &self.key_slots {
+            if slot.get_row() < 1 || slot.get_col() > 9 {
+                continue;
+            }
+
+            if let Some(score) = swap_map.get(&(*slot, *key)) {
+                if let Some(out) = wants_out {
+                    if out.2 > score.get_w_avg() {
+                        continue;
+                    }
+                }
+
+                wants_out = Some((*slot, *key, score.get_w_avg()));
+            } else {
+                panic!("Nonexistent swap score for slot {:?} key {:?}", *slot, *key);
+            }
+        }
+
+        let final_out = wants_out.expect("Nothing wanted out");
+
+        let mut wants_in: Option<(Slot, Key, f64)> = None;
+        for (slot, key) in &self.key_slots {
+            if slot.get_row() < 1 || slot.get_col() > 9 {
+                continue;
+            }
+
+            if *key == final_out.1 {
+                continue;
+            }
+
+            let score_out = swap_map[&(*slot, self.key_slots[&final_out.0])].get_w_avg();
+            let score_in = swap_map[&(final_out.0, *key)].get_w_avg();
+            let total_score = score_out + score_in;
+            // println!("{}", total_score);
+
+            if let Some(innn) = wants_in {
+                if innn.2 > total_score {
+                    continue;
+                }
+            }
+
+            wants_in = Some((*slot, *key, total_score));
+        }
+
+        let final_in = wants_in.expect("Nothing wanted in");
+
+        self.last_swap_a = (final_out.0, final_out.1);
+        self.last_swap_b = (final_in.0, final_in.1);
+
+        self.key_slots.insert(final_out.0, final_in.1);
+        self.slot_ascii[usize::from(final_in.1.get_base())] = Some(final_out.0);
+        self.slot_ascii[usize::from(final_in.1.get_shift())] = Some(final_out.0);
+
+        self.key_slots.insert(final_in.0, final_out.1);
+        self.slot_ascii[usize::from(final_out.1.get_base())] = Some(final_in.0);
+        self.slot_ascii[usize::from(final_out.1.get_shift())] = Some(final_in.0);
+    }
+
+    pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>) {
+        let score_diff = self.score - self.last_score;
+
+        let mut score_a = swap_map[&(self.last_swap_a.0, self.last_swap_a.1)];
+        let mut score_b = swap_map[&(self.last_swap_b.0, self.last_swap_b.1)];
+
+        score_a.add_w_avg(score_diff);
+        score_b.add_w_avg(score_diff);
+
+        swap_map.insert((self.last_swap_a.0, self.last_swap_a.1), score_a);
+        swap_map.insert((self.last_swap_b.0, self.last_swap_b.1), score_b);
+    }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
     // layout to change. Be careful over-indexing for any particular factor
@@ -220,11 +292,11 @@ impl Keyboard {
             self.left_uses += 1.0_f64;
         }
 
-        eff *= get_single_key_mult(this_slot);
+        eff *= global_adjustments(this_slot);
 
         let last_compare: Option<KeyCompare> = self
             .last_slot_idx
-            .map(|last_key| return compare_keys(this_slot, last_key, true));
+            .map(|last_slot| return compare_slots(this_slot, last_slot, true));
         if let Some(key_compare) = last_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
@@ -234,7 +306,7 @@ impl Keyboard {
 
         let prev_compare: Option<KeyCompare> = self
             .prev_slot_idx
-            .map(|prev_key| return compare_keys(this_slot, prev_key, false));
+            .map(|prev_slot| return compare_slots(this_slot, prev_slot, false));
         if let Some(key_compare) = prev_compare {
             match key_compare {
                 KeyCompare::Mult(x) => return eff * x,
@@ -351,7 +423,7 @@ impl Keyboard {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Slot {
     row: usize,
     col: usize,
@@ -390,7 +462,7 @@ impl Slot {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     base: u8,
     shift: u8,

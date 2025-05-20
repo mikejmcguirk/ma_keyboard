@@ -258,7 +258,13 @@ impl Keyboard {
             0.0
         };
 
-        let temp_out = (norm_variance_out * 4.0).max(0.01);
+        // Low temperature, but looking at the Softmax probability distributions, this is what it
+        // seems to take to get it to not chose keys essentially at random
+        // let temp_out = (norm_variance_out * 2.0).max(0.01);
+        // let temp_out = (norm_variance_out * 4.0).max(0.01);
+        // let temp_out = 1.0 - (3.96 * norm_variance_out);
+        // let temp_out = 0.5 - (1.96 * norm_variance_out);
+        let temp_out = 0.26 - norm_variance_out;
 
         let mut total_exp_out = 0.0;
         let exp_out_candidates: Vec<(Slot, Key, f64)> = out_normalized
@@ -278,12 +284,14 @@ impl Keyboard {
             .collect();
 
         let mut checked_score_out: f64 = 0.0;
-        let r_out = rng.random_range(0.0..=total_exp_out);
+        let r_out = rng.random_range(0.0..=1.0);
+        // println!("r_out {r_out}");
         let out_selection: (Slot, Key, f64) = {
             *exp_normalized_out
                 .iter()
                 .find(|c| {
                     checked_score_out += c.2;
+                    // println!("checked score out {checked_score_out}, r_out {r_out}");
                     return checked_score_out > r_out;
                 })
                 .unwrap_or_else(|| {
@@ -344,9 +352,15 @@ impl Keyboard {
         } else {
             0.0
         };
+        let temp_in = 0.26 - norm_variance_in;
+        // let temp_in = (norm_variance_in * 2.0).max(0.01);
+        // let temp_in = (norm_variance_in * 4.0).max(0.01);
         // let temp_in = 1.0 - (3.96 * norm_variance_in);
-        let temp_in = (norm_variance_in * 4.0).max(0.01);
-        // println!("norm variance {}, temp {}", norm_variance_in, temp_in);
+        // let temp_in = 0.5 - (1.96 * norm_variance_in);
+        // println!(
+        //     "norm variance {}, temp {}, out slot {:?}",
+        //     norm_variance_in, temp_in, out_selection.0
+        // );
 
         let mut total_exp_in = 0.0;
         let exp_in_candidates: Vec<(Slot, Key, f64)> = in_normalized
@@ -372,7 +386,7 @@ impl Keyboard {
         // println!("{:?}", exp_normalized_in);
 
         let mut checked_score_in: f64 = 0.0;
-        let r_in = rng.random_range(0.0..=total_exp_in);
+        let r_in = rng.random_range(0.0..=1.0);
         let in_selection: (Slot, Key, f64) = {
             *exp_normalized_in
                 .iter()
@@ -419,6 +433,10 @@ impl Keyboard {
 
         swap_map.insert((self.last_swap_a.0, self.last_swap_a.1), score_a);
         swap_map.insert((self.last_swap_b.0, self.last_swap_b.1), score_b);
+
+        // if iter % 100 == 0 {
+        //     println!("{:#?}", swap_map);
+        // }
     }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire

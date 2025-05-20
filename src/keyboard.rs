@@ -314,6 +314,8 @@ impl Keyboard {
                 })
         };
 
+        let cur_out_select_score = swap_map[&(out_selection.0, out_selection.1)].get_w_avg();
+
         let mut min_in = f64::MAX;
         let mut max_in = f64::MIN;
         let in_raw: Vec<(Slot, Key, f64)> = self
@@ -347,16 +349,23 @@ impl Keyboard {
                 return true;
             })
             .map(|(slot_in, key_in)| {
+                let cur_in_candidate_score = swap_map[&(*slot_in, *key_in)].get_w_avg();
+
                 let slot_out = out_selection.0;
                 let key_out = out_selection.1;
-                let score_out = swap_map[&(*slot_in, key_out)].get_w_avg();
-                let score_in = swap_map[&(slot_out, *key_in)].get_w_avg();
-                let total_score = score_out + score_in;
+                let new_out_select_score = swap_map[&(slot_out, *key_in)].get_w_avg();
+                let new_in_candidate_score = swap_map[&(*slot_in, key_out)].get_w_avg();
 
-                min_in = min_in.min(total_score);
-                max_in = max_in.max(total_score);
+                let total_cur_score = cur_out_select_score + cur_in_candidate_score;
+                let total_new_score = new_out_select_score + new_in_candidate_score;
 
-                return (*slot_in, *key_in, total_score);
+                // A positive improvement is considered a lower new score because higher scores in
+                // the swap map for particular slot/key pairs mean the key wants to leave the slot
+                let improvement = total_cur_score - total_new_score;
+                min_in = min_in.min(improvement);
+                max_in = max_in.max(improvement);
+
+                return (*slot_in, *key_in, improvement);
             })
             .collect();
 
@@ -454,6 +463,10 @@ impl Keyboard {
         self.slot_ascii[usize::from(out_key.get_shift())] = Some(in_slot);
     }
 
+    // For any slot/key pair in the swap map, a higher weighted average means improvement has been
+    // seen when the key leaves the slot. (We can more reliably know which key/slot positions are
+    // bad than which ones are good). Therefore, when scoring a swap, the update is made on the
+    // key's starting point rather than where it ended up
     pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>, iter: usize) {
         let last_slot_a = self.last_swap_a.0;
         let last_key_a = self.last_swap_a.1;
@@ -467,12 +480,8 @@ impl Keyboard {
         score_a.reweight_avg(score_diff, iter as f64);
         score_b.reweight_avg(score_diff, iter as f64);
 
-        swap_map.insert((self.last_swap_a.0, self.last_swap_a.1), score_a);
-        swap_map.insert((self.last_swap_b.0, self.last_swap_b.1), score_b);
-
-        // if iter % 100 == 0 {
-        //     println!("{:#?}", swap_map);
-        // }
+        swap_map.insert((last_slot_a, last_key_a), score_a);
+        swap_map.insert((last_slot_b, last_key_b), score_b);
     }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire

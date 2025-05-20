@@ -50,7 +50,7 @@ use crate::{
 // - Amount of elites
 // - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 400;
+    const ITERATIONS: usize = 1000;
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };

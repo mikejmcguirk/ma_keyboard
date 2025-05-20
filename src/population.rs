@@ -236,7 +236,7 @@ impl Population {
                 self.climbers[i].get_generation(),
                 self.climbers[i].get_id()
             );
-            update_climb_info(&climb_info)?;
+            // update_climb_info(&climb_info)?;
 
             self.climbers[i] = hill_climb(
                 &mut self.rng,
@@ -254,11 +254,11 @@ impl Population {
 
         // TODO: The climb method does indeed need to tell the display there is nothing to display,
         // but the climb method should not have to tell the display what needs displayed
-        update_climb_info(&" ".repeat(155))?;
+        // update_climb_info(&" ".repeat(155))?;
         // TODO: At least for now, don't turn off climb_stats at the end of a hill climbing
         // iteration because it makes the display flicker. Might be okay to do that once the whole
         // line isn't being changed each time
-        update_climb_stats(&" ".repeat(155))?;
+        // update_climb_stats(&" ".repeat(155))?;
         return Ok(());
     }
 
@@ -334,9 +334,9 @@ pub fn hill_climb(
 
         let mut climb_kb: Keyboard = kb.clone();
         // climb_kb.shuffle(rng, 1);
-        climb_kb.mapped_swap(swap_map);
+        climb_kb.mapped_swap(rng, swap_map);
         climb_kb.eval(corpus);
-        climb_kb.check_swap(swap_map);
+        climb_kb.check_swap(swap_map, iter);
         let climb_kb_score = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;
@@ -360,7 +360,7 @@ pub fn hill_climb(
             i, start, climb_kb_score, kb_score, avg, weighted_avg
         );
         // println!("{}", climb_info.len());
-        update_climb_stats(&climb_stats)?;
+        // update_climb_stats(&climb_stats)?;
 
         if climb_kb_score > kb_score {
             climb_kb.add_pos_iter();
@@ -431,6 +431,8 @@ fn build_swap_map() -> HashMap<(Slot, Key), SwapScore> {
 pub struct SwapScore {
     w_avg: f64,
     weights: f64,
+    // max_weight: f64,
+    // scaling: f64,
 }
 
 impl SwapScore {
@@ -438,6 +440,8 @@ impl SwapScore {
         return Self {
             w_avg: 0.0,
             weights: 0.0,
+            // max_weight: 100.0,
+            // scaling: 1.0,
         };
     }
 
@@ -445,8 +449,43 @@ impl SwapScore {
         return self.w_avg;
     }
 
-    // TODO: Test function for greedy algo
-    pub fn add_w_avg(&mut self, addition: f64) {
-        self.w_avg += addition;
+    pub fn reweight_avg(&mut self, new_score: f64, new_weight: f64) {
+        assert!(
+            new_weight > 0.0,
+            "New weight of {new_weight} is zero or negative"
+        );
+
+        let inflated_avg = self.w_avg * self.weights;
+        let new_component = new_score * new_weight;
+        self.weights += new_weight;
+
+        self.w_avg = (inflated_avg + new_component) / self.weights;
     }
+
+    // pub fn reweight_avg(&mut self, new_score: f64, new_weight: f64) {
+    //     assert!(
+    //         new_weight > 0.0,
+    //         "New weight of {new_weight} is zero or negative"
+    //     );
+    //
+    //     let new_weight_scaled = new_weight * self.scaling;
+    //     let mut inflated_avg = self.w_avg * self.weights;
+    //     self.weights += new_weight_scaled;
+    //     let mut new_component = new_score * new_weight_scaled;
+    //
+    //     if self.weights > self.max_weight {
+    //         let this_scaling = self.max_weight / self.weights;
+    //         self.weights = self.max_weight;
+    //
+    //         inflated_avg *= this_scaling;
+    //         new_component *= this_scaling;
+    //         self.scaling *= this_scaling;
+    //     }
+    //
+    //     self.w_avg = (inflated_avg + new_component) / self.weights;
+    //
+    //     println!("w avg{}", self.w_avg);
+    //     println!("weights {}", self.weights);
+    //     println!("scaling {}", self.scaling);
+    // }
 }

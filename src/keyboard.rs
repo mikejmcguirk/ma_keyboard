@@ -204,77 +204,218 @@ impl Keyboard {
         }
     }
 
-    pub fn mapped_swap(&mut self, swap_map: &HashMap<(Slot, Key), SwapScore>) {
+    // TODO: Right now the kb swap functions and the swap map build explicitly exclude anything
+    // outside the alpha area. This works until we want to start locking individual keys
+    // TODO: This function does not check valid key locations. Like above, this only works for now
+    pub fn mapped_swap(&mut self, rng: &mut SmallRng, swap_map: &HashMap<(Slot, Key), SwapScore>) {
         self.evaluated = false;
         self.last_score = self.score;
 
-        let mut wants_out: Option<(Slot, Key, f64)> = None;
-        for (slot, key) in &self.key_slots {
-            if slot.get_row() < 1 || slot.get_col() > 9 {
-                continue;
-            }
+        let mut min_out = f64::MAX;
+        let mut max_out = f64::MIN;
+        let out_raw: Vec<(Slot, Key, f64)> = self
+            .key_slots
+            .iter()
+            .filter(|(slot, _)| return slot.get_row() >= 1 && slot.get_col() <= 9)
+            .map(|(slot, key)| {
+                let score = swap_map[&(*slot, *key)].get_w_avg();
+                min_out = min_out.min(score);
+                max_out = max_out.max(score);
 
-            if let Some(score) = swap_map.get(&(*slot, *key)) {
-                if let Some(out) = wants_out {
-                    if out.2 > score.get_w_avg() {
-                        continue;
-                    }
+                return (*slot, *key, score);
+            })
+            .collect();
+
+        debug_assert!(!out_raw.is_empty(), "Should always be candidates out");
+
+        let mut total_normalized = 0.0;
+        let out_normalized: Vec<(Slot, Key, f64)> = out_raw
+            .iter()
+            .map(|c| {
+                if max_out > min_out {
+                    let raw_score = c.2;
+                    let normalized_score = (raw_score - min_out) / (max_out - min_out);
+                    total_normalized += normalized_score;
+
+                    return (c.0, c.1, normalized_score);
+                } else {
+                    return (c.0, c.1, 0.0);
                 }
+            })
+            .collect();
 
-                wants_out = Some((*slot, *key, score.get_w_avg()));
-            } else {
-                panic!("Nonexistent swap score for slot {:?} key {:?}", *slot, *key);
-            }
-        }
+        let range_out = max_out - min_out;
+        let mean_out = out_raw.iter().map(|c| return c.2).sum::<f64>() / out_raw.len() as f64;
+        let variance_out = out_raw
+            .iter()
+            .map(|c| return (c.2 - mean_out).powi(2))
+            .sum::<f64>()
+            / out_raw.len() as f64;
+        // .25 is highly spread out
+        let norm_variance_out = if range_out > 0.0 {
+            variance_out / (range_out * range_out)
+        } else {
+            0.0
+        };
 
-        let final_out = wants_out.expect("Nothing wanted out");
+        let temp_out = (norm_variance_out * 4.0).max(0.01);
 
-        let mut wants_in: Option<(Slot, Key, f64)> = None;
-        for (slot, key) in &self.key_slots {
-            if slot.get_row() < 1 || slot.get_col() > 9 {
-                continue;
-            }
+        let mut total_exp_out = 0.0;
+        let exp_out_candidates: Vec<(Slot, Key, f64)> = out_normalized
+            .iter()
+            .map(|c| {
+                let this_base_score = c.2;
+                let this_exp_score = (this_base_score / temp_out).exp();
+                total_exp_out += this_exp_score;
 
-            if *key == final_out.1 {
-                continue;
-            }
+                return (c.0, c.1, this_exp_score);
+            })
+            .collect();
 
-            let score_out = swap_map[&(*slot, self.key_slots[&final_out.0])].get_w_avg();
-            let score_in = swap_map[&(final_out.0, *key)].get_w_avg();
-            let total_score = score_out + score_in;
-            // println!("{}", total_score);
+        let exp_normalized_out: Vec<(Slot, Key, f64)> = exp_out_candidates
+            .into_iter()
+            .map(|(slot, key, exp_score)| return (slot, key, exp_score / total_exp_out))
+            .collect();
 
-            if let Some(innn) = wants_in {
-                if innn.2 > total_score {
-                    continue;
+        let mut checked_score_out: f64 = 0.0;
+        let r_out = rng.random_range(0.0..=total_exp_out);
+        let out_selection: (Slot, Key, f64) = {
+            *exp_normalized_out
+                .iter()
+                .find(|c| {
+                    checked_score_out += c.2;
+                    return checked_score_out > r_out;
+                })
+                .unwrap_or_else(|| {
+                    return exp_normalized_out
+                        .last()
+                        .expect("Normalized cancidates should not be empty");
+                })
+        };
+
+        let mut min_in = f64::MAX;
+        let mut max_in = f64::MIN;
+        let in_raw: Vec<(Slot, Key, f64)> = self
+            .key_slots
+            .iter()
+            .filter(|(slot_in, key_in)| {
+                let key_out = out_selection.1;
+                return (slot_in.get_row() >= 1 && slot_in.get_col() <= 9) && **key_in != key_out;
+            })
+            .map(|(slot_in, key_in)| {
+                let slot_out = out_selection.0;
+                let key_out = out_selection.1;
+                let score_out = swap_map[&(*slot_in, key_out)].get_w_avg();
+                let score_in = swap_map[&(slot_out, *key_in)].get_w_avg();
+                let total_score = score_out + score_in;
+
+                min_in = min_in.min(total_score);
+                max_in = max_in.max(total_score);
+
+                return (*slot_in, *key_in, total_score);
+            })
+            .collect();
+
+        let in_normalized: Vec<(Slot, Key, f64)> = in_raw
+            .iter()
+            .map(|c| {
+                if max_in > min_in {
+                    let raw_score = c.2;
+                    let normalized_score = (raw_score - min_in) / (max_in - min_in);
+                    // total_normalized += normalized_score;
+
+                    return (c.0, c.1, normalized_score);
+                } else {
+                    return (c.0, c.1, 0.0);
                 }
-            }
+            })
+            .collect();
 
-            wants_in = Some((*slot, *key, total_score));
-        }
+        let range_in = max_in - min_in;
+        let mean_in = in_raw.iter().map(|c| return c.2).sum::<f64>() / in_raw.len() as f64;
+        let variance_in = in_raw
+            .iter()
+            .map(|c| return (c.2 - mean_in).powi(2))
+            .sum::<f64>()
+            / in_raw.len() as f64;
+        // .25 is highly spread out
+        let norm_variance_in = if range_in > 0.0 {
+            variance_in / (range_in * range_in)
+        } else {
+            0.0
+        };
+        // let temp_in = 1.0 - (3.96 * norm_variance_in);
+        let temp_in = (norm_variance_in * 4.0).max(0.01);
+        // println!("norm variance {}, temp {}", norm_variance_in, temp_in);
 
-        let final_in = wants_in.expect("Nothing wanted in");
+        let mut total_exp_in = 0.0;
+        let exp_in_candidates: Vec<(Slot, Key, f64)> = in_normalized
+            .iter()
+            .map(|c| {
+                let this_base_score = c.2;
+                let this_exp_score = (this_base_score / temp_in).exp();
+                // println!("base score {this_base_score}");
+                // println!("temp {temp}");
+                // println!("base / temp {}", (this_base_score / temp));
+                // println!("this exp {this_exp_score}");
+                total_exp_in += this_exp_score;
 
-        self.last_swap_a = (final_out.0, final_out.1);
-        self.last_swap_b = (final_in.0, final_in.1);
+                return (c.0, c.1, this_exp_score);
+            })
+            .collect();
 
-        self.key_slots.insert(final_out.0, final_in.1);
-        self.slot_ascii[usize::from(final_in.1.get_base())] = Some(final_out.0);
-        self.slot_ascii[usize::from(final_in.1.get_shift())] = Some(final_out.0);
+        // println!("total exp in {total_exp_in}");
+        let exp_normalized_in: Vec<(Slot, Key, f64)> = exp_in_candidates
+            .into_iter()
+            .map(|(slot, key, exp_score)| return (slot, key, exp_score / total_exp_in))
+            .collect();
+        // println!("{:?}", exp_normalized_in);
 
-        self.key_slots.insert(final_in.0, final_out.1);
-        self.slot_ascii[usize::from(final_out.1.get_base())] = Some(final_in.0);
-        self.slot_ascii[usize::from(final_out.1.get_shift())] = Some(final_in.0);
+        let mut checked_score_in: f64 = 0.0;
+        let r_in = rng.random_range(0.0..=total_exp_in);
+        let in_selection: (Slot, Key, f64) = {
+            *exp_normalized_in
+                .iter()
+                .find(|c| {
+                    checked_score_in += c.2;
+                    return checked_score_out > r_in;
+                })
+                .unwrap_or_else(|| {
+                    return exp_normalized_in
+                        .last()
+                        .expect("Normalized cancidates should not be empty");
+                })
+        };
+
+        let out_slot = out_selection.0;
+        let out_key = out_selection.1;
+        let in_slot = in_selection.0;
+        let in_key = in_selection.1;
+
+        self.last_swap_a = (out_slot, out_key);
+        self.last_swap_b = (in_slot, in_key);
+
+        self.key_slots.insert(out_slot, in_key);
+        self.slot_ascii[usize::from(in_key.get_base())] = Some(out_slot);
+        self.slot_ascii[usize::from(in_key.get_shift())] = Some(out_slot);
+
+        self.key_slots.insert(in_slot, out_key);
+        self.slot_ascii[usize::from(out_key.get_base())] = Some(in_slot);
+        self.slot_ascii[usize::from(out_key.get_shift())] = Some(in_slot);
     }
 
-    pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>) {
+    pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>, iter: usize) {
+        let last_slot_a = self.last_swap_a.0;
+        let last_key_a = self.last_swap_a.1;
+        let last_slot_b = self.last_swap_b.0;
+        let last_key_b = self.last_swap_b.1;
+
+        let mut score_a = swap_map[&(last_slot_a, last_key_a)];
+        let mut score_b = swap_map[&(last_slot_b, last_key_b)];
+
         let score_diff = self.score - self.last_score;
-
-        let mut score_a = swap_map[&(self.last_swap_a.0, self.last_swap_a.1)];
-        let mut score_b = swap_map[&(self.last_swap_b.0, self.last_swap_b.1)];
-
-        score_a.add_w_avg(score_diff);
-        score_b.add_w_avg(score_diff);
+        score_a.reweight_avg(score_diff, iter as f64);
+        score_b.reweight_avg(score_diff, iter as f64);
 
         swap_map.insert((self.last_swap_a.0, self.last_swap_a.1), score_a);
         swap_map.insert((self.last_swap_b.0, self.last_swap_b.1), score_b);

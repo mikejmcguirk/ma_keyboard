@@ -139,6 +139,8 @@ impl Keyboard {
         };
     }
 
+    // TODO: The valid shuffle logic and the logic to shuffle the keys around is also used in the
+    // mapped swap function. Should be broken out and shared
     // FUTURE: Right now, shuffling is restricted using constants. If we start adding unmovable
     // keys to the alpha area, perhaps we break key_slots into movable and unmovable keys. This
     // will speed up shuffling, but potentially slow down the ASCII lookup since two BTrees need to
@@ -216,7 +218,18 @@ impl Keyboard {
         let out_raw: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
-            .filter(|(slot, _)| return slot.get_row() >= 1 && slot.get_col() <= 9)
+            .filter(|(slot, key)| {
+                if slot.get_row() < 1 || slot.get_col() > 9 {
+                    return false;
+                }
+
+                let these_valid_slots = &self.valid_slots[key];
+                if these_valid_slots.len() == 1 {
+                    return false;
+                }
+
+                return true;
+            })
             .map(|(slot, key)| {
                 let score = swap_map[&(*slot, *key)].get_w_avg();
                 min_out = min_out.min(score);
@@ -307,8 +320,31 @@ impl Keyboard {
             .key_slots
             .iter()
             .filter(|(slot_in, key_in)| {
+                if slot_in.get_row() < 1 || slot_in.get_col() > 9 {
+                    return false;
+                }
+
                 let key_out = out_selection.1;
-                return (slot_in.get_row() >= 1 && slot_in.get_col() <= 9) && **key_in != key_out;
+                if **key_in == key_out {
+                    return false;
+                }
+
+                let valid_slots_in = &self.valid_slots[key_in];
+                if valid_slots_in.len() == 1 {
+                    return false;
+                }
+
+                let slot_out = out_selection.0;
+                if !valid_slots_in.contains(&slot_out) {
+                    return false;
+                }
+
+                let valid_slots_out = &self.valid_slots[&key_out];
+                if !valid_slots_out.contains(slot_in) {
+                    return false;
+                }
+
+                return true;
             })
             .map(|(slot_in, key_in)| {
                 let slot_out = out_selection.0;

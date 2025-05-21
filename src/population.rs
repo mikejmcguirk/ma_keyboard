@@ -1,7 +1,6 @@
-use {
-    core::cmp,
-    std::{collections::HashMap, fs::File},
-};
+extern crate alloc;
+
+use {alloc::collections::BTreeMap, core::cmp, std::fs::File};
 
 use {
     anyhow::{Result, anyhow},
@@ -30,7 +29,7 @@ pub struct Population {
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
-    swap_map: HashMap<(Slot, Key), SwapScore>,
+    swap_table: SwapTable,
     generation: usize,
     top_score: f64,
 }
@@ -97,7 +96,7 @@ impl Population {
             population: gen_pop,
             climber_cnt,
             climbers,
-            swap_map: build_swap_map(),
+            swap_table: SwapTable::new(),
             generation: 0,
             top_score: 0.0,
         });
@@ -246,7 +245,7 @@ impl Population {
                 &self.climbers[i],
                 corpus,
                 iter,
-                &mut self.swap_map,
+                &mut self.swap_table,
             )?;
 
             if self.climbers[0].get_score() > self.top_score {
@@ -310,7 +309,7 @@ pub fn hill_climb(
     keyboard: &Keyboard,
     corpus: &[String],
     iter: usize,
-    swap_map: &mut HashMap<(Slot, Key), SwapScore>,
+    swap_table: &mut SwapTable,
 ) -> Result<Keyboard> {
     const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
@@ -333,9 +332,9 @@ pub fn hill_climb(
 
         let mut climb_kb: Keyboard = kb.clone();
         // climb_kb.shuffle(rng, 1);
-        climb_kb.mapped_swap(rng, swap_map);
+        climb_kb.table_swap(rng, swap_table);
         climb_kb.eval(corpus);
-        climb_kb.check_swap(swap_map, iter);
+        climb_kb.check_table_swap(swap_table, iter);
         let climb_kb_score = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;
@@ -402,25 +401,54 @@ fn get_weight(delta: f64) -> f64 {
     // return 1.0 + K * delta.powf(0.0001);
 }
 
-fn build_swap_map() -> HashMap<(Slot, Key), SwapScore> {
-    swappable_arr!();
+pub struct SwapTable {
+    swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>>,
+}
 
-    let swap_map: HashMap<(Slot, Key), SwapScore> = (1..=3)
-        .flat_map(|i| return (0..=9).map(move |j| return (i, j)))
-        .flat_map(|(i, j)| {
-            return SWAPPABLE_KEYS.iter().map(move |&key| {
-                return (
-                    (Slot::from_tuple((i, j)), Key::from_tuple(key)),
-                    SwapScore::new(),
-                );
-            });
-        })
-        .collect();
+impl SwapTable {
+    // TODO: Obvious issue here is we have the number row in the swap table even though we don't
+    // want to use it. You could only build three rows in the table and subtract from the value of
+    // the slot in get_score, but that feels like a hack
+    pub fn new() -> Self {
+        swappable_arr!();
 
-    // println!("{:?}", swap_map);
-    // panic!();
+        let mut swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>> = Vec::new();
 
-    return swap_map;
+        for _ in 0..4 {
+            let mut row: Vec<BTreeMap<Key, SwapScore>> = Vec::new();
+            for _ in 0..10 {
+                let mut swap_options: BTreeMap<Key, SwapScore> = BTreeMap::new();
+                for key in &SWAPPABLE_KEYS {
+                    swap_options.insert(Key::from_tuple(*key), SwapScore::new());
+                }
+
+                row.push(swap_options);
+            }
+
+            swap_table.push(row);
+        }
+
+        return Self { swap_table };
+    }
+
+    // This fn is often used in iterators where a reference is provided. Passing by ref here to
+    // avoid the de-referencing step
+    #[expect(clippy::trivially_copy_pass_by_ref)]
+    pub fn get_score(&self, slot: &Slot, key: &Key) -> f64 {
+        let row = slot.get_row();
+        let col = slot.get_col();
+
+        return self.swap_table[row][col][key].get_w_avg();
+    }
+
+    pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64, iter: usize) {
+        let row = slot.get_row();
+        let col = slot.get_col();
+        let mut score = self.swap_table[row][col][&key];
+
+        score.reweight_avg(new_score, iter as f64);
+        self.swap_table[row][col].insert(key, score);
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

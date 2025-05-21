@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use {alloc::collections::BTreeMap, std::collections::HashMap};
+use alloc::collections::BTreeMap;
 
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
@@ -10,7 +10,7 @@ use crate::{
         check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
         global_adjustments, place_keys, select_swap,
     },
-    population::SwapScore,
+    population::SwapTable,
 };
 
 kb_consts!();
@@ -213,7 +213,7 @@ impl Keyboard {
     // later (>500) generations. Build a way to log the variance of the swap map every ~20
     // iterations so we can see how the possibilities change over time. Would help with putting
     // together a better temperature calc
-    pub fn mapped_swap(&mut self, rng: &mut SmallRng, swap_map: &HashMap<(Slot, Key), SwapScore>) {
+    pub fn table_swap(&mut self, rng: &mut SmallRng, swap_table: &SwapTable) {
         self.evaluated = false;
         self.last_score = self.score; // So we can see how the swap changed the score
 
@@ -230,13 +230,13 @@ impl Keyboard {
                 return true;
             })
             .map(|(slot, key)| {
-                let score = swap_map[&(*slot, *key)].get_w_avg();
+                let score = swap_table.get_score(slot, key);
                 return (*slot, *key, score);
             })
             .collect();
 
         let select_a = select_swap(rng, &mut base_a);
-        let select_a_score = swap_map[&(select_a.0, select_a.1)].get_w_avg();
+        let select_a_score = swap_table.get_score(&select_a.0, &select_a.1);
 
         let mut base_b: Vec<(Slot, Key, f64)> = self
             .key_slots
@@ -258,12 +258,12 @@ impl Keyboard {
                 return true;
             })
             .map(|(slot_b, key_b)| {
-                let candidate_score_b = swap_map[&(*slot_b, *key_b)].get_w_avg();
+                let candidate_score_b = swap_table.get_score(slot_b, key_b);
 
                 let slot_a = select_a.0;
                 let key_a = select_a.1;
-                let new_select_score_a = swap_map[&(slot_a, *key_b)].get_w_avg();
-                let new_candidate_score_b = swap_map[&(*slot_b, key_a)].get_w_avg();
+                let new_select_score_a = swap_table.get_score(&slot_a, key_b);
+                let new_candidate_score_b = swap_table.get_score(slot_b, &key_a);
 
                 let total_cur_score = select_a_score + candidate_score_b;
                 let total_new_score = new_select_score_a + new_candidate_score_b;
@@ -308,21 +308,15 @@ impl Keyboard {
     // reference to the swap map, which I think gets into lifetimes. Half of the logic is already
     // done for this though because eval terminates early if there hasn't been a layout change
     // since the last run
-    pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>, iter: usize) {
+    pub fn check_table_swap(&self, swap_table: &mut SwapTable, iter: usize) {
         let last_slot_a = self.last_swap_a.0;
         let last_key_a = self.last_swap_a.1;
         let last_slot_b = self.last_swap_b.0;
         let last_key_b = self.last_swap_b.1;
-
-        let mut score_a = swap_map[&(last_slot_a, last_key_a)];
-        let mut score_b = swap_map[&(last_slot_b, last_key_b)];
-
         let score_diff = self.score - self.last_score;
-        score_a.reweight_avg(score_diff, iter as f64);
-        score_b.reweight_avg(score_diff, iter as f64);
 
-        swap_map.insert((last_slot_a, last_key_a), score_a);
-        swap_map.insert((last_slot_b, last_key_b), score_b);
+        swap_table.update_score(last_slot_a, last_key_a, score_diff, iter);
+        swap_table.update_score(last_slot_b, last_key_b, score_diff, iter);
     }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
@@ -443,9 +437,9 @@ impl Keyboard {
         return self.id;
     }
 
-    pub fn is_elite(&self) -> bool {
-        return self.is_elite;
-    }
+    // pub fn is_elite(&self) -> bool {
+    //     return self.is_elite;
+    // }
 
     pub fn set_elite(&mut self) {
         self.is_elite = true;

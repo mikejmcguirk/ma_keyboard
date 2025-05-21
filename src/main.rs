@@ -40,7 +40,7 @@
 #![allow(clippy::create_dir)]
 #![allow(clippy::default_numeric_fallback)]
 #![allow(clippy::double_must_use)]
-#![allow(clippy::excessive_precision)] // Creates problems when using literals
+#![allow(clippy::excessive_precision)] // Don't need nags when pasting literals
 #![allow(clippy::explicit_iter_loop)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::identity_op)]

@@ -7,8 +7,8 @@ use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
-        check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
-        global_adjustments, place_keys,
+        apply_minmax, apply_softmax, check_col, check_key_no_hist, compare_slots, get_temp,
+        get_valid_key_locs_sorted, get_variance, global_adjustments, place_keys, select_swap,
     },
     population::SwapScore,
 };
@@ -160,71 +160,74 @@ impl Keyboard {
         self.evaluated = false;
 
         for _ in 0..cnt {
-            let this_row = rng.random_range(TOP_ROW..=BOT_ROW);
-            let this_col = rng.random_range(L_PINKY..=R_PINKY);
-            let this_slot = Slot::from_tuple((this_row, this_col));
-            let this_key = self.key_slots[&this_slot];
+            let row_a = rng.random_range(TOP_ROW..=BOT_ROW);
+            let col_a = rng.random_range(L_PINKY..=R_PINKY);
+            let slot_a = Slot::from_tuple((row_a, col_a));
+            let key_a = self.key_slots[&slot_a];
 
-            if let Some(vec) = self.valid_slots.get_mut(&this_key) {
+            if let Some(vec) = self.valid_slots.get_mut(&key_a) {
                 vec.shuffle(rng);
                 if vec.len() == 1 {
                     continue;
                 }
             } else {
-                panic!("Valid slots not found for key {:?}", this_key);
+                panic!("Valid slots not found for key {:?}", key_a);
             }
 
-            let these_valid_slots = &self.valid_slots[&this_key];
-            for slot in these_valid_slots {
-                let that_row = slot.get_row();
-                let that_col = slot.get_col();
-                let that_slot = Slot::from_tuple((that_row, that_col));
-                let that_key = self.key_slots[&that_slot];
-                if this_key == that_key
-                    || !self.valid_slots[&that_key].contains(&this_slot)
-                    || self.valid_slots[&that_key].len() == 1
+            for slot in &self.valid_slots[&key_a] {
+                let row_b = slot.get_row();
+                let col_b = slot.get_col();
+                let slot_b = Slot::from_tuple((row_b, col_b));
+                let key_b = self.key_slots[&slot_b];
+                if key_a == key_b
+                    || !self.valid_slots[&key_b].contains(&slot_a)
+                    || self.valid_slots[&key_b].len() == 1
                 {
                     continue;
                 }
 
-                self.key_slots.insert(this_slot, that_key);
-                self.slot_ascii[usize::from(that_key.get_base())] = Some(this_slot);
-                self.slot_ascii[usize::from(that_key.get_shift())] = Some(this_slot);
-
-                self.key_slots.insert(that_slot, this_key);
-                self.slot_ascii[usize::from(this_key.get_base())] = Some(that_slot);
-                self.slot_ascii[usize::from(this_key.get_shift())] = Some(that_slot);
+                self.swap_keys(slot_a, key_a, slot_b, key_b);
 
                 break;
             }
 
             debug_assert_ne!(
-                self.key_slots[&this_slot], this_key,
+                self.key_slots[&slot_a], key_a,
                 "ERROR: Key {:?} at {},{} not changed",
-                this_key, this_row, this_col
+                key_a, row_a, col_a
             );
         }
     }
 
+    // TODO: Do I need to calculate the temp_in differently from temp out? *Shouldn't* be necessary
+    // but worth spot checking the outputs
+    // TODO: I think to refactor this what you do is you use individual functions to get each of
+    // the tuples to swap, then do the swap. The individual functions can have common operations
+    // (like getting temperature) broken out and shared in common with normal shuffling (including
+    // the shuffle itself). This leaves us with two heap allocations per mapped_swap. If we find in
+    // profiling this is a performance issue, we can look into holding the intermediate Vec as part
+    // of the struct and potentially using unsafe code to edit it
     // TODO: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
     // TODO: This function does not check valid key locations. Like above, this only works for now
+    // TODO: The temperature calculations are based on me spot checking the variance and exp
+    // probabilities in the console. But this doesn't account for how things change as you get into
+    // later (>500) generations. Build a way to log the variance of the swap map every ~20
+    // iterations so we can see how the possibilities change over time. Would help with putting
+    // together a better temperature calc
     pub fn mapped_swap(&mut self, rng: &mut SmallRng, swap_map: &HashMap<(Slot, Key), SwapScore>) {
         self.evaluated = false;
-        self.last_score = self.score;
+        self.last_score = self.score; // So we can see how the swap changed the score
 
-        let mut min_out = f64::MAX;
-        let mut max_out = f64::MIN;
-        let out_raw: Vec<(Slot, Key, f64)> = self
+        let mut base_a: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
             .filter(|(slot, key)| {
-                if slot.get_row() < 1 || slot.get_col() > 9 {
+                if slot.get_row() < TOP_ROW || slot.get_col() > R_PINKY {
                     return false;
                 }
 
-                let these_valid_slots = &self.valid_slots[key];
-                if these_valid_slots.len() == 1 {
+                if self.valid_slots[key].len() == 1 {
                     return false;
                 }
 
@@ -232,241 +235,104 @@ impl Keyboard {
             })
             .map(|(slot, key)| {
                 let score = swap_map[&(*slot, *key)].get_w_avg();
-                min_out = min_out.min(score);
-                max_out = max_out.max(score);
-
                 return (*slot, *key, score);
             })
             .collect();
 
-        debug_assert!(!out_raw.is_empty(), "Should always be candidates out");
+        debug_assert!(!base_a.is_empty(), "Should always be candidates out");
+        apply_minmax(&mut base_a);
+        let var_a = get_variance(&mut base_a);
+        let temp_a = get_temp(var_a);
+        apply_softmax(&mut base_a, temp_a);
+        let select_a = select_swap(rng, &base_a);
 
-        let mut total_normalized = 0.0;
-        let out_normalized: Vec<(Slot, Key, f64)> = out_raw
-            .iter()
-            .map(|c| {
-                if max_out > min_out {
-                    let raw_score = c.2;
-                    let normalized_score = (raw_score - min_out) / (max_out - min_out);
-                    total_normalized += normalized_score;
+        let select_a_score = swap_map[&(select_a.0, select_a.1)].get_w_avg();
 
-                    return (c.0, c.1, normalized_score);
-                } else {
-                    return (c.0, c.1, 0.0);
-                }
-            })
-            .collect();
-
-        let range_out = max_out - min_out;
-        let mean_out = out_raw.iter().map(|c| return c.2).sum::<f64>() / out_raw.len() as f64;
-        let variance_out = out_raw
-            .iter()
-            .map(|c| return (c.2 - mean_out).powi(2))
-            .sum::<f64>()
-            / out_raw.len() as f64;
-        // .25 is highly spread out
-        let norm_variance_out = if range_out > 0.0 {
-            variance_out / (range_out * range_out)
-        } else {
-            0.0
-        };
-
-        // Low temperature, but looking at the Softmax probability distributions, this is what it
-        // seems to take to get it to not chose keys essentially at random
-        // let temp_out = (norm_variance_out * 2.0).max(0.01);
-        // let temp_out = (norm_variance_out * 4.0).max(0.01);
-        // let temp_out = 1.0 - (3.96 * norm_variance_out);
-        // let temp_out = 0.5 - (1.96 * norm_variance_out);
-        let temp_out = 0.26 - norm_variance_out;
-
-        let mut total_exp_out = 0.0;
-        let exp_out_candidates: Vec<(Slot, Key, f64)> = out_normalized
-            .iter()
-            .map(|c| {
-                let this_base_score = c.2;
-                let this_exp_score = (this_base_score / temp_out).exp();
-                total_exp_out += this_exp_score;
-
-                return (c.0, c.1, this_exp_score);
-            })
-            .collect();
-
-        let exp_normalized_out: Vec<(Slot, Key, f64)> = exp_out_candidates
-            .into_iter()
-            .map(|(slot, key, exp_score)| return (slot, key, exp_score / total_exp_out))
-            .collect();
-
-        let mut checked_score_out: f64 = 0.0;
-        let r_out = rng.random_range(0.0..=1.0);
-        // println!("r_out {r_out}");
-        let out_selection: (Slot, Key, f64) = {
-            *exp_normalized_out
-                .iter()
-                .find(|c| {
-                    checked_score_out += c.2;
-                    // println!("checked score out {checked_score_out}, r_out {r_out}");
-                    return checked_score_out > r_out;
-                })
-                .unwrap_or_else(|| {
-                    return exp_normalized_out
-                        .last()
-                        .expect("Normalized cancidates should not be empty");
-                })
-        };
-
-        let cur_out_select_score = swap_map[&(out_selection.0, out_selection.1)].get_w_avg();
-
-        let mut min_in = f64::MAX;
-        let mut max_in = f64::MIN;
-        let in_raw: Vec<(Slot, Key, f64)> = self
+        let mut base_b: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
-            .filter(|(slot_in, key_in)| {
-                if slot_in.get_row() < 1 || slot_in.get_col() > 9 {
+            .filter(|(slot_b, key_b)| {
+                if slot_b.get_row() < 1 || slot_b.get_col() > 9 {
                     return false;
                 }
 
-                let key_out = out_selection.1;
-                if **key_in == key_out {
+                let key_a = select_a.1;
+                if **key_b == key_a {
                     return false;
                 }
 
-                let valid_slots_in = &self.valid_slots[key_in];
-                if valid_slots_in.len() == 1 {
+                let valid_slots_b = &self.valid_slots[key_b];
+                if valid_slots_b.len() == 1 {
                     return false;
                 }
 
-                let slot_out = out_selection.0;
-                if !valid_slots_in.contains(&slot_out) {
+                let slot_a = select_a.0;
+                if !valid_slots_b.contains(&slot_a) {
                     return false;
                 }
 
-                let valid_slots_out = &self.valid_slots[&key_out];
-                if !valid_slots_out.contains(slot_in) {
+                let valid_slots_a = &self.valid_slots[&key_a];
+                if !valid_slots_a.contains(slot_b) {
                     return false;
                 }
 
                 return true;
             })
-            .map(|(slot_in, key_in)| {
-                let cur_in_candidate_score = swap_map[&(*slot_in, *key_in)].get_w_avg();
+            .map(|(slot_b, key_b)| {
+                let candidate_score_b = swap_map[&(*slot_b, *key_b)].get_w_avg();
 
-                let slot_out = out_selection.0;
-                let key_out = out_selection.1;
-                let new_out_select_score = swap_map[&(slot_out, *key_in)].get_w_avg();
-                let new_in_candidate_score = swap_map[&(*slot_in, key_out)].get_w_avg();
+                let slot_a = select_a.0;
+                let key_a = select_a.1;
+                let new_select_score_a = swap_map[&(slot_a, *key_b)].get_w_avg();
+                let new_candidate_score_b = swap_map[&(*slot_b, key_a)].get_w_avg();
 
-                let total_cur_score = cur_out_select_score + cur_in_candidate_score;
-                let total_new_score = new_out_select_score + new_in_candidate_score;
+                let total_cur_score = select_a_score + candidate_score_b;
+                let total_new_score = new_select_score_a + new_candidate_score_b;
 
                 // A positive improvement is considered a lower new score because higher scores in
                 // the swap map for particular slot/key pairs mean the key wants to leave the slot
                 let improvement = total_cur_score - total_new_score;
-                min_in = min_in.min(improvement);
-                max_in = max_in.max(improvement);
 
-                return (*slot_in, *key_in, improvement);
+                return (*slot_b, *key_b, improvement);
             })
             .collect();
 
-        let in_normalized: Vec<(Slot, Key, f64)> = in_raw
-            .iter()
-            .map(|c| {
-                if max_in > min_in {
-                    let raw_score = c.2;
-                    let normalized_score = (raw_score - min_in) / (max_in - min_in);
-                    // total_normalized += normalized_score;
+        apply_minmax(&mut base_b);
+        let var_b = get_variance(&mut base_b);
+        let temp_b = get_temp(var_b);
+        apply_softmax(&mut base_b, temp_b);
+        let select_b = select_swap(rng, &base_b);
 
-                    return (c.0, c.1, normalized_score);
-                } else {
-                    return (c.0, c.1, 0.0);
-                }
-            })
-            .collect();
+        let slot_a = select_a.0;
+        let key_a = select_a.1;
+        let slot_b = select_b.0;
+        let key_b = select_b.1;
 
-        let range_in = max_in - min_in;
-        let mean_in = in_raw.iter().map(|c| return c.2).sum::<f64>() / in_raw.len() as f64;
-        let variance_in = in_raw
-            .iter()
-            .map(|c| return (c.2 - mean_in).powi(2))
-            .sum::<f64>()
-            / in_raw.len() as f64;
-        // .25 is highly spread out
-        let norm_variance_in = if range_in > 0.0 {
-            variance_in / (range_in * range_in)
-        } else {
-            0.0
-        };
-        let temp_in = 0.26 - norm_variance_in;
-        // let temp_in = (norm_variance_in * 2.0).max(0.01);
-        // let temp_in = (norm_variance_in * 4.0).max(0.01);
-        // let temp_in = 1.0 - (3.96 * norm_variance_in);
-        // let temp_in = 0.5 - (1.96 * norm_variance_in);
-        // println!(
-        //     "norm variance {}, temp {}, out slot {:?}",
-        //     norm_variance_in, temp_in, out_selection.0
-        // );
+        self.swap_keys(slot_a, key_a, slot_b, key_b);
+    }
 
-        let mut total_exp_in = 0.0;
-        let exp_in_candidates: Vec<(Slot, Key, f64)> = in_normalized
-            .iter()
-            .map(|c| {
-                let this_base_score = c.2;
-                let this_exp_score = (this_base_score / temp_in).exp();
-                // println!("base score {this_base_score}");
-                // println!("temp {temp}");
-                // println!("base / temp {}", (this_base_score / temp));
-                // println!("this exp {this_exp_score}");
-                total_exp_in += this_exp_score;
+    fn swap_keys(&mut self, slot_a: Slot, key_a: Key, slot_b: Slot, key_b: Key) {
+        self.last_swap_a = (slot_a, key_a);
+        self.last_swap_b = (slot_b, key_b);
 
-                return (c.0, c.1, this_exp_score);
-            })
-            .collect();
+        self.key_slots.insert(slot_a, key_b);
+        self.slot_ascii[usize::from(key_b.get_base())] = Some(slot_a);
+        self.slot_ascii[usize::from(key_b.get_shift())] = Some(slot_a);
 
-        // println!("total exp in {total_exp_in}");
-        let exp_normalized_in: Vec<(Slot, Key, f64)> = exp_in_candidates
-            .into_iter()
-            .map(|(slot, key, exp_score)| return (slot, key, exp_score / total_exp_in))
-            .collect();
-        // println!("{:?}", exp_normalized_in);
-
-        let mut checked_score_in: f64 = 0.0;
-        let r_in = rng.random_range(0.0..=1.0);
-        let in_selection: (Slot, Key, f64) = {
-            *exp_normalized_in
-                .iter()
-                .find(|c| {
-                    checked_score_in += c.2;
-                    return checked_score_out > r_in;
-                })
-                .unwrap_or_else(|| {
-                    return exp_normalized_in
-                        .last()
-                        .expect("Normalized cancidates should not be empty");
-                })
-        };
-
-        let out_slot = out_selection.0;
-        let out_key = out_selection.1;
-        let in_slot = in_selection.0;
-        let in_key = in_selection.1;
-
-        self.last_swap_a = (out_slot, out_key);
-        self.last_swap_b = (in_slot, in_key);
-
-        self.key_slots.insert(out_slot, in_key);
-        self.slot_ascii[usize::from(in_key.get_base())] = Some(out_slot);
-        self.slot_ascii[usize::from(in_key.get_shift())] = Some(out_slot);
-
-        self.key_slots.insert(in_slot, out_key);
-        self.slot_ascii[usize::from(out_key.get_base())] = Some(in_slot);
-        self.slot_ascii[usize::from(out_key.get_shift())] = Some(in_slot);
+        self.key_slots.insert(slot_b, key_a);
+        self.slot_ascii[usize::from(key_a.get_base())] = Some(slot_b);
+        self.slot_ascii[usize::from(key_a.get_shift())] = Some(slot_b);
     }
 
     // For any slot/key pair in the swap map, a higher weighted average means improvement has been
     // seen when the key leaves the slot. (We can more reliably know which key/slot positions are
     // bad than which ones are good). Therefore, when scoring a swap, the update is made on the
     // key's starting point rather than where it ended up
+    // FUTURE: It would be cool if this were called automatically after evaluating. But that would
+    // require either passing the swap map into the eval function or making the keyboard store a
+    // reference to the swap map, which I think gets into lifetimes. Half of the logic is already
+    // done for this though because eval terminates early if there hasn't been a layout change
+    // since the last run
     pub fn check_swap(&self, swap_map: &mut HashMap<(Slot, Key), SwapScore>, iter: usize) {
         let last_slot_a = self.last_swap_a.0;
         let last_key_a = self.last_swap_a.1;

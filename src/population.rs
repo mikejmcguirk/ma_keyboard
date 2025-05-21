@@ -10,10 +10,12 @@ use {
 
 use crate::{
     custom_err::CorpusErr,
-    display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
+    // display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
+    display::{update_avg, update_eval, update_kb},
     kb_helpers::{apply_minmax, apply_softmax, get_temp, get_variance},
     keyboard::{Key, Keyboard, Slot},
-    swappable_arr, swappable_keys,
+    swappable_arr,
+    swappable_keys,
     utils::write_err,
 };
 
@@ -37,7 +39,6 @@ pub struct Population {
 }
 
 impl Population {
-    // TODO: Long function
     pub fn create(size: Option<usize>, log_handle: &mut File) -> Result<Self> {
         const DEFAULT_POPULATION: usize = 100;
         const DEFAULT_CLIMB_CNT: usize = 20;
@@ -104,7 +105,7 @@ impl Population {
         });
     }
 
-    pub fn mutate_climbers(&mut self, amts: [usize; 4]) {
+    pub fn mutate_climbers(&mut self) {
         self.generation += 1;
 
         debug_assert!(
@@ -115,10 +116,6 @@ impl Population {
         );
 
         self.population.clear();
-        let tot_score = self.climbers.iter().fold(0.0, |acc, c| {
-            self.population.push(c.clone());
-            return acc + c.get_score();
-        });
 
         let to_add = self.pop_size - self.climbers.len();
         for _ in 0..to_add {
@@ -129,28 +126,6 @@ impl Population {
                 self.id.get(),
             );
             self.population.push(new_kb);
-            // let parent = {
-            //     let r = self.rng.random_range(0.0_f64..=tot_score);
-            //     let mut checked_score: f64 = 0.0;
-            //
-            //     self.climbers
-            //         .iter()
-            //         .find(|climber| {
-            //             checked_score += climber.get_score();
-            //             return checked_score > r;
-            //         })
-            //         .unwrap_or_else(|| {
-            //             return self.climbers.last().expect("Climbers should not be empty");
-            //         })
-            // };
-            //
-            // let this_amt = *amts
-            //     .choose(&mut self.rng)
-            //     .expect("Amts should not be empty");
-            // let mut new_kb = Keyboard::mutate_from(parent, self.generation, self.id.get());
-            // new_kb.shuffle(&mut self.rng, this_amt);
-            //
-            // self.population.push(new_kb);
         }
 
         assert_eq!(
@@ -178,7 +153,6 @@ impl Population {
         return Ok(());
     }
 
-    // TODO: Long function
     pub fn setup_climbers(&mut self) -> Result<()> {
         self.climbers.clear();
         self.population.sort_by(|a, b| {
@@ -233,12 +207,12 @@ impl Population {
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         let mut climber_score = 0.0;
         for i in 0..self.climbers.len() {
-            let climb_info: String = format!(
-                "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
-                i.checked_add(1).expect("Too many climbers in climb_kbs"),
-                self.climbers[i].get_generation(),
-                self.climbers[i].get_id()
-            );
+            // let climb_info: String = format!(
+            //     "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
+            //     i.checked_add(1).expect("Too many climbers in climb_kbs"),
+            //     self.climbers[i].get_generation(),
+            //     self.climbers[i].get_id()
+            // );
             // update_climb_info(&climb_info)?;
 
             self.climbers[i] = hill_climb(
@@ -257,8 +231,6 @@ impl Population {
             climber_score += self.climbers[i].get_score();
         }
 
-        // self.swap_table.print_home();
-        // climbers.len() should never be big enough for this to fail
         let avg_climber_score = climber_score / self.climbers.len() as f64;
         update_avg(avg_climber_score)?;
 
@@ -465,39 +437,6 @@ impl SwapTable {
         score.reweight_avg(new_score);
         self.swap_table[row][col].insert(key, score);
     }
-
-    #[expect(clippy::explicit_counter_loop)] // false positive
-    pub fn print_home(&self) {
-        let mut col_num = 0;
-        for (i, col) in self.swap_table[2].iter().enumerate() {
-            let mut to_print_raw = "".to_string();
-            let mut to_softmax: Vec<(Slot, Key, f64)> = Vec::new();
-            for item in col {
-                let key = char::from(item.0.get_base());
-                let score = item.1.get_w_avg();
-                to_print_raw = format!("{} | {}, {:.0}", to_print_raw, key, score);
-
-                let slot = Slot::from_tuple((2, i));
-                to_softmax.push((slot, *item.0, score));
-            }
-            apply_minmax(&mut to_softmax);
-            let var = get_variance(&to_softmax);
-            let temp = get_temp(var);
-            apply_softmax(&mut to_softmax, temp);
-
-            let mut soft_print = "".to_string();
-            for scaled in &to_softmax {
-                let this_char = char::from(scaled.1.get_base());
-                soft_print = format!("{} | {}, {:.02}", soft_print, this_char, scaled.2);
-            }
-
-            println!("{col_num}");
-            println!("{}", to_print_raw);
-            println!("{}", soft_print);
-            println!();
-            col_num += 1;
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -522,47 +461,12 @@ impl SwapScore {
         return self.w_avg;
     }
 
-    // pub fn reweight_avg(&mut self, new_score: f64, new_weight: f64) {
     pub fn reweight_avg(&mut self, new_score: f64) {
-        let old_avg = self.w_avg;
-        let old_weight = self.weights;
-
         let inflated_avg = self.w_avg * self.weights;
-        let adj_avg = inflated_avg * 0.95;
-        let adj_weight = self.weights * 0.95;
+        let adj_avg = inflated_avg * 0.96;
+        let adj_weight = self.weights * 0.96;
 
         self.weights = adj_weight + 1.0;
         self.w_avg = (adj_avg + new_score) / self.weights;
-        // println!(
-        //     "old_avg {}, old_weight {}, new_score {}, new_avg {}, new_weight {}",
-        //     old_avg, old_weight, new_score, self.w_avg, self.weights
-        // );
     }
-
-    // pub fn reweight_avg(&mut self, new_score: f64, new_weight: f64) {
-    //     assert!(
-    //         new_weight > 0.0,
-    //         "New weight of {new_weight} is zero or negative"
-    //     );
-    //
-    //     let new_weight_scaled = new_weight * self.scaling;
-    //     let mut inflated_avg = self.w_avg * self.weights;
-    //     self.weights += new_weight_scaled;
-    //     let mut new_component = new_score * new_weight_scaled;
-    //
-    //     if self.weights > self.max_weight {
-    //         let this_scaling = self.max_weight / self.weights;
-    //         self.weights = self.max_weight;
-    //
-    //         inflated_avg *= this_scaling;
-    //         new_component *= this_scaling;
-    //         self.scaling *= this_scaling;
-    //     }
-    //
-    //     self.w_avg = (inflated_avg + new_component) / self.weights;
-    //
-    //     println!("w avg{}", self.w_avg);
-    //     println!("weights {}", self.weights);
-    //     println!("scaling {}", self.scaling);
-    // }
 }

@@ -66,11 +66,6 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
         return Ok(exit_code);
     }
 
-    let seed: [u8; 32] = rand::random();
-    // let seed_string: String = format!("{seed:?}");
-    // write_err(log_handle, &seed_string)?;
-    let mut rng = SmallRng::from_seed(seed);
-
     let corpus_dir = get_corpus_dir()?;
     let corpus = load_corpus(&corpus_dir)?;
 
@@ -78,41 +73,9 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
 
     draw_initial(&population)?;
 
-    let decay_start: f64 = 30.0;
-
-    let small_value_target: f64 = 2.0;
-    let med_range_bot_target: f64 = 3.0;
-    let med_range_top_target: f64 = 12.0;
-    let large_range_bot_target: f64 = 13.0;
-    let large_range_top_target: f64 = 21.0;
-    let huge_range_bot_target: f64 = 22.0;
-    let huge_top_value: f64 = 30.0;
-
-    // Since these ranges are built at compile time, we can assume these conversions will succeed
     for iter in 1..=ITERATIONS {
         update_iter(iter)?;
-        let iter_decay: f64 = iter as f64 - 1.0;
-
-        let small_value = decay_value(decay_start, iter_decay, small_value_target);
-        let med_bot_value = decay_value(decay_start, iter_decay, med_range_bot_target);
-        let med_top_value = decay_value(decay_start, iter_decay, med_range_top_target);
-        let large_bot_value = decay_value(decay_start, iter_decay, large_range_bot_target);
-        let large_top_value = decay_value(decay_start, iter_decay, large_range_top_target);
-        let huge_bot_value = decay_value(decay_start, iter_decay, huge_range_bot_target);
-
-        let small_value_usize: usize = small_value.round() as usize;
-        let med_bot_usize: usize = med_bot_value.round() as usize;
-        let med_top_usize: usize = med_top_value.round() as usize;
-        let large_bot_usize: usize = large_bot_value.round() as usize;
-        let large_top_usize: usize = large_top_value.round() as usize;
-        let huge_bot_usize: usize = huge_bot_value.round() as usize;
-        let huge_top_usize: usize = huge_top_value.round() as usize;
-
-        let med_value = rng.random_range(med_bot_usize..=med_top_usize);
-        let large_value = rng.random_range(large_bot_usize..=large_top_usize);
-        let huge_value = rng.random_range(huge_bot_usize..=huge_top_usize);
-
-        population.mutate_climbers([small_value_usize, med_value, large_value, huge_value]);
+        population.mutate_climbers();
 
         population.eval_gen_pop(&corpus)?;
         population.setup_climbers()?;
@@ -207,14 +170,3 @@ fn decay_value(start: f64, iter: f64, target: f64) -> f64 {
     let z = target + (start - target) * (-K * iter).exp();
     return z.max(target); // Clamp to ensure z >= z_min
 }
-
-// update_mut_values(
-//     small_value_usize,
-//     small_value_usize,
-//     med_bot_usize,
-//     med_top_usize,
-//     large_bot_usize,
-//     large_top_usize,
-//     huge_bot_usize,
-//     huge_top_usize,
-// )?;

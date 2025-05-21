@@ -202,27 +202,6 @@ impl Keyboard {
         };
     }
 
-    pub fn mutate_from(kb: &Keyboard, gen_input: usize, id_in: usize) -> Self {
-        return Self {
-            key_slots: kb.key_slots.clone(),
-            valid_slots: kb.valid_slots.clone(),
-            slot_ascii: kb.slot_ascii.clone(),
-            last_slot_idx: None,
-            prev_slot_idx: None,
-            generation: gen_input,
-            id: id_in,
-            evaluated: kb.evaluated,
-            score: kb.get_score(),
-            left_uses: 0.0,
-            right_uses: 0.0,
-            is_elite: false,
-            pos_iter: kb.pos_iter,
-            last_score: kb.last_score,
-            last_swap_a: kb.last_swap_a,
-            last_swap_b: kb.last_swap_b,
-        };
-    }
-
     // TODO: The valid shuffle logic and the logic to shuffle the keys around is also used in the
     // mapped swap function. Should be broken out and shared
     // FUTURE: Right now, shuffling is restricted using constants. If we start adding unmovable
@@ -395,23 +374,15 @@ impl Keyboard {
     // reference to the swap map, which I think gets into lifetimes. Half of the logic is already
     // done for this though because eval terminates early if there hasn't been a layout change
     // since the last run
-    pub fn check_table_swap(&self, swap_table: &mut SwapTable, iter: usize) {
+    pub fn check_table_swap(&self, swap_table: &mut SwapTable) {
         let last_slot_a = self.last_swap_a.0;
         let last_key_a = self.last_swap_a.1;
         let last_slot_b = self.last_swap_b.0;
         let last_key_b = self.last_swap_b.1;
         let score_diff = self.score - self.last_score;
-        // println!(
-        //     "last_slot_a {:?}, last_key_a {:?}, last_slot_b {:?}, last_key_b {:?}, score_diff {:?}",
-        //     last_slot_a,
-        //     char::from(last_key_a.get_base()),
-        //     last_slot_b,
-        //     char::from(last_key_b.get_base()),
-        //     score_diff
-        // );
 
-        swap_table.update_score(last_slot_a, last_key_a, score_diff, iter);
-        swap_table.update_score(last_slot_b, last_key_b, score_diff, iter);
+        swap_table.update_score(last_slot_a, last_key_a, score_diff);
+        swap_table.update_score(last_slot_b, last_key_b, score_diff);
     }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire

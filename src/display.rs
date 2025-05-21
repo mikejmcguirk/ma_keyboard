@@ -162,16 +162,16 @@ pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
 // simplicity, it will all go on one line for now
 // TODO: The climb info and climb stats should show a place holder when no active climb is
 // happening
-pub fn update_climb_info(info: &str) -> io::Result<()> {
-    stdout().queue(SavePosition)?;
-    stdout().queue(MoveTo(0, CLIMB_INFO_Y))?;
-    stdout().queue(Print(info))?;
-    stdout().queue(RestorePosition)?;
-
-    stdout().flush()?;
-
-    return Ok(());
-}
+// pub fn update_climb_info(info: &str) -> io::Result<()> {
+//     stdout().queue(SavePosition)?;
+//     stdout().queue(MoveTo(0, CLIMB_INFO_Y))?;
+//     stdout().queue(Print(info))?;
+//     stdout().queue(RestorePosition)?;
+//
+//     stdout().flush()?;
+//
+//     return Ok(());
+// }
 
 // TODO: Rather than just update the whole line, it should be possible to feed this struct the
 // individual pieces of climb data and update them in place. More logic, but less terminal IO
@@ -179,16 +179,16 @@ pub fn update_climb_info(info: &str) -> io::Result<()> {
 // be possible to paass in the stack numbers. We can see here and in the climb_stats fn that
 // Print() is accepting &strs, so should it not be possible to have a permanently allocated
 // &str we edit in place?
-pub fn update_climb_stats(stats: &str) -> io::Result<()> {
-    stdout().queue(SavePosition)?;
-    stdout().queue(MoveTo(0, CLIMB_STATS_Y))?;
-    stdout().queue(Print(stats))?;
-    stdout().queue(RestorePosition)?;
-
-    stdout().flush()?;
-
-    return Ok(());
-}
+// pub fn update_climb_stats(stats: &str) -> io::Result<()> {
+//     stdout().queue(SavePosition)?;
+//     stdout().queue(MoveTo(0, CLIMB_STATS_Y))?;
+//     stdout().queue(Print(stats))?;
+//     stdout().queue(RestorePosition)?;
+//
+//     stdout().flush()?;
+//
+//     return Ok(());
+// }
 
 pub fn update_eval(num: usize) -> io::Result<()> {
     let to_print = if num > 0 {

@@ -9,10 +9,7 @@ use {
     },
 };
 
-use {
-    anyhow::{Result, anyhow},
-    rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
-};
+use anyhow::{Result, anyhow};
 
 use crate::{
     display::{draw_initial, update_iter},
@@ -163,10 +160,4 @@ fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
     }
 
     return Ok(corpus_files);
-}
-
-fn decay_value(start: f64, iter: f64, target: f64) -> f64 {
-    const K: f64 = 0.1;
-    let z = target + (start - target) * (-K * iter).exp();
-    return z.max(target); // Clamp to ensure z >= z_min
 }

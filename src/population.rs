@@ -12,7 +12,6 @@ use crate::{
     custom_err::CorpusErr,
     // display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
     display::{update_avg, update_eval, update_kb},
-    kb_helpers::{apply_minmax, apply_softmax, get_temp, get_variance},
     keyboard::{Key, Keyboard, Slot},
     swappable_arr,
     swappable_keys,
@@ -303,7 +302,7 @@ pub fn hill_climb(
     decay_factor = decay_factor.min(CLAMP_VALUE);
 
     let mut kb: Keyboard = keyboard.clone();
-    let start = kb.get_score();
+    // let start = kb.get_score();
 
     let mut last_improvement: f64 = 0.0;
     let mut avg: f64 = 0.0;
@@ -318,7 +317,7 @@ pub fn hill_climb(
         // climb_kb.shuffle(rng, 1);
         climb_kb.table_swap(rng, swap_table);
         climb_kb.eval(corpus);
-        climb_kb.check_table_swap(swap_table, iter);
+        climb_kb.check_table_swap(swap_table);
         let climb_kb_score = climb_kb.get_score();
 
         let this_change = climb_kb_score - kb_score;
@@ -337,10 +336,10 @@ pub fn hill_climb(
 
         // TODO: Have hard coded blank value when this isn't active, but need more principled
         // method
-        let climb_stats: String = format!(
-            "Iter: {:05}, Start: {:18}, Cur: {:18}, Best: {:18}, Avg: {:18}, Weighted: {:18}\r",
-            i, start, climb_kb_score, kb_score, avg, weighted_avg
-        );
+        // let climb_stats: String = format!(
+        //     "Iter: {:05}, Start: {:18}, Cur: {:18}, Best: {:18}, Avg: {:18}, Weighted: {:18}\r",
+        //     i, start, climb_kb_score, kb_score, avg, weighted_avg
+        // );
         // println!("{}", climb_info.len());
         // update_climb_stats(&climb_stats)?;
 
@@ -432,7 +431,7 @@ impl SwapTable {
         return self.swap_table[row][col][key].get_w_avg();
     }
 
-    pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64, iter: usize) {
+    pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64) {
         let row = slot.get_row();
         let col = slot.get_col();
         let mut score = self.swap_table[row][col][&key];
@@ -446,8 +445,6 @@ impl SwapTable {
 pub struct SwapScore {
     w_avg: f64,
     weights: f64,
-    // max_weight: f64,
-    // scaling: f64,
 }
 
 impl SwapScore {
@@ -455,8 +452,6 @@ impl SwapScore {
         return Self {
             w_avg: 0.0,
             weights: 0.0,
-            // max_weight: 100.0,
-            // scaling: 1.0,
         };
     }
 

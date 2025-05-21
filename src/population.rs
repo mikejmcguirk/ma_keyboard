@@ -109,13 +109,16 @@ impl Population {
         self.generation += 1;
 
         debug_assert!(
-            self.climbers.len() >= self.climber_cnt,
+            self.climbers.len() <= self.climber_cnt,
             "Current climbers {} is higher than the climber count {}",
             self.climbers.len(),
             self.climber_cnt
         );
 
         self.population.clear();
+        for climber in &self.climbers {
+            self.population.push(climber.clone());
+        }
 
         let to_add = self.pop_size - self.climbers.len();
         for _ in 0..to_add {
@@ -463,8 +466,8 @@ impl SwapScore {
 
     pub fn reweight_avg(&mut self, new_score: f64) {
         let inflated_avg = self.w_avg * self.weights;
-        let adj_avg = inflated_avg * 0.96;
-        let adj_weight = self.weights * 0.96;
+        let adj_avg = inflated_avg * 0.995;
+        let adj_weight = self.weights * 0.995;
 
         self.weights = adj_weight + 1.0;
         self.w_avg = (adj_avg + new_score) / self.weights;

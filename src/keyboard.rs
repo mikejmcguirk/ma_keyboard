@@ -8,9 +8,10 @@ use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
         check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
-        global_adjustments, place_keys, select_swap,
+        global_adjustments, place_keys, place_keys_from_table, select_key,
     },
     population::SwapTable,
+    swappable_arr, swappable_keys,
 };
 
 kb_consts!();
@@ -105,6 +106,89 @@ impl Keyboard {
             last_slot_idx: None,
             prev_slot_idx: None,
             generation: 0,
+            id: id_in,
+            evaluated: false,
+            score: 0.0,
+            left_uses: 0.0,
+            right_uses: 0.0,
+            is_elite: false,
+            pos_iter: 0,
+            last_score: 0.0,
+            last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+            last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+        };
+    }
+
+    // TODO: The alpha area is placed then over-written. This works but is sloppy
+    pub fn from_swap_table(
+        rng: &mut SmallRng,
+        swap_table: &SwapTable,
+        gen_in: usize,
+        id_in: usize,
+    ) -> Self {
+        swappable_arr!();
+
+        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
+        let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
+        assert!(
+            place_keys(&mut key_slots, &valid_key_locs_sorted, 0),
+            "Unable to place all keys"
+        );
+
+        let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
+
+        let mut slots: Vec<Slot> = Vec::new();
+        for i in 1..=3 {
+            for j in 0..=9 {
+                slots.push(Slot::from_tuple((i, j)));
+            }
+        }
+
+        let mut keys: Vec<Key> = Vec::new();
+        for key in &SWAPPABLE_KEYS {
+            keys.push(Key::from_tuple(*key));
+        }
+
+        assert_eq!(
+            slots.len(),
+            keys.len(),
+            "Different amount of keys and locatiosn in from_swap_table"
+        );
+
+        // assert!(place_keys_from_table(
+        //     rng,
+        //     &mut slots,
+        //     &mut keys,
+        //     swap_table,
+        //     &mut key_slots,
+        //     &valid_slots
+        // ));
+        loop {
+            if place_keys_from_table(
+                rng,
+                &mut slots,
+                &mut keys,
+                swap_table,
+                &mut key_slots,
+                &valid_slots,
+            ) {
+                break;
+            }
+        }
+
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &key_slots {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
+
+        return Self {
+            key_slots,
+            valid_slots,
+            slot_ascii,
+            last_slot_idx: None,
+            prev_slot_idx: None,
+            generation: gen_in,
             id: id_in,
             evaluated: false,
             score: 0.0,
@@ -235,7 +319,7 @@ impl Keyboard {
             })
             .collect();
 
-        let select_a = select_swap(rng, &mut base_a);
+        let select_a = select_key(rng, &mut base_a);
         let select_a_score = swap_table.get_score(&select_a.0, &select_a.1);
 
         let mut base_b: Vec<(Slot, Key, f64)> = self
@@ -272,12 +356,15 @@ impl Keyboard {
                 // keyboard score improves when the key leaves the slot. We therefore want to move
                 // keys to lower scoring slots where they are less likely to want to move
                 let improvement = total_cur_score - total_new_score;
+                // println!("slot a {:?}, key a {:?}, slot b {:?}, key b {:?}, cur_score {:?}, new_score {:?}, improvement {:?}",
+                // slot_a, char::from(key_a.get_base()), slot_b, char::from(key_b.get_base()), total_cur_score, total_new_score, improvement
+                // );
 
                 return (*slot_b, *key_b, improvement);
             })
             .collect();
 
-        let select_b = select_swap(rng, &mut base_b);
+        let select_b = select_key(rng, &mut base_b);
 
         let slot_a = select_a.0;
         let key_a = select_a.1;
@@ -314,6 +401,14 @@ impl Keyboard {
         let last_slot_b = self.last_swap_b.0;
         let last_key_b = self.last_swap_b.1;
         let score_diff = self.score - self.last_score;
+        // println!(
+        //     "last_slot_a {:?}, last_key_a {:?}, last_slot_b {:?}, last_key_b {:?}, score_diff {:?}",
+        //     last_slot_a,
+        //     char::from(last_key_a.get_base()),
+        //     last_slot_b,
+        //     char::from(last_key_b.get_base()),
+        //     score_diff
+        // );
 
         swap_table.update_score(last_slot_a, last_key_a, score_diff, iter);
         swap_table.update_score(last_slot_b, last_key_b, score_diff, iter);

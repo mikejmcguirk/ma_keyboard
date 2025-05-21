@@ -11,6 +11,7 @@ use rand::{Rng as _, rngs::SmallRng};
 
 use crate::{
     keyboard::{Finger, Hand, Key, KeyCompare, Slot},
+    population::SwapTable,
     {helper_consts, kb_helper_consts, swappable_keys},
 };
 
@@ -161,6 +162,72 @@ pub fn place_keys(
 
         slots.remove(slot);
     }
+
+    return false;
+}
+
+pub fn place_keys_from_table(
+    rng: &mut SmallRng,
+    slots: &mut Vec<Slot>,
+    keys: &mut Vec<Key>,
+    swap_table: &SwapTable,
+    key_slots: &mut BTreeMap<Slot, Key>,
+    valid_slots: &BTreeMap<Key, Vec<Slot>>,
+) -> bool {
+    if slots.is_empty() && keys.is_empty() {
+        return true;
+    }
+
+    assert_eq!(
+        slots.len(),
+        keys.len(),
+        "Slots and keys have different lengths in place_keys_from_table"
+    );
+
+    let slot_idx = rng.random_range(0..slots.len());
+    let slot = slots[slot_idx];
+    let slot_info = swap_table.get_slot_info(slot);
+    let mut candidates: Vec<(Slot, Key, f64)> = Vec::new();
+
+    for info in slot_info {
+        let key = info.0;
+        if !keys.contains(key) {
+            continue;
+        }
+
+        let these_valid_slots: &Vec<Slot> = &valid_slots[key];
+        // println!(
+        //     "slot {:?}, key {:?}, valid_slots {:?}",
+        //     slot, key, these_valid_slots
+        // );
+        if !these_valid_slots.contains(&slot) {
+            continue;
+        }
+
+        candidates.push((slot, *info.0, info.1.get_w_avg()));
+    }
+
+    if candidates.is_empty() {
+        return false;
+    }
+
+    let select_key = select_key(rng, &mut candidates);
+    key_slots.insert(select_key.0, select_key.1);
+
+    slots.remove(slot_idx);
+
+    let key_idx = keys
+        .iter()
+        .position(|k| return *k == select_key.1)
+        .expect("Should not have pulled a missing key");
+    keys.remove(key_idx);
+
+    if place_keys_from_table(rng, slots, keys, swap_table, key_slots, valid_slots) {
+        return true;
+    }
+
+    slots.push(slot);
+    keys.push(select_key.1);
 
     return false;
 }
@@ -558,22 +625,53 @@ pub fn check_key_no_hist(slot: Slot) -> f64 {
     return mult;
 }
 
-pub fn select_swap(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot, Key, f64) {
+pub fn select_key(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot, Key, f64) {
     debug_assert!(
         !values.is_empty(),
         "Should always be candidates in select_swap"
     );
 
+    // let mut raw_print = "".to_string();
+    // for v in &*values {
+    //     let this_char = char::from(v.1.get_base());
+    //     raw_print = format!("{} | {}, {:.02}", raw_print, this_char, v.2);
+    // }
+    // println!("RAW");
+    // println!("{}", raw_print);
+
     apply_minmax(values);
+    // let mut max_print = "".to_string();
+    // for v in &*values {
+    //     let this_char = char::from(v.1.get_base());
+    //     max_print = format!("{} | {}, {:.02}", max_print, this_char, v.2);
+    // }
+    // println!("MAX");
+    // println!("{}", max_print);
+
     let var = get_variance(values);
     let temp = get_temp(var);
     apply_softmax(values, temp);
+    // println!(
+    //     "soft sum: {}",
+    //     values.iter().fold(0.0, |acc, v| {
+    //         return acc + v.2;
+    //     })
+    // );
+    // let mut soft_print = "".to_string();
+    // for v in &*values {
+    //     let this_char = char::from(v.1.get_base());
+    //     soft_print = format!("{} | {}, {:.02}", soft_print, this_char, v.2);
+    // }
+    // println!("SOFT");
+    // println!("{}", soft_print);
+    // println!();
+
     let selection = roulette(rng, values);
 
     return selection;
 }
 
-fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
+pub fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_minmax");
     debug_assert!(
         !values.iter().any(|v| return v.2.is_nan()),
@@ -604,7 +702,7 @@ fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
     }
 }
 
-fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
+pub fn get_variance(values: &[(Slot, Key, f64)]) -> f64 {
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_softmax");
     debug_assert!(
         !values.iter().any(|v| return v.2.is_nan()),
@@ -619,10 +717,7 @@ fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
     let mean = values.iter().map(|v| return v.2).sum::<f64>() / values.len() as f64;
 
     let mut var = 0.0;
-    // Cannot do &values because &&mut values is not an iterator
-    // Doing just values is an implicit iterator call and moves values
-    // Doing it this way re-borrows values
-    for v in &mut *values {
+    for v in values {
         var += (v.2 - mean).powi(2);
     }
 
@@ -633,18 +728,18 @@ fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
 
 // This function assumes we are working with min/maxed weighted averages. This means the
 // temperature values required to produce sharper probability distributions will be low
-fn get_temp(var: f64) -> f64 {
+pub fn get_temp(var: f64) -> f64 {
     const DECAY_MIN: f64 = 0.01;
-    const DECAY_MAX_PART: f64 = 0.19;
-    // When normalized variance is 0.05, temp should be 0.10
-    const K_TEMP: f64 = -14.944_288_036_604_421;
+    const DECAY_MAX_PART: f64 = 0.14;
+    // When normalized variance is 0.05, temp should be 0.08
+    const K_TEMP: f64 = -13.862943611198906;
 
     debug_assert!((0.0..=0.25).contains(&var), "Var {var} invalid in get_temp");
 
     return DECAY_MIN + DECAY_MAX_PART * (K_TEMP * var).exp();
 }
 
-fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {
+pub fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {
     // NOTE: Negative temps will invert the probability curve
     debug_assert_ne!(temp, 0.0, "Temp is zero in apply_softmax");
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_softmax");

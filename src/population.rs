@@ -18,8 +18,9 @@ use crate::{
 
 const ELITE_CNT: usize = 1;
 
-// TODO: Add a swap history/swap table so swaps can be probabalistically constrained to ones likely
-// to improve the keyboard. Do this after a full clippy pass of the non-swap code
+// TODO: Need to re-think population management. Biggest issue is that progression is not
+// sufficiently related to score. The probabalistic selection does not give sufficient favoritism
+// to the top scorers.
 // FUTURE: If user input is allowed for population management, the underlying math needs to be
 // redone to check for errors
 pub struct Population {
@@ -228,6 +229,8 @@ impl Population {
 
     // TODO: Direct index access. This *should* be an iter_mut(), but that doesn't work because
     // hill climbing is not a self method
+    // TODO: The population should store the average hill climbing iterations and use that for the
+    // max without improvement, whether in full or some % of it
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
@@ -315,10 +318,6 @@ pub fn hill_climb(
     // Iter should never be high enough for this to fail
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
-    if keyboard.is_elite() {
-        // Promotes more reliable global exploration
-        decay_factor *= decay_factor.powf(5.0);
-    }
 
     let mut kb: Keyboard = keyboard.clone();
     let start = kb.get_score();
@@ -386,11 +385,8 @@ fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
     return new_value_for_new_avg + old_avg_for_new_avg;
 }
 
-// The strong weight for positive iterations is necessary for hill climbers to catch up to the
-// elite in later iterations. This comes with the trade-off risk that an early elite can entrench
-// itself in a local optima. This risk is mitigated by giving the elite a punishing decay factor in
-// early iterations. However, the elite is not double-punished with a reduced weight for positive
-// iterations. This allows for excellent genomes to still have the opportunity to climb.
+// The strong weight toward positive iterations is to give hill climbers the chance to catch up in
+// later generations
 fn get_weight(delta: f64) -> f64 {
     const K: f64 = 0.01;
 

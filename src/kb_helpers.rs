@@ -558,7 +558,22 @@ pub fn check_key_no_hist(slot: Slot) -> f64 {
     return mult;
 }
 
-pub fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
+pub fn select_swap(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot, Key, f64) {
+    debug_assert!(
+        !values.is_empty(),
+        "Should always be candidates in select_swap"
+    );
+
+    apply_minmax(values);
+    let var = get_variance(values);
+    let temp = get_temp(var);
+    apply_softmax(values, temp);
+    let selection = roulette(rng, values);
+
+    return selection;
+}
+
+fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_minmax");
     debug_assert!(
         !values.iter().any(|v| return v.2.is_nan()),
@@ -589,7 +604,7 @@ pub fn apply_minmax(values: &mut [(Slot, Key, f64)]) {
     }
 }
 
-pub fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
+fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_softmax");
     debug_assert!(
         !values.iter().any(|v| return v.2.is_nan()),
@@ -618,7 +633,7 @@ pub fn get_variance(values: &mut [(Slot, Key, f64)]) -> f64 {
 
 // This function assumes we are working with min/maxed weighted averages. This means the
 // temperature values required to produce sharper probability distributions will be low
-pub fn get_temp(var: f64) -> f64 {
+fn get_temp(var: f64) -> f64 {
     const DECAY_MIN: f64 = 0.01;
     const DECAY_MAX_PART: f64 = 0.19;
     // When normalized variance is 0.05, temp should be 0.10
@@ -629,7 +644,7 @@ pub fn get_temp(var: f64) -> f64 {
     return DECAY_MIN + DECAY_MAX_PART * (K_TEMP * var).exp();
 }
 
-pub fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {
+fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {
     // NOTE: Negative temps will invert the probability curve
     debug_assert_ne!(temp, 0.0, "Temp is zero in apply_softmax");
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_softmax");
@@ -677,7 +692,7 @@ pub fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {
     }
 }
 
-pub fn select_swap(rng: &mut SmallRng, values: &[(Slot, Key, f64)]) -> (Slot, Key, f64) {
+fn roulette(rng: &mut SmallRng, values: &[(Slot, Key, f64)]) -> (Slot, Key, f64) {
     debug_assert!(!values.is_empty(), "Values vec is empty in apply_softmax");
     debug_assert!(
         !values.iter().any(|v| return v.2.is_nan()),

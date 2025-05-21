@@ -7,8 +7,8 @@ use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
-        apply_minmax, apply_softmax, check_col, check_key_no_hist, compare_slots, get_temp,
-        get_valid_key_locs_sorted, get_variance, global_adjustments, place_keys, select_swap,
+        check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
+        global_adjustments, place_keys, select_swap,
     },
     population::SwapScore,
 };
@@ -199,8 +199,6 @@ impl Keyboard {
         }
     }
 
-    // TODO: Do I need to calculate the temp_in differently from temp out? *Shouldn't* be necessary
-    // but worth spot checking the outputs
     // TODO: I think to refactor this what you do is you use individual functions to get each of
     // the tuples to swap, then do the swap. The individual functions can have common operations
     // (like getting temperature) broken out and shared in common with normal shuffling (including
@@ -223,11 +221,9 @@ impl Keyboard {
             .key_slots
             .iter()
             .filter(|(slot, key)| {
-                if slot.get_row() < TOP_ROW || slot.get_col() > R_PINKY {
-                    return false;
-                }
-
-                if self.valid_slots[key].len() == 1 {
+                let invalid_location = slot.get_row() < TOP_ROW || slot.get_col() > R_PINKY;
+                let static_key = self.valid_slots[key].len() == 1;
+                if invalid_location && static_key {
                     return false;
                 }
 
@@ -239,40 +235,23 @@ impl Keyboard {
             })
             .collect();
 
-        debug_assert!(!base_a.is_empty(), "Should always be candidates out");
-        apply_minmax(&mut base_a);
-        let var_a = get_variance(&mut base_a);
-        let temp_a = get_temp(var_a);
-        apply_softmax(&mut base_a, temp_a);
-        let select_a = select_swap(rng, &base_a);
-
+        let select_a = select_swap(rng, &mut base_a);
         let select_a_score = swap_map[&(select_a.0, select_a.1)].get_w_avg();
 
         let mut base_b: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
             .filter(|(slot_b, key_b)| {
-                if slot_b.get_row() < 1 || slot_b.get_col() > 9 {
-                    return false;
-                }
-
-                let key_a = select_a.1;
-                if **key_b == key_a {
-                    return false;
-                }
-
-                let valid_slots_b = &self.valid_slots[key_b];
-                if valid_slots_b.len() == 1 {
-                    return false;
-                }
-
                 let slot_a = select_a.0;
-                if !valid_slots_b.contains(&slot_a) {
-                    return false;
-                }
+                let key_a = select_a.1;
 
-                let valid_slots_a = &self.valid_slots[&key_a];
-                if !valid_slots_a.contains(slot_b) {
+                let invalid_slot = slot_b.get_row() < TOP_ROW || slot_b.get_col() > R_PINKY;
+                let key_match = key_a == **key_b;
+                let static_key_b = self.valid_slots[key_b].len() == 1;
+                let invalid_loc_a = !self.valid_slots[&key_a].contains(slot_b);
+                let invalid_loc_b = !self.valid_slots[key_b].contains(&slot_a);
+
+                if invalid_slot || key_match || static_key_b || invalid_loc_a || invalid_loc_b {
                     return false;
                 }
 
@@ -289,25 +268,21 @@ impl Keyboard {
                 let total_cur_score = select_a_score + candidate_score_b;
                 let total_new_score = new_select_score_a + new_candidate_score_b;
 
-                // A positive improvement is considered a lower new score because higher scores in
-                // the swap map for particular slot/key pairs mean the key wants to leave the slot
+                // A higher score in the swap map for a particular key and slot means the overall
+                // keyboard score improves when the key leaves the slot. We therefore want to move
+                // keys to lower scoring slots where they are less likely to want to move
                 let improvement = total_cur_score - total_new_score;
 
                 return (*slot_b, *key_b, improvement);
             })
             .collect();
 
-        apply_minmax(&mut base_b);
-        let var_b = get_variance(&mut base_b);
-        let temp_b = get_temp(var_b);
-        apply_softmax(&mut base_b, temp_b);
-        let select_b = select_swap(rng, &base_b);
+        let select_b = select_swap(rng, &mut base_b);
 
         let slot_a = select_a.0;
         let key_a = select_a.1;
         let slot_b = select_b.0;
         let key_b = select_b.1;
-
         self.swap_keys(slot_a, key_a, slot_b, key_b);
     }
 

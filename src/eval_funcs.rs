@@ -2,8 +2,9 @@ use core::cmp;
 
 use crate::{
     base_eff, edge_cols, home_row,
-    keyboard::{Finger, Hand, KeyCompare, Slot},
+    keyboard::{Finger, Hand, KeyCompare},
     most_rows, obscure_cols, scoring,
+    structs::Slot,
 };
 
 scoring!();

@@ -1,9 +1,9 @@
 #[macro_export]
 macro_rules! most_rows {
     () => {
-        const NUM_ROW: usize = 0;
+        pub const NUM_ROW: usize = 0;
         const TOP_ROW: usize = 1;
-        const BOT_ROW: usize = 3;
+        pub const BOT_ROW: usize = 3;
     };
 }
 

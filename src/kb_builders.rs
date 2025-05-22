@@ -12,13 +12,13 @@ use {alloc::collections::BTreeMap, core::cmp};
 use rand::{Rng as _, rngs::SmallRng};
 
 use crate::{
-    cols, edge_cols, home_row,
-    keyboard::{Key, Slot},
-    keys,
+    cols, edge_cols, home_row, keys,
     mapped_swap::select_key,
     most_cols, most_rows, obscure_cols,
     population::SwapTable,
-    row_cnts, rows, static_keys, valid_locations,
+    row_cnts, rows, static_keys,
+    structs::{Key, Slot},
+    valid_locations,
 };
 
 rows!();

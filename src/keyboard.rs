@@ -10,17 +10,18 @@ use crate::{
     edge_cols,
     eval_funcs::{check_key_no_hist, compare_slots, global_adjustments},
     kb_builders::{
-        check_col, get_static_keys, get_swappable_keys, get_valid_key_locs_sorted,
-        place_dvorak_keys, place_keys, place_keys_from_table, place_qwerty_keys,
+        get_static_keys, get_swappable_keys, get_valid_key_locs_sorted, place_dvorak_keys,
+        place_keys, place_keys_from_table, place_qwerty_keys,
     },
     keys,
     mapped_swap::{get_improvement, select_key, shuffle_check},
     most_cols, most_rows,
     population::SwapTable,
+    structs::{Key, Slot},
     swappable_keys,
 };
 
-const ASCII_CNT: usize = 128;
+pub const ASCII_CNT: usize = 128;
 
 most_cols!();
 edge_cols!();
@@ -562,80 +563,5 @@ impl Keyboard {
         } else {
             self.pos_iter = 0;
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Slot {
-    row: usize,
-    col: usize,
-}
-
-impl Slot {
-    // PERF: If this is used in a hot loop, change to debug_assert
-    pub fn from_tuple(source: (usize, usize)) -> Self {
-        assert!(
-            (NUM_ROW..=BOT_ROW).contains(&source.0),
-            "Source row ({}) < num_row ({}) or > bottom row ({}) in slot.from_tuple",
-            NUM_ROW,
-            BOT_ROW,
-            source.0,
-        );
-
-        assert!(
-            check_col(source.0, source.1),
-            "Col {} invalid for row {} in slot.from_tuple",
-            source.0,
-            source.1
-        );
-
-        return Self {
-            row: source.0,
-            col: source.1,
-        };
-    }
-
-    pub fn get_row(&self) -> usize {
-        return self.row;
-    }
-
-    pub fn get_col(&self) -> usize {
-        return self.col;
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key {
-    base: u8,
-    shift: u8,
-}
-
-impl Key {
-    // PERF: If this is run in a hot loop, change to debug_assert
-    pub fn from_tuple(source: (u8, u8)) -> Self {
-        assert!(
-            usize::from(source.0) <= ASCII_CNT,
-            "Base key {} is not a valid ASCII char in Key::from_tuple",
-            source.0
-        );
-
-        assert!(
-            usize::from(source.1) <= ASCII_CNT,
-            "Shift key {} is not a valid ASCII char in Key::from_tuple",
-            source.0
-        );
-
-        return Self {
-            base: source.0,
-            shift: source.1,
-        };
-    }
-
-    pub fn get_base(self) -> u8 {
-        return self.base;
-    }
-
-    pub fn get_shift(self) -> u8 {
-        return self.shift;
     }
 }

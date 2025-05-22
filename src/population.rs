@@ -9,9 +9,9 @@ use {
 
 use crate::{
     display::{update_avg, update_climb_info, update_eval_dsp, update_kb},
-    keyboard::{Key, Keyboard, Slot},
+    keyboard::Keyboard,
     keys,
-    structs::IdSpawner,
+    structs::{IdSpawner, Key, Slot},
     swappable_keys,
 };
 

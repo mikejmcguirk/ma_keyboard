@@ -5,8 +5,8 @@ use alloc::collections::BTreeMap;
 use rand::{Rng as _, rngs::SmallRng};
 
 use crate::{
-    keyboard::{Key, Slot},
     population::SwapTable,
+    structs::{Key, Slot},
 };
 
 // PERF: valid_loc_a doesn't need to be checked when running a basic shuffle

@@ -4,6 +4,7 @@ use {
         env,
         fs::{self, File, ReadDir},
         io::{Write as _, stdin, stdout},
+        path::Path,
         path::PathBuf,
         process::ExitCode,
     },
@@ -37,8 +38,9 @@ use crate::{
 // - Save file to load
 // - Read from config file
 // - The input options will have restrictions on what is possible. Should be possible to print them
-pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
+pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     const ITERATIONS: usize = 2000;
+
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
@@ -49,6 +51,8 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
     println!("{NAME_DASHES}");
     println!();
 
+    println!("Log Path: {}", log_dir.display());
+    println!();
     // The codes here can be success or failure
     if let Some(exit_code) = confirm_continue() {
         return Ok(exit_code);

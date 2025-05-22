@@ -106,7 +106,7 @@
 mod custom_err;
 mod display;
 mod eval_funcs;
-mod kb_helpers;
+mod kb_builders;
 mod keyboard;
 mod macros;
 mod mapped_swap;
@@ -125,7 +125,6 @@ use anyhow::{Result, anyhow};
 
 use crate::{setup::setup, utils::write_err};
 
-// TODO: Should the title card be re-rendered in display?
 fn main() -> ExitCode {
     let log_dir: PathBuf = match create_log_dir() {
         Ok(dir) => dir,
@@ -135,9 +134,6 @@ fn main() -> ExitCode {
         }
     };
 
-    // println!("Log Path: {}", log_dir.display());
-    // println!();
-
     let mut log_handle: File = match setup_log_handle(&log_dir) {
         Ok(handle) => handle,
         Err(e) => {
@@ -146,7 +142,7 @@ fn main() -> ExitCode {
         }
     };
 
-    match setup(&mut log_handle) {
+    match setup(&mut log_handle, &log_dir) {
         Ok(code) => return code,
         Err(e) => {
             if let Err(log_err) = write_err(&mut log_handle, &e) {

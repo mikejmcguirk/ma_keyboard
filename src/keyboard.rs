@@ -7,7 +7,7 @@ use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 use crate::{
     base_eff, edge_cols,
     eval_funcs::{check_key_no_hist, compare_slots, global_adjustments},
-    kb_helpers::{
+    kb_builders::{
         check_col, get_valid_key_locs_sorted, place_dvorak_keys, place_keys,
         place_keys_from_table, place_qwerty_keys,
     },

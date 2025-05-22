@@ -5,17 +5,26 @@ use alloc::collections::BTreeMap;
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
-    kb_consts, kb_helper_consts,
+    base_eff, edge_cols,
+    eval_funcs::{check_key_no_hist, compare_slots, global_adjustments},
     kb_helpers::{
-        check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
-        global_adjustments, place_dvorak_keys, place_keys, place_keys_from_table,
-        place_qwerty_keys, select_key,
+        check_col, get_valid_key_locs_sorted, place_dvorak_keys, place_keys,
+        place_keys_from_table, place_qwerty_keys,
     },
+    keys,
+    mapped_swap::select_key,
+    most_cols, most_rows,
     population::SwapTable,
-    swappable_arr, swappable_keys,
+    swappable_keys,
 };
 
-kb_consts!();
+const ASCII_CNT: usize = 128;
+
+most_cols!();
+edge_cols!();
+most_rows!();
+base_eff!();
+swappable_keys!();
 
 pub enum KeyCompare {
     Mult(f64),
@@ -192,8 +201,6 @@ impl Keyboard {
         gen_in: usize,
         id_in: usize,
     ) -> Self {
-        swappable_arr!();
-
         let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         assert!(

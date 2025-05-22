@@ -105,9 +105,11 @@
 
 mod custom_err;
 mod display;
+mod eval_funcs;
 mod kb_helpers;
 mod keyboard;
 mod macros;
+mod mapped_swap;
 mod population;
 mod setup;
 mod utils;

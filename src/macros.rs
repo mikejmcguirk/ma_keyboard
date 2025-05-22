@@ -1,42 +1,80 @@
 #[macro_export]
-macro_rules! kb_helper_consts {
+macro_rules! most_rows {
     () => {
-        // Default Key
-        // const SPACE: (u8, u8) = (b' ', b' ');
-
-        // Rows
         const NUM_ROW: usize = 0;
         const TOP_ROW: usize = 1;
         const BOT_ROW: usize = 3;
+    };
+}
 
-        // Cols
+#[macro_export]
+macro_rules! row_cnts {
+    () => {
+        const NUM_ROW_CNT: usize = 12;
+        const TOP_ROW_CNT: usize = 13;
+        const HOME_ROW_CNT: usize = 12;
+        const BOT_ROW_CNT: usize = 10;
+    };
+}
+
+#[macro_export]
+macro_rules! home_row {
+    () => {
+        const HOME_ROW: usize = 2;
+    };
+}
+
+#[macro_export]
+macro_rules! rows {
+    () => {
+        most_rows!();
+        row_cnts!();
+        home_row!();
+    };
+}
+
+#[macro_export]
+macro_rules! edge_cols {
+    () => {
         const L_PINKY: usize = 0;
+        const L_EXT: usize = 4;
+        const R_EXT: usize = 5;
+        const R_PIPE: usize = 12;
+    };
+}
+
+#[macro_export]
+macro_rules! most_cols {
+    () => {
         const L_RING: usize = 1;
         const L_MIDDLE: usize = 2;
         const L_INDEX: usize = 3;
-        const L_EXT: usize = 4;
-        const R_EXT: usize = 5;
         const R_INDEX: usize = 6;
         const R_MIDDLE: usize = 7;
         const R_RING: usize = 8;
         const R_PINKY: usize = 9;
-        const R_PIPE: usize = 12;
-
-        const BASE_EFF: f64 = 1.0;
     };
 }
 
 #[macro_export]
-macro_rules! kb_consts {
+macro_rules! obscure_cols {
     () => {
-        kb_helper_consts!();
-
-        const ASCII_CNT: usize = 128;
+        const R_SYMBOL: usize = 10;
+        const R_NETHER: usize = 11;
     };
 }
 
 #[macro_export]
-macro_rules! swappable_keys {
+macro_rules! cols {
+    () => {
+        most_cols!();
+        edge_cols!();
+        obscure_cols!();
+    };
+}
+
+#[macro_export]
+macro_rules! keys {
     () => {
         const COMMA: (u8, u8) = (b',', b'<');
         const PERIOD: (u8, u8) = (b'.', b'>');
@@ -72,9 +110,32 @@ macro_rules! swappable_keys {
 }
 
 #[macro_export]
-macro_rules! swappable_arr {
+macro_rules! static_keys {
     () => {
-        swappable_keys!();
+        const NEWLINE: (u8, u8) = (b'\n', b'\n');
+        const BACKSLASH: (u8, u8) = (b'\\', b'|');
+        const ONE: (u8, u8) = (b'1', b'!');
+        const TWO: (u8, u8) = (b'2', b'@');
+        const THREE: (u8, u8) = (b'3', b'#');
+        const FOUR: (u8, u8) = (b'4', b'$');
+        const FIVE: (u8, u8) = (b'5', b'%');
+        const SIX: (u8, u8) = (b'6', b'^');
+        const SEVEN: (u8, u8) = (b'7', b'&');
+        const EIGHT: (u8, u8) = (b'8', b'*');
+        const NINE: (u8, u8) = (b'9', b'(');
+        const ZERO: (u8, u8) = (b'0', b')');
+        const L_BRACKET: (u8, u8) = (b'[', b'{');
+        const R_BRACKET: (u8, u8) = (b']', b'}');
+        const DASH: (u8, u8) = (b'-', b'_');
+        const EQUALS: (u8, u8) = (b'=', b'+');
+        const F_SLASH: (u8, u8) = (b'/', b'?');
+    };
+}
+
+#[macro_export]
+macro_rules! swappable_keys {
+    () => {
+        keys!();
 
         const SWAPPABLE_KEYS: [(u8, u8); 30] = [
             COMMA, PERIOD, SEMICOLON, QUOTE, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,
@@ -84,25 +145,16 @@ macro_rules! swappable_arr {
 }
 
 #[macro_export]
-macro_rules! helper_consts {
+macro_rules! base_eff {
     () => {
-        kb_helper_consts!();
+        const BASE_EFF: f64 = 1.0;
+    };
+}
 
-        const NUM_ROW_CNT: usize = 12;
-        const TOP_ROW_CNT: usize = 13;
-        const HOME_ROW_CNT: usize = 12;
-        const BOT_ROW_CNT: usize = 10;
-
-        // =======================
-        // ==== Keyboard Info ====
-        // =======================
-
-        // Rows
-        const HOME_ROW: usize = 2;
-
-        // Cols
-        const R_SYMBOL: usize = 10;
-        const R_NETHER: usize = 11;
+#[macro_export]
+macro_rules! scoring {
+    () => {
+        base_eff!();
 
         // Increase, Medium, Bigram or Single Key
         // const I_ME_B: f64 = 1.4;
@@ -128,30 +180,15 @@ macro_rules! helper_consts {
         const D_BU_B: f64 = 0.2;
         // Deduct, Brutal, Skipgram
         const D_BU_S: f64 = 0.6;
+    };
+}
 
-        // ==================
-        // ==== Key Info ====
-        // ==================
-
-        // Keys
-        const NEWLINE: (u8, u8) = (b'\n', b'\n');
-        const BACKSLASH: (u8, u8) = (b'\\', b'|');
-        const ONE: (u8, u8) = (b'1', b'!');
-        const TWO: (u8, u8) = (b'2', b'@');
-        const THREE: (u8, u8) = (b'3', b'#');
-        const FOUR: (u8, u8) = (b'4', b'$');
-        const FIVE: (u8, u8) = (b'5', b'%');
-        const SIX: (u8, u8) = (b'6', b'^');
-        const SEVEN: (u8, u8) = (b'7', b'&');
-        const EIGHT: (u8, u8) = (b'8', b'*');
-        const NINE: (u8, u8) = (b'9', b'(');
-        const ZERO: (u8, u8) = (b'0', b')');
-        const L_BRACKET: (u8, u8) = (b'[', b'{');
-        const R_BRACKET: (u8, u8) = (b']', b'}');
-        const DASH: (u8, u8) = (b'-', b'_');
-        const EQUALS: (u8, u8) = (b'=', b'+');
-        const F_SLASH: (u8, u8) = (b'/', b'?');
-        swappable_keys!();
+#[macro_export]
+macro_rules! valid_locations {
+    () => {
+        cols!();
+        keys!();
+        static_keys!();
 
         // Number Row - Static
         const ONE_VALID: [(usize, usize); 1] = [(NUM_ROW, L_PINKY)];
@@ -166,45 +203,25 @@ macro_rules! helper_consts {
         const ZERO_VALID: [(usize, usize); 1] = [(NUM_ROW, R_PINKY)];
         const L_BRACKET_VALID: [(usize, usize); 1] = [(NUM_ROW, R_SYMBOL)];
         const R_BRACKET_VALID: [(usize, usize); 1] = [(NUM_ROW, R_NETHER)];
-
         // Pinky Extension Symbol Keys - Static
         const DASH_VALID: [(usize, usize); 1] = [(TOP_ROW, R_SYMBOL)];
         const EQUALS_VALID: [(usize, usize); 1] = [(TOP_ROW, R_NETHER)];
         const F_SLASH_VALID: [(usize, usize); 1] = [(HOME_ROW, R_SYMBOL)];
         const NEWLINE_VALID: [(usize, usize); 1] = [(HOME_ROW, R_NETHER)];
         const BACKSLASH_VALID: [(usize, usize); 1] = [(TOP_ROW, R_PIPE)];
-
         // ALpha Keys - Dynamic
-        const Q_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_PINKY),
-            (HOME_ROW, L_PINKY),
-            (BOT_ROW, L_PINKY)
-        ];
-        const A_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_PINKY),
-            (HOME_ROW, L_PINKY),
-            (BOT_ROW, L_PINKY)
-        ];
-        const Z_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_PINKY),
-            (HOME_ROW, L_PINKY),
-            (BOT_ROW, L_PINKY)
-        ];
-        const W_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_RING),
-            (HOME_ROW, L_RING),
-            (BOT_ROW, L_RING)
-        ];
-        const S_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_RING),
-            (HOME_ROW, L_RING),
-            (BOT_ROW, L_RING)
-        ];
-        const X_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_RING),
-            (HOME_ROW, L_RING),
-            (BOT_ROW, L_RING)
-        ];
+        const Q_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_PINKY), (HOME_ROW, L_PINKY), (BOT_ROW, L_PINKY)];
+        const A_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_PINKY), (HOME_ROW, L_PINKY), (BOT_ROW, L_PINKY)];
+        const Z_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_PINKY), (HOME_ROW, L_PINKY), (BOT_ROW, L_PINKY)];
+        const W_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_RING), (HOME_ROW, L_RING), (BOT_ROW, L_RING)];
+        const S_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_RING), (HOME_ROW, L_RING), (BOT_ROW, L_RING)];
+        const X_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_RING), (HOME_ROW, L_RING), (BOT_ROW, L_RING)];
         const E_INVALID: [(usize, usize); 3] = [
             (TOP_ROW, L_MIDDLE),
             (HOME_ROW, L_MIDDLE),
@@ -220,66 +237,30 @@ macro_rules! helper_consts {
             (HOME_ROW, L_MIDDLE),
             (BOT_ROW, L_MIDDLE),
         ];
-        const R_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_INDEX),
-            (HOME_ROW, L_INDEX),
-            (BOT_ROW, L_INDEX)
-        ];
-        const F_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_INDEX),
-            (HOME_ROW, L_INDEX),
-            (BOT_ROW, L_INDEX)
-        ];
-        const V_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_INDEX),
-            (HOME_ROW, L_INDEX),
-            (BOT_ROW, L_INDEX)
-        ];
-        const T_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_EXT),
-            (HOME_ROW, L_EXT),
-            (BOT_ROW, L_EXT)
-        ];
-        const G_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_EXT),
-            (HOME_ROW, L_EXT),
-            (BOT_ROW, L_EXT)
-        ];
-        const B_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_EXT),
-            (HOME_ROW, L_EXT),
-            (BOT_ROW, L_EXT)
-        ];
-        const Y_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_EXT),
-            (HOME_ROW, R_EXT),
-            (BOT_ROW, R_EXT)
-        ];
-        const H_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_EXT),
-            (HOME_ROW, R_EXT),
-            (BOT_ROW, R_EXT)
-        ];
-        const N_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_EXT),
-            (HOME_ROW, R_EXT),
-            (BOT_ROW, R_EXT)
-        ];
-        const U_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_INDEX),
-            (HOME_ROW, R_INDEX),
-            (BOT_ROW, R_INDEX)
-        ];
-        const J_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_INDEX),
-            (HOME_ROW, R_INDEX),
-            (BOT_ROW, R_INDEX)
-        ];
-        const M_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_INDEX),
-            (HOME_ROW, R_INDEX),
-            (BOT_ROW, R_INDEX)
-        ];
+        const R_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_INDEX), (HOME_ROW, L_INDEX), (BOT_ROW, L_INDEX)];
+        const F_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_INDEX), (HOME_ROW, L_INDEX), (BOT_ROW, L_INDEX)];
+        const V_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_INDEX), (HOME_ROW, L_INDEX), (BOT_ROW, L_INDEX)];
+        const T_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_EXT), (HOME_ROW, L_EXT), (BOT_ROW, L_EXT)];
+        const G_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_EXT), (HOME_ROW, L_EXT), (BOT_ROW, L_EXT)];
+        const B_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, L_EXT), (HOME_ROW, L_EXT), (BOT_ROW, L_EXT)];
+        const Y_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_EXT), (HOME_ROW, R_EXT), (BOT_ROW, R_EXT)];
+        const H_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_EXT), (HOME_ROW, R_EXT), (BOT_ROW, R_EXT)];
+        const N_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_EXT), (HOME_ROW, R_EXT), (BOT_ROW, R_EXT)];
+        const U_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_INDEX), (HOME_ROW, R_INDEX), (BOT_ROW, R_INDEX)];
+        const J_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_INDEX), (HOME_ROW, R_INDEX), (BOT_ROW, R_INDEX)];
+        const M_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_INDEX), (HOME_ROW, R_INDEX), (BOT_ROW, R_INDEX)];
         const I_INVALID: [(usize, usize); 3] = [
             (TOP_ROW, R_MIDDLE),
             (HOME_ROW, R_MIDDLE),
@@ -298,16 +279,10 @@ macro_rules! helper_consts {
             (HOME_ROW, R_MIDDLE),
             (BOT_ROW, R_MIDDLE),
         ];
-        const O_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_RING),
-            (HOME_ROW, R_RING),
-            (BOT_ROW, R_RING)
-        ];
-        const L_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_RING),
-            (HOME_ROW, R_RING),
-            (BOT_ROW, R_RING)
-        ];
+        const O_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_RING), (HOME_ROW, R_RING), (BOT_ROW, R_RING)];
+        const L_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_RING), (HOME_ROW, R_RING), (BOT_ROW, R_RING)];
         const PERIOD_INVALID: [(usize, usize); 6] = [
             (TOP_ROW, L_PINKY),
             (HOME_ROW, L_PINKY),
@@ -316,21 +291,12 @@ macro_rules! helper_consts {
             (HOME_ROW, R_RING),
             (BOT_ROW, R_RING),
         ];
-        const P_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_PINKY),
-            (HOME_ROW, R_PINKY),
-            (BOT_ROW, R_PINKY)
-        ];
-        const SEMICOLON_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_PINKY),
-            (HOME_ROW, R_PINKY),
-            (BOT_ROW, R_PINKY)
-        ];
-        const QUOTE_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, R_PINKY),
-            (HOME_ROW, R_PINKY),
-            (BOT_ROW, R_PINKY)
-        ];
+        const P_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
+        const SEMICOLON_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
+        const QUOTE_INVALID: [(usize, usize); 3] =
+            [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
 
         const DEFAULT_TOP_ROW: [(usize, usize); 10] = [
             (TOP_ROW, L_PINKY),
@@ -370,6 +336,5 @@ macro_rules! helper_consts {
             (BOT_ROW, R_RING),
             (BOT_ROW, R_PINKY),
         ];
-
     };
 }

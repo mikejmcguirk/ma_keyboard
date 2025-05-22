@@ -13,10 +13,12 @@ use crate::{
     // display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
     display::{update_avg, update_eval, update_kb},
     keyboard::{Key, Keyboard, Slot},
-    swappable_arr,
+    keys,
     swappable_keys,
     utils::write_err,
 };
+
+swappable_keys!();
 
 const ELITE_CNT: usize = 1;
 
@@ -401,8 +403,6 @@ impl SwapTable {
     // want to use it. You could only build three rows in the table and subtract from the value of
     // the slot in get_score, but that feels like a hack
     pub fn new() -> Self {
-        swappable_arr!();
-
         let mut swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>> = Vec::new();
 
         for _ in 0..4 {

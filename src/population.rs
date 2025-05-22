@@ -33,13 +33,7 @@ const MAX_SCORE_DECAY: f64 = 0.998;
 const K_TEMP_MIN: f64 = -31.162_892_36;
 const K_TEMP_MAX: f64 = -6.107_632_992;
 
-// TODO: Implement the hyper-heuristic idea. Includes:
-// - Weighted avg for swap table
-// - Temperature goal (0.05 - 0.15)
-// - Climb decay
-// - Climb improvement weight
-// - Probabalistic selection or tournament(usize)
-// - Variable population feels overly-complex but maybe
+// FUTURE: Consider letting populations engage in tournament selection
 pub struct Population {
     id: usize,
     rng: SmallRng,

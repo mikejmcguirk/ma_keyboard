@@ -212,7 +212,7 @@ pub fn update_climb_info(info: &str) -> io::Result<()> {
     return Ok(());
 }
 
-pub fn update_eval(num: usize) -> io::Result<()> {
+pub fn update_eval_dsp(num: usize) -> io::Result<()> {
     let to_print = if num > 0 {
         format!("{:03}", num)
     } else {

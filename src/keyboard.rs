@@ -5,7 +5,9 @@ use alloc::collections::BTreeMap;
 use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
-    base_eff, edge_cols,
+    base_eff,
+    corpus::get_corpus,
+    edge_cols,
     eval_funcs::{check_key_no_hist, compare_slots, global_adjustments},
     kb_builders::{
         check_col, get_static_keys, get_swappable_keys, get_valid_key_locs_sorted,
@@ -435,11 +437,12 @@ impl Keyboard {
         return eff;
     }
 
-    pub fn eval(&mut self, corpus: &[String]) {
+    pub fn eval(&mut self) {
         if self.evaluated {
             return;
         }
 
+        let corpus = get_corpus();
         self.score = 0.0_f64;
         self.last_slot_idx = None;
         self.prev_slot_idx = None;

@@ -8,8 +8,7 @@ use {
 };
 
 use crate::{
-    custom_err::CorpusErr,
-    display::{update_avg, update_climb_info, update_eval, update_kb},
+    display::{update_avg, update_climb_info, update_eval_dsp, update_kb},
     keyboard::{Key, Keyboard, Slot},
     keys,
     structs::IdSpawner,
@@ -148,19 +147,16 @@ impl Population {
         );
     }
 
-    pub fn eval_gen_pop(&mut self, corpus: &[String]) -> Result<(), CorpusErr> {
-        if corpus.is_empty() {
-            return Err(CorpusErr::EmptyCorpus);
-        }
-
+    // TODO: Is it intuitive that this would return an error?
+    pub fn eval_gen_pop(&mut self) -> Result<()> {
         for (i, kb) in self.population.iter_mut().enumerate() {
             let display_num = i.checked_add(1).expect("Population has too many to count");
-            update_eval(display_num)?;
+            update_eval_dsp(display_num)?;
 
-            kb.eval(corpus);
+            kb.eval();
         }
 
-        update_eval(0)?;
+        update_eval_dsp(0)?;
         return Ok(());
     }
 
@@ -212,7 +208,7 @@ impl Population {
         return Ok(());
     }
 
-    pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
+    pub fn climb_kbs(&mut self, iter: usize) -> Result<()> {
         let mut climber_score = 0.0_f64;
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
@@ -223,13 +219,8 @@ impl Population {
             );
             update_climb_info(&climb_info)?;
 
-            self.climbers[i] = hill_climb(
-                &mut self.rng,
-                &self.climbers[i],
-                corpus,
-                iter,
-                &mut self.swap_table,
-            );
+            self.climbers[i] =
+                hill_climb(&mut self.rng, &self.climbers[i], iter, &mut self.swap_table);
 
             if self.climbers[i].get_score() > self.top_score {
                 self.top_score = self.climbers[i].get_score();
@@ -336,7 +327,6 @@ impl Population {
 pub fn hill_climb(
     rng: &mut SmallRng,
     keyboard: &Keyboard,
-    corpus: &[String],
     iter: usize,
     swap_table: &mut SwapTable,
 ) -> Keyboard {
@@ -359,7 +349,7 @@ pub fn hill_climb(
 
         let mut climb_kb: Keyboard = kb.clone();
         climb_kb.table_swap(rng, swap_table);
-        climb_kb.eval(corpus);
+        climb_kb.eval();
         climb_kb.check_table_swap(swap_table);
         let climb_kb_score = climb_kb.get_score();
 

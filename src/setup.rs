@@ -11,7 +11,7 @@ use {
 use anyhow::Result;
 
 use crate::{
-    corpus::{get_corpus, initialize_corpus},
+    corpus::initialize_corpus,
     display::{draw_initial, update_dvorak, update_iter, update_pop_dsp, update_qwerty},
     keyboard::Keyboard,
     population::Population,
@@ -57,11 +57,11 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     draw_initial(&population)?;
 
     let mut qwerty = Keyboard::create_qwerty();
-    qwerty.eval(get_corpus());
+    qwerty.eval();
     update_qwerty(qwerty.get_score())?;
 
     let mut dvorak = Keyboard::create_dvorak();
-    dvorak.eval(get_corpus());
+    dvorak.eval();
     update_dvorak(dvorak.get_score())?;
 
     for iter in 1..=ITERATIONS {
@@ -73,9 +73,9 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
         update_pop_dsp(&population)?;
         population.refill_pop();
 
-        population.eval_gen_pop(get_corpus())?;
+        population.eval_gen_pop()?;
         population.setup_climbers()?;
-        population.climb_kbs(get_corpus(), iter)?;
+        population.climb_kbs(iter)?;
     }
 
     println!();

@@ -104,7 +104,6 @@
 #![allow(clippy::use_debug)]
 
 mod corpus;
-mod custom_err;
 mod display;
 mod eval_funcs;
 mod kb_builders;

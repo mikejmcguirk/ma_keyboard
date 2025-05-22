@@ -12,6 +12,9 @@ pub static CORPUS: OnceLock<Vec<String>> = OnceLock::new();
 pub fn initialize_corpus() -> Result<()> {
     let corpus_dir = get_corpus_dir()?;
     let corpus = load_corpus(&corpus_dir)?;
+    if corpus.is_empty() {
+        return Err(anyhow!("No corpus entries in initialize_corpus"));
+    }
 
     CORPUS
         .set(corpus)

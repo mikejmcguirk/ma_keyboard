@@ -12,7 +12,7 @@ use crate::{
         place_dvorak_keys, place_keys, place_keys_from_table, place_qwerty_keys,
     },
     keys,
-    mapped_swap::select_key,
+    mapped_swap::{get_improvement, select_key, shuffle_check},
     most_cols, most_rows,
     population::SwapTable,
     swappable_keys,
@@ -135,12 +135,7 @@ impl Keyboard {
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_qwerty_keys(&mut key_slots);
         let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
-
-        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
-        for (slot, key) in &key_slots {
-            slot_ascii[usize::from(key.get_base())] = Some(*slot);
-            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
-        }
+        let slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
 
         return Self {
             key_slots,
@@ -167,12 +162,7 @@ impl Keyboard {
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_dvorak_keys(&mut key_slots);
         let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
-
-        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
-        for (slot, key) in &key_slots {
-            slot_ascii[usize::from(key.get_base())] = Some(*slot);
-            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
-        }
+        let slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
 
         return Self {
             key_slots,
@@ -291,10 +281,7 @@ impl Keyboard {
                 let col_b = slot.get_col();
                 let slot_b = Slot::from_tuple((row_b, col_b));
                 let key_b = self.key_slots[&slot_b];
-                if key_a == key_b
-                    || !self.valid_slots[&key_b].contains(&slot_a)
-                    || self.valid_slots[&key_b].len() == 1
-                {
+                if !shuffle_check(&self.valid_slots, slot_a, key_a, slot_b, key_b) {
                     continue;
                 }
 
@@ -311,13 +298,7 @@ impl Keyboard {
         }
     }
 
-    // TODO: I think to refactor this what you do is you use individual functions to get each of
-    // the tuples to swap, then do the swap. The individual functions can have common operations
-    // (like getting temperature) broken out and shared in common with normal shuffling (including
-    // the shuffle itself). This leaves us with two heap allocations per mapped_swap. If we find in
-    // profiling this is a performance issue, we can look into holding the intermediate Vec as part
-    // of the struct and potentially using unsafe code to edit it
-    // TODO: Right now the kb swap functions and the swap map build explicitly exclude anything
+    // FUTURE: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
     pub fn table_swap(&mut self, rng: &mut SmallRng, swap_table: &SwapTable) {
         self.evaluated = false;
@@ -350,46 +331,28 @@ impl Keyboard {
             .filter(|(slot_b, key_b)| {
                 let slot_a = select_a.0;
                 let key_a = select_a.1;
-
                 let invalid_slot = slot_b.get_row() < TOP_ROW || slot_b.get_col() > R_PINKY;
-                let key_match = key_a == **key_b;
-                let static_key_b = self.valid_slots[key_b].len() == 1;
-                let invalid_loc_a = !self.valid_slots[&key_a].contains(slot_b);
-                let invalid_loc_b = !self.valid_slots[key_b].contains(&slot_a);
+                let bad_shuffle_check =
+                    !shuffle_check(&self.valid_slots, slot_a, key_a, **slot_b, **key_b);
 
-                if invalid_slot || key_match || static_key_b || invalid_loc_a || invalid_loc_b {
+                if bad_shuffle_check || invalid_slot {
                     return false;
                 }
 
                 return true;
             })
             .map(|(slot_b, key_b)| {
-                let candidate_score_b = swap_table.get_score(slot_b, key_b);
-
                 let slot_a = select_a.0;
                 let key_a = select_a.1;
-                let new_select_score_a = swap_table.get_score(&slot_a, key_b);
-                let new_candidate_score_b = swap_table.get_score(slot_b, &key_a);
-
-                let total_cur_score = select_a_score + candidate_score_b;
-                let total_new_score = new_select_score_a + new_candidate_score_b;
-
-                // A higher score in the swap map for a particular key and slot means the overall
-                // keyboard score improves when the key leaves the slot. We therefore want to move
-                // keys to lower scoring slots where they are less likely to want to move
-                let improvement = total_cur_score - total_new_score;
+                let improvement =
+                    get_improvement(swap_table, select_a_score, slot_a, key_a, slot_b, key_b);
 
                 return (*slot_b, *key_b, improvement);
             })
             .collect();
 
         let select_b = select_key(rng, &mut base_b);
-
-        let slot_a = select_a.0;
-        let key_a = select_a.1;
-        let slot_b = select_b.0;
-        let key_b = select_b.1;
-        self.swap_keys(slot_a, key_a, slot_b, key_b);
+        self.swap_keys(select_a.0, select_a.1, select_b.0, select_b.1);
     }
 
     fn swap_keys(&mut self, slot_a: Slot, key_a: Key, slot_b: Slot, key_b: Key) {

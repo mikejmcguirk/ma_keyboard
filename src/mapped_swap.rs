@@ -1,6 +1,50 @@
+use std::collections::BTreeMap;
+
 use rand::{Rng as _, rngs::SmallRng};
 
-use crate::keyboard::{Key, Slot};
+use crate::{
+    keyboard::{Key, Slot},
+    population::SwapTable,
+};
+
+pub fn shuffle_check(
+    valid_slots: &BTreeMap<Key, Vec<Slot>>,
+    slot_a: Slot,
+    key_a: Key,
+    slot_b: Slot,
+    key_b: Key,
+) -> bool {
+    let different_keys = key_a != key_b;
+    let valid_loc_a = valid_slots[&key_a].contains(&slot_b);
+    let valid_loc_b = valid_slots[&key_b].contains(&slot_a);
+    let swappable_key_b = valid_slots[&key_b].len() >= 1;
+
+    return different_keys && valid_loc_a && valid_loc_b && swappable_key_b;
+}
+
+// Takes in references because this is called from an iterator
+#[expect(clippy::trivially_copy_pass_by_ref)]
+pub fn get_improvement(
+    swap_table: &SwapTable,
+    select_a_score: f64,
+    slot_a: Slot,
+    key_a: Key,
+    slot_b: &Slot,
+    key_b: &Key,
+) -> f64 {
+    let candidate_score_b = swap_table.get_score(slot_b, key_b);
+    let new_select_score_a = swap_table.get_score(&slot_a, key_b);
+    let new_candidate_score_b = swap_table.get_score(slot_b, &key_a);
+
+    let total_cur_score = select_a_score + candidate_score_b;
+    let total_new_score = new_select_score_a + new_candidate_score_b;
+
+    // A higher score in the swap map for a particular key and slot means the overall
+    // keyboard score improves when the key leaves the slot. We therefore want to move
+    // keys to lower scoring slots where they are less likely to want to move
+    let improvement = total_cur_score - total_new_score;
+    return improvement;
+}
 
 pub fn select_key(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot, Key, f64) {
     debug_assert!(

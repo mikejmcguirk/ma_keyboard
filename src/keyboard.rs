@@ -382,20 +382,14 @@ impl Keyboard {
     // seen when the key leaves the slot. (We can more reliably know which key/slot positions are
     // bad than which ones are good). Therefore, when scoring a swap, the update is made on the
     // key's starting point rather than where it ended up
-    // FUTURE: It would be cool if this were called automatically after evaluating. But that would
-    // require either passing the swap map into the eval function or making the keyboard store a
-    // reference to the swap map, which I think gets into lifetimes. Half of the logic is already
-    // done for this though because eval terminates early if there hasn't been a layout change
-    // since the last run
-    pub fn check_table_swap(&self, swap_table: &mut SwapTable) {
+    pub fn get_last_swap_info(&self) -> (Slot, Key, Slot, Key, f64) {
         let last_slot_a = self.last_swap_a.0;
         let last_key_a = self.last_swap_a.1;
         let last_slot_b = self.last_swap_b.0;
         let last_key_b = self.last_swap_b.1;
         let score_diff = self.score - self.last_score;
 
-        swap_table.update_score(last_slot_a, last_key_a, score_diff);
-        swap_table.update_score(last_slot_b, last_key_b, score_diff);
+        return (last_slot_a, last_key_a, last_slot_b, last_key_b, score_diff);
     }
 
     // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire

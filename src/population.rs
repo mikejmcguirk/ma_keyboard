@@ -263,7 +263,8 @@ impl Population {
             let mut climb_kb = kb.clone();
             climb_kb.table_swap(&mut self.rng, &self.swap_table);
             climb_kb.eval();
-            climb_kb.check_table_swap(&mut self.swap_table);
+            // climb_kb.check_table_swap(&mut self.swap_table);
+            self.update_from_swap(climb_kb.get_last_swap_info());
 
             let this_improvement = (climb_kb.get_score() - kb.get_score()).max(0.0);
             avg_improvement = get_new_avg(this_improvement, avg_improvement, i);
@@ -298,6 +299,19 @@ impl Population {
         }
 
         return kb;
+    }
+
+    fn update_from_swap(&mut self, swap_info: (Slot, Key, Slot, Key, f64)) {
+        let last_slot_a = swap_info.0;
+        let last_key_a = swap_info.1;
+        let last_slot_b = swap_info.2;
+        let last_key_b = swap_info.3;
+        let score_diff = swap_info.4;
+
+        self.swap_table
+            .update_score(last_slot_a, last_key_a, score_diff);
+        self.swap_table
+            .update_score(last_slot_b, last_key_b, score_diff);
     }
 
     fn update_climb_decay(&mut self, iter: usize) {
@@ -422,7 +436,7 @@ impl SwapTable {
     // FUTURE: Obvious issue here is we have the number row in the swap table even though we don't
     // want to use it. You could only build three rows in the table and subtract from the value of
     // the slot in get_score, but that feels like a hack
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>> = Vec::new();
 
         for _ in 0_usize..4_usize {
@@ -473,6 +487,7 @@ impl SwapTable {
 pub struct SwapScore {
     w_avg: f64,
     weights: f64,
+    // decay: f64,
 }
 
 impl SwapScore {
@@ -482,6 +497,14 @@ impl SwapScore {
             weights: 0.0,
         };
     }
+
+    // fn create(decay: f64) -> Self {
+    //     return Self {
+    //         w_avg: 0.0,
+    //         weights: 0.0,
+    //         decay: 0.995_f64,
+    //     };
+    // }
 
     pub fn get_w_avg(&self) -> f64 {
         return self.w_avg;

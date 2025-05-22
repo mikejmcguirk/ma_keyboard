@@ -88,7 +88,7 @@ impl Population {
         // climbers now
         for _ in 0..climber_cnt {
             let mut keyboard = Keyboard::create_primo(id_spawner.get());
-            keyboard.shuffle(&mut rng, SWAPPABLE_KEYS.len());
+            keyboard.shuffle(SWAPPABLE_KEYS.len());
             climbers.push(keyboard);
         }
 
@@ -139,7 +139,6 @@ impl Population {
         let to_add = self.pop_cnt - self.population.len();
         for _ in 0..to_add {
             let new_kb = Keyboard::from_swap_table(
-                &mut self.rng,
                 &self.swap_table,
                 self.generation,
                 self.id_spawner.get(),
@@ -148,7 +147,7 @@ impl Population {
         }
 
         for p in self.population.iter_mut().filter(|p| return !p.is_elite()) {
-            p.shuffle(&mut self.rng, self.mutation);
+            p.shuffle(self.mutation);
         }
 
         assert_eq!(
@@ -265,7 +264,7 @@ impl Population {
 
         for i in 1..=100000 {
             let mut climb_kb = kb.kb_clone();
-            climb_kb.table_swap(&mut self.rng, &self.swap_table);
+            climb_kb.table_swap(&self.swap_table);
             climb_kb.eval();
             self.update_from_swap(climb_kb.get_last_swap_info());
 

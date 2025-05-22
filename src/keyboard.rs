@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use rand::{Rng as _, rngs::SmallRng, seq::SliceRandom as _};
+use rand::{Rng as _, SeedableRng as _, rngs::SmallRng, seq::SliceRandom as _};
 
 use crate::{
     base_eff,
@@ -74,6 +74,7 @@ impl Finger {
 // FUTURE: Valid_slots is a meta-population level construct
 // NOTE: Do not derive Clone, because that does not advance the keyboard's RNG state
 pub struct Keyboard {
+    rng: SmallRng,
     key_slots: BTreeMap<Slot, Key>,
     valid_slots: BTreeMap<Key, Vec<Slot>>,
     slot_ascii: Vec<Option<Slot>>,
@@ -97,6 +98,9 @@ impl Keyboard {
     /// The specs to build the keyboard properly are defined at compile time. If the specs are
     /// incorrect, this function or one of its sub-functions will panic
     pub fn create_primo(id_in: usize) -> Self {
+        let seed: [u8; 32] = rand::random();
+        let rng = SmallRng::from_seed(seed);
+
         let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         assert!(
@@ -113,6 +117,7 @@ impl Keyboard {
         }
 
         return Self {
+            rng,
             key_slots,
             valid_slots,
             slot_ascii,
@@ -133,7 +138,11 @@ impl Keyboard {
     }
 
     pub fn kb_clone(&self) -> Self {
+        let seed: [u8; 32] = rand::random();
+        let rng = SmallRng::from_seed(seed);
+
         return Self {
+            rng,
             key_slots: self.key_slots.clone(),
             valid_slots: self.valid_slots.clone(),
             slot_ascii: self.slot_ascii.clone(),
@@ -154,6 +163,8 @@ impl Keyboard {
     }
 
     pub fn create_qwerty() -> Self {
+        let seed: [u8; 32] = rand::random();
+        let rng = SmallRng::from_seed(seed);
         let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_qwerty_keys(&mut key_slots);
@@ -166,6 +177,7 @@ impl Keyboard {
         }
 
         return Self {
+            rng,
             key_slots,
             valid_slots,
             slot_ascii,
@@ -186,6 +198,8 @@ impl Keyboard {
     }
 
     pub fn create_dvorak() -> Self {
+        let seed: [u8; 32] = rand::random();
+        let rng = SmallRng::from_seed(seed);
         let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_dvorak_keys(&mut key_slots);
@@ -198,6 +212,7 @@ impl Keyboard {
         }
 
         return Self {
+            rng,
             key_slots,
             valid_slots,
             slot_ascii,
@@ -217,12 +232,10 @@ impl Keyboard {
         };
     }
 
-    pub fn from_swap_table(
-        rng: &mut SmallRng,
-        swap_table: &SwapTable,
-        gen_in: usize,
-        id_in: usize,
-    ) -> Self {
+    pub fn from_swap_table(swap_table: &SwapTable, gen_in: usize, id_in: usize) -> Self {
+        let seed: [u8; 32] = rand::random();
+        let mut rng = SmallRng::from_seed(seed);
+
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         let mut swappable_keys: Vec<Key> = get_swappable_keys(&SWAPPABLE_KEYS);
         let static_keys = get_static_keys(&swappable_keys, &valid_key_locs_sorted);
@@ -237,7 +250,7 @@ impl Keyboard {
 
         loop {
             if place_keys_from_table(
-                rng,
+                &mut rng,
                 &mut swappable_slots,
                 &mut swappable_keys,
                 swap_table,
@@ -255,6 +268,7 @@ impl Keyboard {
         }
 
         return Self {
+            rng,
             key_slots,
             valid_slots,
             slot_ascii,
@@ -289,17 +303,17 @@ impl Keyboard {
     /// - A key has no valid locations
     /// - If a valid key cannot be found in any of the valid slots
     /// - The swap key does not have any valid slots
-    pub fn shuffle(&mut self, rng: &mut SmallRng, cnt: usize) {
+    pub fn shuffle(&mut self, cnt: usize) {
         self.evaluated = false;
 
         for _ in 0..cnt {
-            let row_a = rng.random_range(TOP_ROW..=BOT_ROW);
-            let col_a = rng.random_range(L_PINKY..=R_PINKY);
+            let row_a = self.rng.random_range(TOP_ROW..=BOT_ROW);
+            let col_a = self.rng.random_range(L_PINKY..=R_PINKY);
             let slot_a = Slot::from_tuple((row_a, col_a));
             let key_a = self.key_slots[&slot_a];
 
             if let Some(vec) = self.valid_slots.get_mut(&key_a) {
-                vec.shuffle(rng);
+                vec.shuffle(&mut self.rng);
                 if vec.len() == 1 {
                     continue;
                 }
@@ -331,7 +345,7 @@ impl Keyboard {
 
     // FUTURE: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
-    pub fn table_swap(&mut self, rng: &mut SmallRng, swap_table: &SwapTable) {
+    pub fn table_swap(&mut self, swap_table: &SwapTable) {
         self.evaluated = false;
         self.last_score = self.score;
 
@@ -353,7 +367,7 @@ impl Keyboard {
             })
             .collect();
 
-        let select_a = select_key(rng, &mut base_a);
+        let select_a = select_key(&mut self.rng, &mut base_a);
         let select_a_score = swap_table.get_score(&select_a.0, &select_a.1);
 
         let mut base_b: Vec<(Slot, Key, f64)> = self
@@ -382,7 +396,7 @@ impl Keyboard {
             })
             .collect();
 
-        let select_b = select_key(rng, &mut base_b);
+        let select_b = select_key(&mut self.rng, &mut base_b);
         self.swap_keys(select_a.0, select_a.1, select_b.0, select_b.1);
     }
 

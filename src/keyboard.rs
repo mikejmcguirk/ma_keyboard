@@ -8,8 +8,8 @@ use crate::{
     base_eff, edge_cols,
     eval_funcs::{check_key_no_hist, compare_slots, global_adjustments},
     kb_builders::{
-        check_col, get_valid_key_locs_sorted, place_dvorak_keys, place_keys,
-        place_keys_from_table, place_qwerty_keys,
+        check_col, get_static_keys, get_swappable_keys, get_valid_key_locs_sorted,
+        place_dvorak_keys, place_keys, place_keys_from_table, place_qwerty_keys,
     },
     keys,
     mapped_swap::select_key,
@@ -194,53 +194,29 @@ impl Keyboard {
         };
     }
 
-    // TODO: The alpha area is placed then over-written. This works but is sloppy
     pub fn from_swap_table(
         rng: &mut SmallRng,
         swap_table: &SwapTable,
         gen_in: usize,
         id_in: usize,
     ) -> Self {
-        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
-        assert!(
-            place_keys(&mut key_slots, &valid_key_locs_sorted, 0),
-            "Unable to place all keys"
-        );
+        let mut swappable_keys: Vec<Key> = get_swappable_keys(&SWAPPABLE_KEYS);
+        let static_keys = get_static_keys(&swappable_keys, &valid_key_locs_sorted);
+
+        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
+        assert!(place_keys(&mut key_slots, &static_keys, 0), "place_keys");
 
         let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
+        let mut swappable_slots: Vec<Slot> = (1..=3)
+            .flat_map(|i| return (0..=9).map(move |j| return Slot::from_tuple((i, j))))
+            .collect();
 
-        let mut slots: Vec<Slot> = Vec::new();
-        for i in 1..=3 {
-            for j in 0..=9 {
-                slots.push(Slot::from_tuple((i, j)));
-            }
-        }
-
-        let mut keys: Vec<Key> = Vec::new();
-        for key in &SWAPPABLE_KEYS {
-            keys.push(Key::from_tuple(*key));
-        }
-
-        assert_eq!(
-            slots.len(),
-            keys.len(),
-            "Different amount of keys and locatiosn in from_swap_table"
-        );
-
-        // assert!(place_keys_from_table(
-        //     rng,
-        //     &mut slots,
-        //     &mut keys,
-        //     swap_table,
-        //     &mut key_slots,
-        //     &valid_slots
-        // ));
         loop {
             if place_keys_from_table(
                 rng,
-                &mut slots,
-                &mut keys,
+                &mut swappable_slots,
+                &mut swappable_keys,
                 swap_table,
                 &mut key_slots,
                 &valid_slots,
@@ -343,15 +319,9 @@ impl Keyboard {
     // of the struct and potentially using unsafe code to edit it
     // TODO: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
-    // TODO: This function does not check valid key locations. Like above, this only works for now
-    // TODO: The temperature calculations are based on me spot checking the variance and exp
-    // probabilities in the console. But this doesn't account for how things change as you get into
-    // later (>500) generations. Build a way to log the variance of the swap map every ~20
-    // iterations so we can see how the possibilities change over time. Would help with putting
-    // together a better temperature calc
     pub fn table_swap(&mut self, rng: &mut SmallRng, swap_table: &SwapTable) {
         self.evaluated = false;
-        self.last_score = self.score; // So we can see how the swap changed the score
+        self.last_score = self.score;
 
         let mut base_a: Vec<(Slot, Key, f64)> = self
             .key_slots
@@ -408,9 +378,6 @@ impl Keyboard {
                 // keyboard score improves when the key leaves the slot. We therefore want to move
                 // keys to lower scoring slots where they are less likely to want to move
                 let improvement = total_cur_score - total_new_score;
-                // println!("slot a {:?}, key a {:?}, slot b {:?}, key b {:?}, cur_score {:?}, new_score {:?}, improvement {:?}",
-                // slot_a, char::from(key_a.get_base()), slot_b, char::from(key_b.get_base()), total_cur_score, total_new_score, improvement
-                // );
 
                 return (*slot_b, *key_b, improvement);
             })
@@ -535,7 +502,7 @@ impl Keyboard {
         self.evaluated = true;
     }
 
-    // TODO: Very inefficient
+    // FUTURE: Very inefficient
     pub fn get_display_chars(&self) -> Vec<Vec<char>> {
         let mut num_row: Vec<char> = Vec::new();
         let mut top_row: Vec<char> = Vec::new();
@@ -563,7 +530,6 @@ impl Keyboard {
         return display_chars;
     }
 
-    // Info display
     pub fn get_score(&self) -> f64 {
         return self.score;
     }

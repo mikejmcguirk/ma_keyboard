@@ -171,6 +171,30 @@ pub fn place_keys(
     return false;
 }
 
+pub fn get_swappable_keys(swappable_keys: &[(u8, u8); 30]) -> Vec<Key> {
+    return swappable_keys
+        .iter()
+        .copied()
+        .map(|k| return Key::from_tuple(k))
+        .collect();
+}
+
+pub fn get_static_keys(
+    swappable_keys: &[Key],
+    valid_locs: &[(Key, Vec<Slot>)],
+) -> Vec<(Key, Vec<Slot>)> {
+    return valid_locs
+        .iter()
+        .filter_map(|v| {
+            if swappable_keys.contains(&v.0) {
+                return None;
+            } else {
+                return Some((v.0, v.1.clone()));
+            }
+        })
+        .collect();
+}
+
 pub fn place_keys_from_table(
     rng: &mut SmallRng,
     slots: &mut Vec<Slot>,
@@ -183,7 +207,7 @@ pub fn place_keys_from_table(
         return true;
     }
 
-    assert_eq!(
+    debug_assert_eq!(
         slots.len(),
         keys.len(),
         "Slots and keys have different lengths in place_keys_from_table"

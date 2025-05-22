@@ -19,11 +19,14 @@ swappable_keys!();
 
 const ELITE_CNT: usize = 1;
 
-// TODO: Need to re-think population management. Biggest issue is that progression is not
-// sufficiently related to score. The probabalistic selection does not give sufficient favoritism
-// to the top scorers.
-// FUTURE: If user input is allowed for population management, the underlying math needs to be
-// redone to check for errors
+// TODO: Implement the hyper-heuristic idea. Includes:
+// - Elite count (1-4)
+// - Cull count (1-4)
+// - Weighted avg for swap table
+// - Temperature goal (0.05 - 0.15)
+// - Climber count?
+// - Climb decay
+// - Climb improvement weight
 pub struct Population {
     rng: SmallRng,
     id: IdSpawner,
@@ -54,9 +57,6 @@ impl Population {
             return Err(anyhow!("Population size cannot be zero"));
         }
         let gen_pop: Vec<Keyboard> = Vec::with_capacity(pop_cnt);
-
-        // TODO: The input should just be the population total and the climber total. No need for
-        // goofy % math
 
         let climber_cnt: usize = DEFAULT_CLIMB_CNT;
         if climber_cnt > pop_cnt {
@@ -129,7 +129,7 @@ impl Population {
             self.population.push(new_kb);
         }
 
-        for p in self.population.iter_mut().filter(|p| return p.is_elite()) {
+        for p in self.population.iter_mut().filter(|p| return !p.is_elite()) {
             p.shuffle(&mut self.rng, 2);
         }
 
@@ -205,8 +205,6 @@ impl Population {
         return Ok(());
     }
 
-    // TODO: Direct index access. This *should* be an iter_mut(), but that doesn't work because
-    // hill climbing is not a self method
     // TODO: The population should store the average hill climbing iterations and use that for the
     // max without improvement, whether in full or some % of it
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {

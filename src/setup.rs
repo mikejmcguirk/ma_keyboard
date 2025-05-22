@@ -80,7 +80,7 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
 }
 
 fn confirm_continue() -> Option<ExitCode> {
-    let mut input: String = String::new();
+    let mut input = String::new();
 
     loop {
         print!("Continue? [Y/N]: ");

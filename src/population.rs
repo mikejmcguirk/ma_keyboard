@@ -40,6 +40,8 @@ pub struct Population {
 }
 
 impl Population {
+    // FUTURE: Sloppy, but don't want to get into deep refactor without knowing how the
+    // meta-population management will be handled
     pub fn create(size: Option<usize>, log_handle: &mut File) -> Result<Self> {
         const DEFAULT_POPULATION: usize = 100;
         const DEFAULT_CLIMB_CNT: usize = 20;
@@ -83,10 +85,9 @@ impl Population {
         // initial population as climbers rather than general population is unintuitive, it lets us
         // transition into the main loop logic without creating a special case for the first
         // iteration
-        // TODO: The hard-coded shuffle value needs a place to live
         for _ in 0..climber_cnt {
             let mut keyboard = Keyboard::create_primo(id.get());
-            keyboard.shuffle(&mut rng, 30);
+            keyboard.shuffle(&mut rng, SWAPPABLE_KEYS.len());
             climbers.push(keyboard);
         }
 
@@ -205,10 +206,8 @@ impl Population {
         return Ok(());
     }
 
-    // TODO: The population should store the average hill climbing iterations and use that for the
-    // max without improvement, whether in full or some % of it
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
-        let mut climber_score = 0.0;
+        let mut climber_score = 0.0_f64;
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
                 "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
@@ -224,7 +223,7 @@ impl Population {
                 corpus,
                 iter,
                 &mut self.swap_table,
-            )?;
+            );
 
             if self.climbers[i].get_score() > self.top_score {
                 self.top_score = self.climbers[i].get_score();
@@ -267,11 +266,10 @@ impl IdSpawner {
     }
 }
 
-// TODO: Feed back the average for max average without improvement
+// FUTURE: It would be better if max_iter_without_improvement were based on the average iters per
+// hill climb, but right now it would be contrived to pass around that data
 // PERF: Some of this calculation is per iteration and could be sectioned out
-// TODO: Function too long. But don't want to chip away too much without knowing how it will be
-// displayed
-// TODO: Long function signature
+// FUTURE: Don't love the shape of this function, but need to see how meta-population shakes out
 // NOTE: Changing one key at a time works best. If you change two keys, the algorithm will find
 // bigger changes less frequently. This causes the decay to continue for about as many
 // iterations as it would if doing only one step, but fewer improvements will be found,
@@ -282,12 +280,10 @@ pub fn hill_climb(
     corpus: &[String],
     iter: usize,
     swap_table: &mut SwapTable,
-) -> Result<Keyboard> {
-    // const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 90;
-    const MAX_ITER_WITHOUT_IMPROVEMENT: usize = 400;
+) -> Keyboard {
     const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
 
-    // Iter should never be high enough for this to fail
+    let max_iter_without_improvement = iter / 2;
     let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
     decay_factor = decay_factor.min(CLAMP_VALUE);
 
@@ -330,13 +326,13 @@ pub fn hill_climb(
         // NOTE: The i > 1 condition pastes over an edge case where the first improvement on the
         // first iteration is smaller than the unweighted mean due to floating point imprecision
         let plateauing: bool = weighted_avg < avg && i > 1;
-        let not_starting: bool = avg <= 0.0 && i >= MAX_ITER_WITHOUT_IMPROVEMENT;
+        let not_starting: bool = avg <= 0.0 && i >= max_iter_without_improvement;
         if plateauing || not_starting {
             break;
         }
     }
 
-    return Ok(kb);
+    return kb;
 }
 
 fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
@@ -368,15 +364,15 @@ pub struct SwapTable {
 }
 
 impl SwapTable {
-    // TODO: Obvious issue here is we have the number row in the swap table even though we don't
+    // FUTURE: Obvious issue here is we have the number row in the swap table even though we don't
     // want to use it. You could only build three rows in the table and subtract from the value of
     // the slot in get_score, but that feels like a hack
     pub fn new() -> Self {
         let mut swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>> = Vec::new();
 
-        for _ in 0..4 {
+        for _ in 0_usize..4_usize {
             let mut row: Vec<BTreeMap<Key, SwapScore>> = Vec::new();
-            for _ in 0..10 {
+            for _ in 0_usize..10_usize {
                 let mut swap_options: BTreeMap<Key, SwapScore> = BTreeMap::new();
                 for key in &SWAPPABLE_KEYS {
                     swap_options.insert(Key::from_tuple(*key), SwapScore::new());
@@ -438,10 +434,10 @@ impl SwapScore {
 
     pub fn reweight_avg(&mut self, new_score: f64) {
         let inflated_avg = self.w_avg * self.weights;
-        let adj_avg = inflated_avg * 0.995;
-        let adj_weight = self.weights * 0.995;
+        let adj_avg = inflated_avg * 0.995_f64;
+        let adj_weight = self.weights * 0.995_f64;
 
-        self.weights = adj_weight + 1.0;
+        self.weights = adj_weight + 1.0_f64;
         self.w_avg = (adj_avg + new_score) / self.weights;
     }
 }

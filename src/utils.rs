@@ -5,11 +5,9 @@ use {
 
 use {anyhow::Result, chrono::Local};
 
-// TODO: pass an option to not write to console
-// TODO: should have write_log as well
-pub fn write_log<T: Display>(handle: &mut File, err: &T) -> Result<()> {
+pub fn write_log<T: Display>(handle: &mut File, log: &T) -> Result<()> {
     let timestamp: String = Local::now().format("%Y-%m-%d, %H:%M:%S").to_string();
-    writeln!(handle, "{timestamp}: {err}")?;
+    writeln!(handle, "{timestamp}: {log}")?;
     handle.flush()?;
 
     return Ok(());

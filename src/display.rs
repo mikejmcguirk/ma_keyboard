@@ -60,14 +60,8 @@ const DVORAK_Y: u16 = QWERTY_Y + 1;
 
 const CURSOR_Y: u16 = DVORAK_Y + 1;
 
-// TODO: Need a better solution for preventing typing while running
-// TODO: For the format numbers, get the correct amounts at compile time. This will also help
-// out windows because the display struct will have a value there
-
-// TODO: In the inevitable refactor, only setting the alternate screen and clearing the
-// terminal are really inherent to the process of setting up the ability to draw. Everything
-// else can be broken out and maybe even reused
-// TODO: I would guess as well that we don't want to trigger this until user input is handled
+// FUTURE: This probably all needs to be redone, but don't want to get deep into it until I know
+// what the outputs actually are
 pub fn draw_initial(pop: &Population) -> io::Result<()> {
     stdout().queue(Clear(ClearType::All))?;
 
@@ -151,7 +145,7 @@ pub fn update_avg(score: f64) -> io::Result<()> {
 }
 
 // At least for now, it would be more contrived to iterate through everything
-// TODO: This is not a good long term solution though
+// FUTURE: This is not a good long term solution though
 pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
     let info: String = format!(
         "Generation: {:05}, ID: {:07}, Score: {:18}, Positive Iterations: {:05}",
@@ -183,10 +177,6 @@ pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
     return Ok(());
 }
 
-// TODO: You could print a theoretical climb count then the actual climbers separately. For
-// simplicity, it will all go on one line for now
-// TODO: The climb info and climb stats should show a place holder when no active climb is
-// happening
 pub fn update_climb_info(info: &str) -> io::Result<()> {
     stdout().queue(SavePosition)?;
     stdout().queue(MoveTo(0, CLIMB_INFO_Y))?;

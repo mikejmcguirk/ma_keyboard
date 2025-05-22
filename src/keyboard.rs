@@ -69,7 +69,7 @@ impl Finger {
     }
 }
 
-// TODO: Valid_slots is a meta-population level construct
+// FUTURE: Valid_slots is a meta-population level construct
 #[derive(Clone)]
 pub struct Keyboard {
     key_slots: BTreeMap<Slot, Key>,
@@ -241,8 +241,6 @@ impl Keyboard {
         };
     }
 
-    // TODO: The valid shuffle logic and the logic to shuffle the keys around is also used in the
-    // mapped swap function. Should be broken out and shared
     // FUTURE: Right now, shuffling is restricted using constants. If we start adding unmovable
     // keys to the alpha area, perhaps we break key_slots into movable and unmovable keys. This
     // will speed up shuffling, but potentially slow down the ASCII lookup since two BTrees need to
@@ -307,7 +305,7 @@ impl Keyboard {
         let mut base_a: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
-            .filter(|(slot, key)| {
+            .filter(|&(slot, key)| {
                 let invalid_location = slot.get_row() < TOP_ROW || slot.get_col() > R_PINKY;
                 let static_key = self.valid_slots[key].len() == 1;
                 if invalid_location && static_key {
@@ -328,12 +326,12 @@ impl Keyboard {
         let mut base_b: Vec<(Slot, Key, f64)> = self
             .key_slots
             .iter()
-            .filter(|(slot_b, key_b)| {
+            .filter(|&(slot_b, key_b)| {
                 let slot_a = select_a.0;
                 let key_a = select_a.1;
                 let invalid_slot = slot_b.get_row() < TOP_ROW || slot_b.get_col() > R_PINKY;
                 let bad_shuffle_check =
-                    !shuffle_check(&self.valid_slots, slot_a, key_a, **slot_b, **key_b);
+                    !shuffle_check(&self.valid_slots, slot_a, key_a, *slot_b, *key_b);
 
                 if bad_shuffle_check || invalid_slot {
                     return false;
@@ -484,12 +482,7 @@ impl Keyboard {
             }
         }
 
-        let mut display_chars: Vec<Vec<char>> = Vec::new();
-        display_chars.push(num_row);
-        display_chars.push(top_row);
-        display_chars.push(home_row);
-        display_chars.push(bot_row);
-
+        let display_chars: Vec<Vec<char>> = vec![num_row, top_row, home_row, bot_row];
         return display_chars;
     }
 

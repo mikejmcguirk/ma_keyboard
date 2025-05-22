@@ -5,7 +5,9 @@
 // These functions are designed to work with the keyboard struct. Because the struct's properties
 // are known at compile time, these functions might not check certain edge cases
 
-use {core::cmp, std::collections::BTreeMap};
+extern crate alloc;
+
+use {alloc::collections::BTreeMap, core::cmp};
 
 use rand::{Rng as _, rngs::SmallRng};
 

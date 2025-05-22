@@ -45,8 +45,8 @@ pub fn compare_slots(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> KeyCo
     let this_finger = Finger::from_slot(this_slot);
     let last_finger = Finger::from_slot(last_slot);
     let finger_match: bool = this_finger == last_finger;
-    let this_row: usize = this_slot.get_row();
-    let last_row: usize = last_slot.get_row();
+    let this_row = this_slot.get_row();
+    let last_row = last_slot.get_row();
     let row_match: bool = this_row == last_row;
 
     if finger_match {
@@ -297,8 +297,8 @@ fn get_center_dist(slot: Slot) -> usize {
 /// # Panics
 /// Panics if the rows of each key are the same
 fn check_combo(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
-    let this_row: usize = this_slot.get_row();
-    let last_row: usize = last_slot.get_row();
+    let this_row = this_slot.get_row();
+    let last_row = last_slot.get_row();
     let this_finger = Finger::from_slot(this_slot);
     let last_finger = Finger::from_slot(last_slot);
     debug_assert_ne!(
@@ -342,8 +342,8 @@ fn check_scissor(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
         "Same hands when checking for scissor",
     );
 
-    let this_col: usize = this_slot.get_col();
-    let last_col: usize = last_slot.get_col();
+    let this_col = this_slot.get_col();
+    let last_col = last_slot.get_col();
     debug_assert!(
         this_col.abs_diff(last_col) > 0,
         "{this_col} and {last_col} are the same in check_scissor"
@@ -353,8 +353,8 @@ fn check_scissor(this_slot: Slot, last_slot: Slot, is_bigram: bool) -> f64 {
         return 1.0;
     }
 
-    let this_row: usize = this_slot.get_row();
-    let last_row: usize = last_slot.get_row();
+    let this_row = this_slot.get_row();
+    let last_row = last_slot.get_row();
 
     debug_assert_ne!(this_row, last_row, "Same rows when checking for scissor",);
 

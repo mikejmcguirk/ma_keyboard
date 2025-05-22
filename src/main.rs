@@ -103,6 +103,7 @@
 #![allow(clippy::unwrap_in_result)]
 #![allow(clippy::use_debug)]
 
+mod corpus;
 mod custom_err;
 mod display;
 mod eval_funcs;

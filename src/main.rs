@@ -123,7 +123,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
-use crate::{setup::setup, utils::write_err};
+use crate::{setup::setup, utils::write_log};
 
 fn main() -> ExitCode {
     let log_dir: PathBuf = match create_log_dir() {
@@ -145,7 +145,7 @@ fn main() -> ExitCode {
     match setup(&mut log_handle, &log_dir) {
         Ok(code) => return code,
         Err(e) => {
-            if let Err(log_err) = write_err(&mut log_handle, &e) {
+            if let Err(log_err) = write_log(&mut log_handle, &e) {
                 eprintln!("{log_err}");
             }
 
@@ -174,7 +174,7 @@ fn create_log_dir() -> Result<PathBuf> {
 }
 
 fn setup_log_handle(log_dir: &Path) -> Result<File> {
-    let err_file = get_err_file(log_dir)?;
+    let err_file = get_log_file(log_dir)?;
 
     let handle: File = OpenOptions::new()
         .create(true)
@@ -184,11 +184,11 @@ fn setup_log_handle(log_dir: &Path) -> Result<File> {
     return Ok(handle);
 }
 
-fn get_err_file(log_dir: &Path) -> Result<PathBuf> {
+fn get_log_file(log_dir: &Path) -> Result<PathBuf> {
     for i in 0_u8..=99_u8 {
         const MAX_FILE_SIZE: u64 = 1024 * 1024;
 
-        let err_file = log_dir.join(format!("err_{i:02}.log"));
+        let err_file = log_dir.join(format!("{i:02}.log"));
         if !err_file.exists() {
             return Ok(err_file);
         }
@@ -199,5 +199,5 @@ fn get_err_file(log_dir: &Path) -> Result<PathBuf> {
         }
     }
 
-    return Ok(log_dir.join("err_00.log"));
+    return Ok(log_dir.join("00.log"));
 }

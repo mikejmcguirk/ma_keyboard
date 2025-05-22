@@ -18,29 +18,20 @@ use crate::{
     population::Population,
 };
 
-// FUTURE: A better architecture for this is to let the user bring in the valid keys from a config
-// file rather than actually altering the source code. So then error propagation would be the
-// better design
-// TODO: Create qwerty and dvorak controls
-// TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
+// FUTURE: At some point I'll come up with a way to load key settings from a config rather than
+// having to edit the source code. A lot of things would then need error propagation
+// FUTURE: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
 // re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
 // threadRNG? Issue with threadRNG is - it's the slower version from what I understand
 // TODO: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its
 // own file
-// TODO: Args:
-// TODO: write seed to log not error
-// TODO: The amount of mutation should depend on how old the elite is. So if you're on generation
-// 20 and the elite is from generation 10, we would want more mutation than if we're on generation
-// 20 and the elite is from generation 15. Doing this by % would get awkward in later generations
-//    though, and doing it by a static number would be unprincipled.
-// TODO: The usize conversions on the decays are still bad
+// FUTURE: Args:
 // - Save file to load
 // - Read from config file
 // - The input options will have restrictions on what is possible. Should be possible to print them
 pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     const ITERATIONS: usize = 2000;
-
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
@@ -50,10 +41,9 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     println!("{PROG_NAME}");
     println!("{NAME_DASHES}");
     println!();
-
     println!("Log Path: {}", log_dir.display());
     println!();
-    // The codes here can be success or failure
+
     if let Some(exit_code) = confirm_continue() {
         return Ok(exit_code);
     }
@@ -82,7 +72,9 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
         population.climb_kbs(&corpus, iter)?;
     }
 
-    // TODO: use display to tell the user the program's complete
+    println!();
+    println!("Complete");
+    println!();
 
     return Ok(ExitCode::SUCCESS);
 }
@@ -135,7 +127,7 @@ fn get_corpus_dir() -> Result<PathBuf> {
     return Ok(corpus_dir);
 }
 
-// TODO: Will need to be updated with typing and weights for entries
+// FUTURE: Will need to be updated with typing and weights for entries
 fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
     let corpus_content: ReadDir = match fs::read_dir(corpus_dir) {
         Ok(dir) => dir,

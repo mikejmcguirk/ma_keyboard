@@ -4,18 +4,15 @@ use {alloc::collections::BTreeMap, core::cmp, std::fs::File};
 
 use {
     anyhow::{Result, anyhow},
-    // rand::{Rng as _, SeedableRng as _, prelude::IndexedRandom as _, rngs::SmallRng},
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
 use crate::{
     custom_err::CorpusErr,
-    // display::{update_avg, update_climb_info, update_climb_stats, update_eval, update_kb},
-    display::{update_avg, update_eval, update_kb},
+    display::{update_avg, update_climb_info, update_eval, update_kb},
     keyboard::{Key, Keyboard, Slot},
-    keys,
-    swappable_keys,
-    utils::write_err,
+    keys, swappable_keys,
+    utils::write_log,
 };
 
 swappable_keys!();
@@ -47,7 +44,7 @@ impl Population {
 
         let seed: [u8; 32] = rand::random();
         let seed_string: String = format!("{seed:?}");
-        write_err(log_handle, &seed_string)?;
+        write_log(log_handle, &seed_string)?;
         let mut rng = SmallRng::from_seed(seed);
 
         let mut id = IdSpawner::new();
@@ -132,11 +129,7 @@ impl Population {
             self.population.push(new_kb);
         }
 
-        for p in self.population.iter_mut() {
-            if p.is_elite() {
-                continue;
-            }
-
+        for p in self.population.iter_mut().filter(|p| return p.is_elite()) {
             p.shuffle(&mut self.rng, 2);
         }
 
@@ -219,13 +212,13 @@ impl Population {
     pub fn climb_kbs(&mut self, corpus: &[String], iter: usize) -> Result<()> {
         let mut climber_score = 0.0;
         for i in 0..self.climbers.len() {
-            // let climb_info: String = format!(
-            //     "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
-            //     i.checked_add(1).expect("Too many climbers in climb_kbs"),
-            //     self.climbers[i].get_generation(),
-            //     self.climbers[i].get_id()
-            // );
-            // update_climb_info(&climb_info)?;
+            let climb_info: String = format!(
+                "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
+                i.checked_add(1).expect("Too many climbers in climb_kbs"),
+                self.climbers[i].get_generation(),
+                self.climbers[i].get_id()
+            );
+            update_climb_info(&climb_info)?;
 
             self.climbers[i] = hill_climb(
                 &mut self.rng,
@@ -246,13 +239,6 @@ impl Population {
         let avg_climber_score = climber_score / self.climbers.len() as f64;
         update_avg(avg_climber_score)?;
 
-        // TODO: The climb method does indeed need to tell the display there is nothing to display,
-        // but the climb method should not have to tell the display what needs displayed
-        // update_climb_info(&" ".repeat(155))?;
-        // TODO: At least for now, don't turn off climb_stats at the end of a hill climbing
-        // iteration because it makes the display flicker. Might be okay to do that once the whole
-        // line isn't being changed each time
-        // update_climb_stats(&" ".repeat(155))?;
         return Ok(());
     }
 
@@ -277,17 +263,13 @@ impl IdSpawner {
     // PERF: I want to return 0 as the first id but maybe this is an extravagance
     pub fn get(&mut self) -> usize {
         let to_return: usize = self.next_id;
-        self.next_id
-            .checked_add(1)
-            .expect("Too many kbs created when getting ID");
+        self.next_id += 1;
 
         return to_return;
     }
 }
 
-// TODO: After the swap map is added, test whether allowing the elite to climb at all is good
-// TODO: Re-introduce an annealing type concept back into here. We are not seeing reliable enough
-// cycling
+// TODO: Feed back the average for max average without improvement
 // PERF: Some of this calculation is per iteration and could be sectioned out
 // TODO: Function too long. But don't want to chip away too much without knowing how it will be
 // displayed
@@ -312,7 +294,6 @@ pub fn hill_climb(
     decay_factor = decay_factor.min(CLAMP_VALUE);
 
     let mut kb: Keyboard = keyboard.clone();
-    // let start = kb.get_score();
 
     let mut last_improvement: f64 = 0.0;
     let mut avg: f64 = 0.0;
@@ -324,7 +305,6 @@ pub fn hill_climb(
         let kb_score = kb.get_score();
 
         let mut climb_kb: Keyboard = kb.clone();
-        // climb_kb.shuffle(rng, 1);
         climb_kb.table_swap(rng, swap_table);
         climb_kb.eval(corpus);
         climb_kb.check_table_swap(swap_table);
@@ -335,23 +315,14 @@ pub fn hill_climb(
 
         avg = get_new_avg(this_improvement, avg, i);
 
-        let delta: f64 = this_improvement - last_improvement;
+        let delta = this_improvement - last_improvement;
         last_improvement = this_improvement;
         let weight = get_weight(delta);
 
         sum_weights *= decay_factor;
-        let weighted_avg_for_new: f64 = weighted_avg * sum_weights;
+        let weighted_avg_for_new = weighted_avg * sum_weights;
         sum_weights += weight;
         weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
-
-        // TODO: Have hard coded blank value when this isn't active, but need more principled
-        // method
-        // let climb_stats: String = format!(
-        //     "Iter: {:05}, Start: {:18}, Cur: {:18}, Best: {:18}, Avg: {:18}, Weighted: {:18}\r",
-        //     i, start, climb_kb_score, kb_score, avg, weighted_avg
-        // );
-        // println!("{}", climb_info.len());
-        // update_climb_stats(&climb_stats)?;
 
         if climb_kb_score > kb_score {
             climb_kb.add_pos_iter();

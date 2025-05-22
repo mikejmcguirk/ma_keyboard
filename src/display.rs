@@ -24,7 +24,6 @@ const CLIMB_Y: u16 = POP_Y + 1;
 
 const AVG_NAME: &str = "Average Climber Score: ";
 const AVG_LEN: usize = AVG_NAME.len();
-// The as conversion takes place at compile time
 const AVG_NUM_X: u16 = AVG_LEN as u16;
 const AVG_Y: u16 = POP_Y + 1;
 
@@ -37,20 +36,12 @@ const KB_BOT_Y: u16 = KB_HOME_Y + 1;
 
 const ITER_NAME: &str = "Iteration: ";
 const ITER_LEN: usize = ITER_NAME.len();
-// The as conversion takes place at compile time
 const ITER_NUM_X: u16 = ITER_LEN as u16;
 const ITER_Y: u16 = KB_BOT_Y + 2;
 
-// const MUT_NAME: &str = "Mutation Ranges: ";
-// const MUT_LEN: usize = MUT_NAME.len();
-// const MUT_NUM_X: u16 = MUT_LEN as u16;
-// const MUT_Y: u16 = ITER_Y + 1;
-
 const EVAL_NAME: &str = "Evaluating: ";
 const EVAL_LEN: usize = EVAL_NAME.len();
-// The as conversion takes place at compile time
 const EVAL_NUM_X: u16 = EVAL_LEN as u16;
-// const EVAL_Y: u16 = MUT_Y + 1;
 const EVAL_Y: u16 = ITER_Y + 1;
 
 const CLIMB_HEADER_Y: u16 = EVAL_Y + 2;
@@ -60,7 +51,7 @@ const CLIMB_STATS_Y: u16 = CLIMB_INFO_Y + 1;
 const QWERTY_NAME: &str = "Qwerty Score: ";
 const QWERTY_LEN: usize = QWERTY_NAME.len();
 const QWERTY_NUM_X: u16 = QWERTY_LEN as u16;
-const QWERTY_Y: u16 = CLIMB_STATS_Y + 2;
+const QWERTY_Y: u16 = CLIMB_STATS_Y + 1;
 
 const DVORAK_NAME: &str = "Dvorak Score: ";
 const DVORAK_LEN: usize = DVORAK_NAME.len();
@@ -92,11 +83,7 @@ pub fn draw_initial(pop: &Population) -> io::Result<()> {
 
     stdout().queue(MoveTo(0, ITER_Y))?;
     stdout().queue(Print(format!("{}{:05}", ITER_NAME, 0_i32)))?;
-    // stdout().queue(MoveTo(0, MUT_Y))?;
-    // stdout().queue(Print(format!(
-    //     "{}{:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
-    //     MUT_NAME, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32, 0_i32,
-    // )))?;
+
     stdout().queue(MoveTo(0, EVAL_Y))?;
     stdout().queue(Print(format!("{} --", EVAL_NAME)))?;
     stdout().queue(MoveTo(0, CLIMB_HEADER_Y))?;
@@ -200,33 +187,16 @@ pub fn update_kb(kb: &Keyboard) -> io::Result<()> {
 // simplicity, it will all go on one line for now
 // TODO: The climb info and climb stats should show a place holder when no active climb is
 // happening
-// pub fn update_climb_info(info: &str) -> io::Result<()> {
-//     stdout().queue(SavePosition)?;
-//     stdout().queue(MoveTo(0, CLIMB_INFO_Y))?;
-//     stdout().queue(Print(info))?;
-//     stdout().queue(RestorePosition)?;
-//
-//     stdout().flush()?;
-//
-//     return Ok(());
-// }
+pub fn update_climb_info(info: &str) -> io::Result<()> {
+    stdout().queue(SavePosition)?;
+    stdout().queue(MoveTo(0, CLIMB_INFO_Y))?;
+    stdout().queue(Print(info))?;
+    stdout().queue(RestorePosition)?;
 
-// TODO: Rather than just update the whole line, it should be possible to feed this struct the
-// individual pieces of climb data and update them in place. More logic, but less terminal IO
-// In particular, we are allocating strings to pass into these functions, when it really should
-// be possible to paass in the stack numbers. We can see here and in the climb_stats fn that
-// Print() is accepting &strs, so should it not be possible to have a permanently allocated
-// &str we edit in place?
-// pub fn update_climb_stats(stats: &str) -> io::Result<()> {
-//     stdout().queue(SavePosition)?;
-//     stdout().queue(MoveTo(0, CLIMB_STATS_Y))?;
-//     stdout().queue(Print(stats))?;
-//     stdout().queue(RestorePosition)?;
-//
-//     stdout().flush()?;
-//
-//     return Ok(());
-// }
+    stdout().flush()?;
+
+    return Ok(());
+}
 
 pub fn update_eval(num: usize) -> io::Result<()> {
     let to_print = if num > 0 {
@@ -244,27 +214,3 @@ pub fn update_eval(num: usize) -> io::Result<()> {
 
     return Ok(());
 }
-
-// // TODO: Long function signature
-// pub fn update_mut_values(
-//     low_b: usize,
-//     low_t: usize,
-//     mid_b: usize,
-//     mid_t: usize,
-//     high_b: usize,
-//     high_t: usize,
-//     huge_b: usize,
-//     huge_t: usize,
-// ) -> io::Result<()> {
-//     stdout().queue(SavePosition)?;
-//     stdout().queue(MoveTo(MUT_NUM_X, MUT_Y))?;
-//     stdout().queue(Print(format!(
-//         "{:02}, {:02} | {:02}, {:02} | {:02}, {:02} | {:02}, {:02}",
-//         low_b, low_t, mid_b, mid_t, high_b, high_t, huge_b, huge_t
-//     )))?;
-//     stdout().queue(RestorePosition)?;
-//
-//     stdout().flush()?;
-//
-//     return Ok(());
-// }

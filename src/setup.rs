@@ -12,7 +12,7 @@ use anyhow::Result;
 
 use crate::{
     corpus::initialize_corpus,
-    display::{draw_initial, update_dvorak, update_iter, update_pop_dsp, update_qwerty},
+    display::{initial_dsp, update_dvorak, update_iter, update_pop_dsp, update_qwerty},
     keyboard::Keyboard,
     population::Population,
     structs::IdSpawner,
@@ -54,7 +54,7 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     let mut id_spawner = IdSpawner::new();
     let mut population = Population::create(id_spawner.get());
 
-    draw_initial(&population)?;
+    initial_dsp(&population)?;
 
     let mut qwerty = Keyboard::create_qwerty();
     qwerty.eval();

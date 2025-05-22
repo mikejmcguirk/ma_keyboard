@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 
+// FUTURE: Should be able to make this an Arc for multi-threading
 pub static CORPUS: OnceLock<Vec<String>> = OnceLock::new();
 
 pub fn initialize_corpus() -> Result<()> {

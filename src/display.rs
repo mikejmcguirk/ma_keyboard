@@ -59,19 +59,20 @@ const CURSOR_Y: u16 = DVORAK_Y + 1;
 
 // FUTURE: This probably all needs to be redone, but don't want to get deep into it until I know
 // what the outputs actually are
-pub fn draw_initial(population: &Population) -> io::Result<()> {
+pub fn initial_dsp(population: &Population) -> io::Result<()> {
     let pop_id = format!("Population ID: {:02}, ", population.get_id());
     let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
-    let climb_cnt = format!("Climbers: {:02}", population.get_climb_cnt());
+    let climb_cnt = format!("Climbers: {:02}, ", population.get_climb_cnt());
+    let avg_climb_iter = format!("Avg. Climb Iter: {:09.02}", population.get_avg_climb_iter());
 
     stdout().queue(Clear(ClearType::All))?;
 
     stdout().queue(MoveTo(0, POP_STATS_Y))?;
     stdout().queue(Print(format!(
-        "{}{}{}{}{}",
-        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt
+        "{}{}{}{}{}{}",
+        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt, avg_climb_iter
     )))?;
     stdout().queue(MoveTo(0, AVG_Y))?;
     stdout().queue(Print(format!("{} --", AVG_NAME,)))?;
@@ -120,13 +121,14 @@ pub fn update_pop_dsp(population: &Population) -> io::Result<()> {
     let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
-    let climb_cnt = format!("Climbers: {:02}", population.get_climb_cnt());
+    let climb_cnt = format!("Climbers: {:02}, ", population.get_climb_cnt());
+    let avg_climb_iter = format!("Avg. Climb Iter: {:09.02}", population.get_avg_climb_iter());
 
     stdout().queue(SavePosition)?;
     stdout().queue(MoveTo(0, POP_STATS_Y))?;
     stdout().queue(Print(format!(
-        "{}{}{}{}{}",
-        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt
+        "{}{}{}{}{}{}",
+        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt, avg_climb_iter
     )))?;
     stdout().queue(RestorePosition)?;
 

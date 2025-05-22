@@ -47,6 +47,9 @@ pub struct Population {
     swap_table: SwapTable,
     generation: usize,
     top_score: f64,
+    total_climbs: usize,
+    avg_climb_iter: f64,
+    climb_decay: f64,
 }
 
 impl Population {
@@ -98,6 +101,9 @@ impl Population {
             swap_table: SwapTable::new(),
             generation: 0,
             top_score: 0.0,
+            total_climbs: 0,
+            avg_climb_iter: 0.0,
+            climb_decay: 0.0,
         };
     }
 
@@ -210,6 +216,8 @@ impl Population {
 
     pub fn climb_kbs(&mut self, iter: usize) -> Result<()> {
         let mut climber_score = 0.0_f64;
+        self.update_climb_decay(iter);
+
         for i in 0..self.climbers.len() {
             let climb_info: String = format!(
                 "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
@@ -219,8 +227,11 @@ impl Population {
             );
             update_climb_info(&climb_info)?;
 
-            self.climbers[i] =
-                hill_climb(&mut self.rng, &self.climbers[i], iter, &mut self.swap_table);
+            // self.climbers[i] =
+            //     hill_climb(&mut self.rng, &self.climbers[i], iter, &mut self.swap_table);
+
+            // Because climb_kbs borrows self as &mut, we can't double-borrow. Clone the kb instead
+            self.climbers[i] = self.climb_kb(self.climbers[i].clone());
 
             if self.climbers[i].get_score() > self.top_score {
                 self.top_score = self.climbers[i].get_score();
@@ -234,6 +245,65 @@ impl Population {
         update_avg(avg_climber_score)?;
 
         return Ok(());
+    }
+
+    // NOTE: Changing one key at a time works best. If you change two keys, the algorithm will find
+    // bigger changes less frequently. This causes the decay to continue for about as many
+    // iterations as it would if doing only one step, but fewer improvements will be found, causing
+    // the improvement at the end of the hill climbing step to be lower
+    fn climb_kb(&mut self, keyboard: Keyboard) -> Keyboard {
+        let mut last_improvement: f64 = 0.0;
+        let mut avg_improvement: f64 = 0.0;
+        let mut weighted_avg: f64 = 0.0;
+        let mut sum_weights: f64 = 0.0;
+
+        let mut kb = keyboard;
+
+        for i in 1..=100000 {
+            let mut climb_kb = kb.clone();
+            climb_kb.table_swap(&mut self.rng, &self.swap_table);
+            climb_kb.eval();
+            climb_kb.check_table_swap(&mut self.swap_table);
+
+            let this_improvement = (climb_kb.get_score() - kb.get_score()).max(0.0);
+            avg_improvement = get_new_avg(this_improvement, avg_improvement, i);
+
+            let improvement_delta = this_improvement - last_improvement;
+            last_improvement = this_improvement;
+
+            // TODO: This should be a population setting. I think you can do the weights as an
+            // enum
+            let this_weight = get_weight(improvement_delta);
+            sum_weights *= self.climb_decay;
+            let inflated_w_avg = weighted_avg * sum_weights;
+            sum_weights += this_weight;
+            weighted_avg = (inflated_w_avg + this_improvement * this_weight) / sum_weights;
+
+            if climb_kb.get_score() > kb.get_score() {
+                climb_kb.add_pos_iter();
+                kb = climb_kb;
+            }
+
+            // Check i > 1 to paste over an edge case where the first improvement on the first
+            // iteration is smaller than the unweighted mean due to floating point imprecision
+            let plateauing: bool = weighted_avg < avg_improvement && i > 1;
+            let i_f64 = i as f64;
+            let not_starting: bool = avg_improvement <= 0.0 && i_f64 >= self.avg_climb_iter;
+            if plateauing || not_starting {
+                self.total_climbs += 1;
+                self.avg_climb_iter = get_new_avg(i_f64, self.avg_climb_iter, self.total_climbs);
+
+                break;
+            }
+        }
+
+        return kb;
+    }
+
+    fn update_climb_decay(&mut self, iter: usize) {
+        const CLAMP_VALUE: f64 = 0.999_999_999_999_999;
+
+        self.climb_decay = (1.0 - (1.0 / iter as f64)).min(CLAMP_VALUE);
     }
 
     pub fn get_id(&self) -> usize {
@@ -254,6 +324,10 @@ impl Population {
 
     pub fn get_mutation(&self) -> usize {
         return self.mutation;
+    }
+
+    pub fn get_avg_climb_iter(&self) -> f64 {
+        return self.avg_climb_iter;
     }
 
     // TODO: Maybe don't need this. If you're creating an offspring maybe you would just create a
@@ -314,74 +388,6 @@ impl Population {
     pub fn randomize_mutation(&mut self) {
         self.mutation = self.rng.random_range(MIN_MUTATION..=MAX_MUTATION);
     }
-}
-
-// FUTURE: It would be better if max_iter_without_improvement were based on the average iters per
-// hill climb, but right now it would be contrived to pass around that data
-// PERF: Some of this calculation is per iteration and could be sectioned out
-// FUTURE: Don't love the shape of this function, but need to see how meta-population shakes out
-// NOTE: Changing one key at a time works best. If you change two keys, the algorithm will find
-// bigger changes less frequently. This causes the decay to continue for about as many
-// iterations as it would if doing only one step, but fewer improvements will be found,
-// causing the improvement at the end of the hill climbing step to be lower
-pub fn hill_climb(
-    rng: &mut SmallRng,
-    keyboard: &Keyboard,
-    iter: usize,
-    swap_table: &mut SwapTable,
-) -> Keyboard {
-    const CLAMP_VALUE: f64 = 0.999_999_999_999_999_9;
-
-    let max_iter_without_improvement = iter / 2;
-    let mut decay_factor: f64 = 1.0 - (1.0 / iter as f64);
-    decay_factor = decay_factor.min(CLAMP_VALUE);
-
-    let mut kb: Keyboard = keyboard.clone();
-
-    let mut last_improvement: f64 = 0.0;
-    let mut avg: f64 = 0.0;
-    let mut weighted_avg: f64 = 0.0;
-    let mut sum_weights: f64 = 0.0;
-
-    // One indexed for averaging math and display
-    for i in 1..=10000 {
-        let kb_score = kb.get_score();
-
-        let mut climb_kb: Keyboard = kb.clone();
-        climb_kb.table_swap(rng, swap_table);
-        climb_kb.eval();
-        climb_kb.check_table_swap(swap_table);
-        let climb_kb_score = climb_kb.get_score();
-
-        let this_change = climb_kb_score - kb_score;
-        let this_improvement = (this_change).max(0.0);
-
-        avg = get_new_avg(this_improvement, avg, i);
-
-        let delta = this_improvement - last_improvement;
-        last_improvement = this_improvement;
-        let weight = get_weight(delta);
-
-        sum_weights *= decay_factor;
-        let weighted_avg_for_new = weighted_avg * sum_weights;
-        sum_weights += weight;
-        weighted_avg = (weighted_avg_for_new + this_improvement * weight) / sum_weights;
-
-        if climb_kb_score > kb_score {
-            climb_kb.add_pos_iter();
-            kb = climb_kb;
-        }
-
-        // NOTE: The i > 1 condition pastes over an edge case where the first improvement on the
-        // first iteration is smaller than the unweighted mean due to floating point imprecision
-        let plateauing: bool = weighted_avg < avg && i > 1;
-        let not_starting: bool = avg <= 0.0 && i >= max_iter_without_improvement;
-        if plateauing || not_starting {
-            break;
-        }
-    }
-
-    return kb;
 }
 
 fn get_new_avg(new_value: f64, old_avg: f64, new_count: usize) -> f64 {
@@ -482,11 +488,10 @@ impl SwapScore {
     }
 
     pub fn reweight_avg(&mut self, new_score: f64) {
+        self.weights *= 0.995_f64;
         let inflated_avg = self.w_avg * self.weights;
-        let adj_avg = inflated_avg * 0.995_f64;
-        let adj_weight = self.weights * 0.995_f64;
+        self.weights += 1.0_f64;
 
-        self.weights = adj_weight + 1.0_f64;
-        self.w_avg = (adj_avg + new_score) / self.weights;
+        self.w_avg = (inflated_avg + new_score) / self.weights;
     }
 }

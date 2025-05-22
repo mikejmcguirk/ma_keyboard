@@ -49,7 +49,11 @@ pub fn get_improvement(
     return improvement;
 }
 
-pub fn select_key(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot, Key, f64) {
+pub fn select_key(
+    rng: &mut SmallRng,
+    values: &mut [(Slot, Key, f64)],
+    k_temp: f64,
+) -> (Slot, Key, f64) {
     debug_assert!(
         !values.is_empty(),
         "Should always be candidates in select_swap"
@@ -57,7 +61,7 @@ pub fn select_key(rng: &mut SmallRng, values: &mut [(Slot, Key, f64)]) -> (Slot,
 
     apply_minmax(values);
     let var = get_variance(values);
-    let temp = get_temp(var);
+    let temp = get_temp(var, k_temp);
     apply_softmax(values, temp);
 
     let selection = mapped_roulette(rng, values);
@@ -122,18 +126,16 @@ pub fn get_variance(values: &[(Slot, Key, f64)]) -> f64 {
 
 // This function assumes we are working with min/maxed weighted averages. This means the
 // temperature values required to produce sharper probability distributions will be low
-pub fn get_temp(var: f64) -> f64 {
+pub fn get_temp(var: f64, k_temp: f64) -> f64 {
     const DECAY_MIN: f64 = 0.01;
-    const DECAY_MAX_PART: f64 = 0.14;
-    // When normalized variance is 0.05, temp should be 0.08
-    const K_TEMP: f64 = -13.862_943_611_198_906;
+    const DECAY_MAX_PART: f64 = 0.19;
 
     debug_assert!(
         (0.0_f64..=0.25_f64).contains(&var),
         "Var {var} invalid in get_temp"
     );
 
-    return DECAY_MIN + DECAY_MAX_PART * (K_TEMP * var).exp();
+    return DECAY_MIN + DECAY_MAX_PART * (k_temp * var).exp();
 }
 
 pub fn apply_softmax(values: &mut [(Slot, Key, f64)], temp: f64) {

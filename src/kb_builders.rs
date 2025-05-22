@@ -204,6 +204,7 @@ pub fn place_keys_from_table(
     swap_table: &SwapTable,
     key_slots: &mut BTreeMap<Slot, Key>,
     valid_slots: &BTreeMap<Key, Vec<Slot>>,
+    k_temp: f64,
 ) -> bool {
     if slots.is_empty() && keys.is_empty() {
         return true;
@@ -238,7 +239,7 @@ pub fn place_keys_from_table(
         return false;
     }
 
-    let select_key = select_key(rng, &mut candidates);
+    let select_key = select_key(rng, &mut candidates, k_temp);
     key_slots.insert(select_key.0, select_key.1);
 
     slots.remove(slot_idx);
@@ -249,7 +250,7 @@ pub fn place_keys_from_table(
         .expect("Should not have pulled a missing key");
     keys.remove(key_idx);
 
-    if place_keys_from_table(rng, slots, keys, swap_table, key_slots, valid_slots) {
+    if place_keys_from_table(rng, slots, keys, swap_table, key_slots, valid_slots, k_temp) {
         return true;
     }
 

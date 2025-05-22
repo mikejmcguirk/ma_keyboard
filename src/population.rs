@@ -30,6 +30,9 @@ const MAX_MUTATION: usize = 3;
 const MIN_SCORE_DECAY: f64 = 0.9;
 const MAX_SCORE_DECAY: f64 = 0.998;
 
+const K_TEMP_MIN: f64 = -31.162_892_36;
+const K_TEMP_MAX: f64 = -6.107_632_992;
+
 // TODO: Implement the hyper-heuristic idea. Includes:
 // - Weighted avg for swap table
 // - Temperature goal (0.05 - 0.15)
@@ -48,6 +51,7 @@ pub struct Population {
     elite_cnt: usize,
     mutation: usize,
     swap_table: SwapTable,
+    k_temp: f64,
     score_decay: f64,
     generation: usize,
     top_score: f64,
@@ -91,6 +95,7 @@ impl Population {
             keyboard.shuffle(SWAPPABLE_KEYS.len());
             climbers.push(keyboard);
         }
+        let k_temp = rng.random_range(K_TEMP_MIN..=K_TEMP_MAX);
 
         let score_decay = rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY);
 
@@ -105,6 +110,7 @@ impl Population {
             elite_cnt,
             mutation,
             swap_table: SwapTable::new(),
+            k_temp,
             score_decay,
             generation: 0,
             top_score: 0.0,
@@ -142,6 +148,7 @@ impl Population {
                 &self.swap_table,
                 self.generation,
                 self.id_spawner.get(),
+                self.k_temp,
             );
             self.population.push(new_kb);
         }
@@ -264,7 +271,7 @@ impl Population {
 
         for i in 1..=100000 {
             let mut climb_kb = kb.kb_clone();
-            climb_kb.table_swap(&self.swap_table);
+            climb_kb.table_swap(&self.swap_table, self.k_temp);
             climb_kb.eval();
             self.update_from_swap(climb_kb.get_last_swap_info());
 
@@ -397,6 +404,14 @@ impl Population {
 
     pub fn randomize_decay(&mut self) {
         self.score_decay = self.rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY);
+    }
+
+    pub fn get_k_temp(&self) -> f64 {
+        return self.k_temp;
+    }
+
+    pub fn randomize_k_temp(&mut self) {
+        self.k_temp = self.rng.random_range(K_TEMP_MIN..=K_TEMP_MAX);
     }
 }
 

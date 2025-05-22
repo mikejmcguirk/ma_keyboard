@@ -233,7 +233,12 @@ impl Keyboard {
         };
     }
 
-    pub fn from_swap_table(swap_table: &SwapTable, gen_in: usize, id_in: usize) -> Self {
+    pub fn from_swap_table(
+        swap_table: &SwapTable,
+        gen_in: usize,
+        id_in: usize,
+        k_temp: f64,
+    ) -> Self {
         let seed: [u8; 32] = rand::random();
         let mut rng = SmallRng::from_seed(seed);
 
@@ -257,6 +262,7 @@ impl Keyboard {
                 swap_table,
                 &mut key_slots,
                 &valid_slots,
+                k_temp,
             ) {
                 break;
             }
@@ -346,7 +352,7 @@ impl Keyboard {
 
     // FUTURE: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
-    pub fn table_swap(&mut self, swap_table: &SwapTable) {
+    pub fn table_swap(&mut self, swap_table: &SwapTable, k_temp: f64) {
         self.evaluated = false;
         self.last_score = self.score;
 
@@ -368,7 +374,7 @@ impl Keyboard {
             })
             .collect();
 
-        let select_a = select_key(&mut self.rng, &mut base_a);
+        let select_a = select_key(&mut self.rng, &mut base_a, k_temp);
         let select_a_score = swap_table.get_score(&select_a.0, &select_a.1);
 
         let mut base_b: Vec<(Slot, Key, f64)> = self
@@ -397,7 +403,7 @@ impl Keyboard {
             })
             .collect();
 
-        let select_b = select_key(&mut self.rng, &mut base_b);
+        let select_b = select_key(&mut self.rng, &mut base_b, k_temp);
         self.swap_keys(select_a.0, select_a.1, select_b.0, select_b.1);
     }
 
@@ -426,45 +432,6 @@ impl Keyboard {
         let score_diff = self.score - self.last_score;
 
         return (last_slot_a, last_key_a, last_slot_b, last_key_b, score_diff);
-    }
-
-    // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
-    // layout to change. Be careful over-indexing for any particular factor
-    fn get_efficiency(&mut self, this_slot: Slot) -> f64 {
-        let mut eff = BASE_EFF;
-
-        let this_hand = Hand::from_slot(this_slot);
-        if this_hand == Hand::Right {
-            self.right_uses += 1.0_f64;
-        } else {
-            self.left_uses += 1.0_f64;
-        }
-
-        eff *= global_adjustments(this_slot);
-
-        let last_compare: Option<KeyCompare> = self
-            .last_slot_idx
-            .map(|last_slot| return compare_slots(this_slot, last_slot, true));
-        if let Some(key_compare) = last_compare {
-            match key_compare {
-                KeyCompare::Mult(x) => return eff * x,
-                KeyCompare::Mismatch => {}
-            }
-        }
-
-        let prev_compare: Option<KeyCompare> = self
-            .prev_slot_idx
-            .map(|prev_slot| return compare_slots(this_slot, prev_slot, false));
-        if let Some(key_compare) = prev_compare {
-            match key_compare {
-                KeyCompare::Mult(x) => return eff * x,
-                KeyCompare::Mismatch => {}
-            }
-        }
-
-        eff *= check_key_no_hist(this_slot);
-
-        return eff;
     }
 
     pub fn eval(&mut self) {
@@ -504,6 +471,45 @@ impl Keyboard {
         }
 
         self.evaluated = true;
+    }
+
+    // NOTE: A single major efficiency penalty at any point in the algorithm can cause the entire
+    // layout to change. Be careful over-indexing for any particular factor
+    fn get_efficiency(&mut self, this_slot: Slot) -> f64 {
+        let mut eff = BASE_EFF;
+
+        let this_hand = Hand::from_slot(this_slot);
+        if this_hand == Hand::Right {
+            self.right_uses += 1.0_f64;
+        } else {
+            self.left_uses += 1.0_f64;
+        }
+
+        eff *= global_adjustments(this_slot);
+
+        let last_compare: Option<KeyCompare> = self
+            .last_slot_idx
+            .map(|last_slot| return compare_slots(this_slot, last_slot, true));
+        if let Some(key_compare) = last_compare {
+            match key_compare {
+                KeyCompare::Mult(x) => return eff * x,
+                KeyCompare::Mismatch => {}
+            }
+        }
+
+        let prev_compare: Option<KeyCompare> = self
+            .prev_slot_idx
+            .map(|prev_slot| return compare_slots(this_slot, prev_slot, false));
+        if let Some(key_compare) = prev_compare {
+            match key_compare {
+                KeyCompare::Mult(x) => return eff * x,
+                KeyCompare::Mismatch => {}
+            }
+        }
+
+        eff *= check_key_no_hist(this_slot);
+
+        return eff;
     }
 
     // FUTURE: Very inefficient

@@ -12,18 +12,14 @@ use {
 use anyhow::{Result, anyhow};
 
 use crate::{
-    display::{draw_initial, update_iter},
+    display::{draw_initial, update_dvorak, update_iter, update_qwerty},
+    keyboard::Keyboard,
     population::Population,
 };
 
-// TODO: The second rng is quite bad
-// TODO: A better architecture for this is to let the user bring in the valid keys from a config
+// FUTURE: A better architecture for this is to let the user bring in the valid keys from a config
 // file rather than actually altering the source code. So then error propagation would be the
 // better design
-// TODO: I think display being globally available context acutally makes sense, but not totally
-// sure how to do it
-// TODO: THe mutation amounts need to go back to ranges, given that we have further segmented out
-// the hill climbing as its own thing and we have reduced to one elite
 // TODO: Create qwerty and dvorak controls
 // TODO: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
 // re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
@@ -31,7 +27,6 @@ use crate::{
 // TODO: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its
 // own file
-// TODO: Run qwerty and dvorak controls for scoring
 // TODO: Args:
 // TODO: write seed to log not error
 // TODO: The amount of mutation should depend on how old the elite is. So if you're on generation
@@ -39,15 +34,11 @@ use crate::{
 // 20 and the elite is from generation 15. Doing this by % would get awkward in later generations
 //    though, and doing it by a static number would be unprincipled.
 // TODO: The usize conversions on the decays are still bad
-// - Population size
-// - Layout to rate
 // - Save file to load
 // - Read from config file
 // - The input options will have restrictions on what is possible. Should be possible to print them
-// - Amount of elites
-// - Amount to cull
 pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
-    const ITERATIONS: usize = 1000;
+    const ITERATIONS: usize = 2000;
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
@@ -70,9 +61,17 @@ pub fn setup(log_handle: &mut File) -> Result<ExitCode> {
 
     draw_initial(&population)?;
 
+    let mut qwerty = Keyboard::create_qwerty();
+    qwerty.eval(&corpus);
+    update_qwerty(qwerty.get_score())?;
+
+    let mut dvorak = Keyboard::create_dvorak();
+    dvorak.eval(&corpus);
+    update_dvorak(dvorak.get_score())?;
+
     for iter in 1..=ITERATIONS {
         update_iter(iter)?;
-        population.mutate_climbers();
+        population.refill_pop();
 
         population.eval_gen_pop(&corpus)?;
         population.setup_climbers()?;
@@ -133,7 +132,6 @@ fn get_corpus_dir() -> Result<PathBuf> {
 }
 
 // TODO: Will need to be updated with typing and weights for entries
-// TODO: Do we just consume corpus_dir here?
 fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
     let corpus_content: ReadDir = match fs::read_dir(corpus_dir) {
         Ok(dir) => dir,

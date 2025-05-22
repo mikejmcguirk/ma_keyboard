@@ -104,7 +104,7 @@ impl Population {
         });
     }
 
-    pub fn mutate_climbers(&mut self) {
+    pub fn refill_pop(&mut self) {
         self.generation += 1;
 
         debug_assert!(
@@ -128,6 +128,14 @@ impl Population {
                 self.id.get(),
             );
             self.population.push(new_kb);
+        }
+
+        for p in self.population.iter_mut() {
+            if p.is_elite() {
+                continue;
+            }
+
+            p.shuffle(&mut self.rng, 2);
         }
 
         assert_eq!(

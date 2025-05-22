@@ -8,7 +8,8 @@ use crate::{
     kb_consts, kb_helper_consts,
     kb_helpers::{
         check_col, check_key_no_hist, compare_slots, get_valid_key_locs_sorted,
-        global_adjustments, place_keys, place_keys_from_table, select_key,
+        global_adjustments, place_dvorak_keys, place_keys, place_keys_from_table,
+        place_qwerty_keys, select_key,
     },
     population::SwapTable,
     swappable_arr, swappable_keys,
@@ -59,6 +60,7 @@ impl Finger {
     }
 }
 
+// TODO: Valid_slots is a meta-population level construct
 #[derive(Clone)]
 pub struct Keyboard {
     key_slots: BTreeMap<Slot, Key>,
@@ -107,6 +109,70 @@ impl Keyboard {
             prev_slot_idx: None,
             generation: 0,
             id: id_in,
+            evaluated: false,
+            score: 0.0,
+            left_uses: 0.0,
+            right_uses: 0.0,
+            is_elite: false,
+            pos_iter: 0,
+            last_score: 0.0,
+            last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+            last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+        };
+    }
+
+    pub fn create_qwerty() -> Self {
+        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
+        let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
+        place_qwerty_keys(&mut key_slots);
+        let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
+
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &key_slots {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
+
+        return Self {
+            key_slots,
+            valid_slots,
+            slot_ascii,
+            last_slot_idx: None,
+            prev_slot_idx: None,
+            generation: 0,
+            id: 0,
+            evaluated: false,
+            score: 0.0,
+            left_uses: 0.0,
+            right_uses: 0.0,
+            is_elite: false,
+            pos_iter: 0,
+            last_score: 0.0,
+            last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+            last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+        };
+    }
+
+    pub fn create_dvorak() -> Self {
+        let mut key_slots: BTreeMap<Slot, Key> = BTreeMap::new();
+        let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
+        place_dvorak_keys(&mut key_slots);
+        let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
+
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &key_slots {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
+
+        return Self {
+            key_slots,
+            valid_slots,
+            slot_ascii,
+            last_slot_idx: None,
+            prev_slot_idx: None,
+            generation: 0,
+            id: 0,
             evaluated: false,
             score: 0.0,
             left_uses: 0.0,
@@ -503,9 +569,9 @@ impl Keyboard {
         return self.id;
     }
 
-    // pub fn is_elite(&self) -> bool {
-    //     return self.is_elite;
-    // }
+    pub fn is_elite(&self) -> bool {
+        return self.is_elite;
+    }
 
     pub fn set_elite(&mut self) {
         self.is_elite = true;

@@ -232,6 +232,112 @@ pub fn place_keys_from_table(
     return false;
 }
 
+pub fn place_qwerty_keys(key_slots: &mut BTreeMap<Slot, Key>) {
+    key_slots.insert(Slot::from_tuple((0, 0)), Key::from_tuple(ONE));
+    key_slots.insert(Slot::from_tuple((0, 1)), Key::from_tuple(TWO));
+    key_slots.insert(Slot::from_tuple((0, 2)), Key::from_tuple(THREE));
+    key_slots.insert(Slot::from_tuple((0, 3)), Key::from_tuple(FOUR));
+    key_slots.insert(Slot::from_tuple((0, 4)), Key::from_tuple(FIVE));
+    key_slots.insert(Slot::from_tuple((0, 5)), Key::from_tuple(SIX));
+    key_slots.insert(Slot::from_tuple((0, 6)), Key::from_tuple(SEVEN));
+    key_slots.insert(Slot::from_tuple((0, 7)), Key::from_tuple(EIGHT));
+    key_slots.insert(Slot::from_tuple((0, 8)), Key::from_tuple(NINE));
+    key_slots.insert(Slot::from_tuple((0, 9)), Key::from_tuple(ZERO));
+    key_slots.insert(Slot::from_tuple((0, 10)), Key::from_tuple(DASH));
+    key_slots.insert(Slot::from_tuple((0, 11)), Key::from_tuple(EQUALS));
+
+    key_slots.insert(Slot::from_tuple((1, 0)), Key::from_tuple(Q));
+    key_slots.insert(Slot::from_tuple((1, 1)), Key::from_tuple(W));
+    key_slots.insert(Slot::from_tuple((1, 2)), Key::from_tuple(E));
+    key_slots.insert(Slot::from_tuple((1, 3)), Key::from_tuple(R));
+    key_slots.insert(Slot::from_tuple((1, 4)), Key::from_tuple(T));
+    key_slots.insert(Slot::from_tuple((1, 5)), Key::from_tuple(Y));
+    key_slots.insert(Slot::from_tuple((1, 6)), Key::from_tuple(U));
+    key_slots.insert(Slot::from_tuple((1, 7)), Key::from_tuple(I));
+    key_slots.insert(Slot::from_tuple((1, 8)), Key::from_tuple(O));
+    key_slots.insert(Slot::from_tuple((1, 9)), Key::from_tuple(P));
+    key_slots.insert(Slot::from_tuple((1, 10)), Key::from_tuple(L_BRACKET));
+    key_slots.insert(Slot::from_tuple((1, 11)), Key::from_tuple(R_BRACKET));
+    key_slots.insert(Slot::from_tuple((1, 12)), Key::from_tuple(BACKSLASH));
+
+    key_slots.insert(Slot::from_tuple((2, 0)), Key::from_tuple(A));
+    key_slots.insert(Slot::from_tuple((2, 1)), Key::from_tuple(S));
+    key_slots.insert(Slot::from_tuple((2, 2)), Key::from_tuple(D));
+    key_slots.insert(Slot::from_tuple((2, 3)), Key::from_tuple(F));
+    key_slots.insert(Slot::from_tuple((2, 4)), Key::from_tuple(G));
+    key_slots.insert(Slot::from_tuple((2, 5)), Key::from_tuple(H));
+    key_slots.insert(Slot::from_tuple((2, 6)), Key::from_tuple(J));
+    key_slots.insert(Slot::from_tuple((2, 7)), Key::from_tuple(K));
+    key_slots.insert(Slot::from_tuple((2, 8)), Key::from_tuple(L));
+    key_slots.insert(Slot::from_tuple((2, 9)), Key::from_tuple(SEMICOLON));
+    key_slots.insert(Slot::from_tuple((2, 10)), Key::from_tuple(QUOTE));
+    key_slots.insert(Slot::from_tuple((2, 11)), Key::from_tuple(NEWLINE));
+
+    key_slots.insert(Slot::from_tuple((3, 0)), Key::from_tuple(Z));
+    key_slots.insert(Slot::from_tuple((3, 1)), Key::from_tuple(X));
+    key_slots.insert(Slot::from_tuple((3, 2)), Key::from_tuple(C));
+    key_slots.insert(Slot::from_tuple((3, 3)), Key::from_tuple(V));
+    key_slots.insert(Slot::from_tuple((3, 4)), Key::from_tuple(B));
+    key_slots.insert(Slot::from_tuple((3, 5)), Key::from_tuple(N));
+    key_slots.insert(Slot::from_tuple((3, 6)), Key::from_tuple(M));
+    key_slots.insert(Slot::from_tuple((3, 7)), Key::from_tuple(COMMA));
+    key_slots.insert(Slot::from_tuple((3, 8)), Key::from_tuple(PERIOD));
+    key_slots.insert(Slot::from_tuple((3, 9)), Key::from_tuple(F_SLASH));
+}
+
+pub fn place_dvorak_keys(key_slots: &mut BTreeMap<Slot, Key>) {
+    key_slots.insert(Slot::from_tuple((0, 0)), Key::from_tuple(ONE));
+    key_slots.insert(Slot::from_tuple((0, 1)), Key::from_tuple(TWO));
+    key_slots.insert(Slot::from_tuple((0, 2)), Key::from_tuple(THREE));
+    key_slots.insert(Slot::from_tuple((0, 3)), Key::from_tuple(FOUR));
+    key_slots.insert(Slot::from_tuple((0, 4)), Key::from_tuple(FIVE));
+    key_slots.insert(Slot::from_tuple((0, 5)), Key::from_tuple(SIX));
+    key_slots.insert(Slot::from_tuple((0, 6)), Key::from_tuple(SEVEN));
+    key_slots.insert(Slot::from_tuple((0, 7)), Key::from_tuple(EIGHT));
+    key_slots.insert(Slot::from_tuple((0, 8)), Key::from_tuple(NINE));
+    key_slots.insert(Slot::from_tuple((0, 9)), Key::from_tuple(ZERO));
+    key_slots.insert(Slot::from_tuple((0, 10)), Key::from_tuple(L_BRACKET));
+    key_slots.insert(Slot::from_tuple((0, 11)), Key::from_tuple(R_BRACKET));
+
+    key_slots.insert(Slot::from_tuple((1, 0)), Key::from_tuple(QUOTE));
+    key_slots.insert(Slot::from_tuple((1, 1)), Key::from_tuple(COMMA));
+    key_slots.insert(Slot::from_tuple((1, 2)), Key::from_tuple(PERIOD));
+    key_slots.insert(Slot::from_tuple((1, 3)), Key::from_tuple(P));
+    key_slots.insert(Slot::from_tuple((1, 4)), Key::from_tuple(Y));
+    key_slots.insert(Slot::from_tuple((1, 5)), Key::from_tuple(F));
+    key_slots.insert(Slot::from_tuple((1, 6)), Key::from_tuple(G));
+    key_slots.insert(Slot::from_tuple((1, 7)), Key::from_tuple(C));
+    key_slots.insert(Slot::from_tuple((1, 8)), Key::from_tuple(R));
+    key_slots.insert(Slot::from_tuple((1, 9)), Key::from_tuple(L));
+    key_slots.insert(Slot::from_tuple((1, 10)), Key::from_tuple(F_SLASH));
+    key_slots.insert(Slot::from_tuple((1, 11)), Key::from_tuple(EQUALS));
+    key_slots.insert(Slot::from_tuple((1, 12)), Key::from_tuple(BACKSLASH));
+
+    key_slots.insert(Slot::from_tuple((2, 0)), Key::from_tuple(A));
+    key_slots.insert(Slot::from_tuple((2, 1)), Key::from_tuple(O));
+    key_slots.insert(Slot::from_tuple((2, 2)), Key::from_tuple(E));
+    key_slots.insert(Slot::from_tuple((2, 3)), Key::from_tuple(U));
+    key_slots.insert(Slot::from_tuple((2, 4)), Key::from_tuple(I));
+    key_slots.insert(Slot::from_tuple((2, 5)), Key::from_tuple(D));
+    key_slots.insert(Slot::from_tuple((2, 6)), Key::from_tuple(H));
+    key_slots.insert(Slot::from_tuple((2, 7)), Key::from_tuple(T));
+    key_slots.insert(Slot::from_tuple((2, 8)), Key::from_tuple(N));
+    key_slots.insert(Slot::from_tuple((2, 9)), Key::from_tuple(S));
+    key_slots.insert(Slot::from_tuple((2, 10)), Key::from_tuple(DASH));
+    key_slots.insert(Slot::from_tuple((2, 11)), Key::from_tuple(NEWLINE));
+
+    key_slots.insert(Slot::from_tuple((3, 0)), Key::from_tuple(SEMICOLON));
+    key_slots.insert(Slot::from_tuple((3, 1)), Key::from_tuple(Q));
+    key_slots.insert(Slot::from_tuple((3, 2)), Key::from_tuple(J));
+    key_slots.insert(Slot::from_tuple((3, 3)), Key::from_tuple(K));
+    key_slots.insert(Slot::from_tuple((3, 4)), Key::from_tuple(X));
+    key_slots.insert(Slot::from_tuple((3, 5)), Key::from_tuple(B));
+    key_slots.insert(Slot::from_tuple((3, 6)), Key::from_tuple(M));
+    key_slots.insert(Slot::from_tuple((3, 7)), Key::from_tuple(W));
+    key_slots.insert(Slot::from_tuple((3, 8)), Key::from_tuple(V));
+    key_slots.insert(Slot::from_tuple((3, 9)), Key::from_tuple(Z));
+}
+
 pub fn global_adjustments(slot: Slot) -> f64 {
     let mut mult = BASE_EFF;
     let finger = Finger::from_slot(slot);

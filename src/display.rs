@@ -57,7 +57,17 @@ const CLIMB_HEADER_Y: u16 = EVAL_Y + 2;
 const CLIMB_INFO_Y: u16 = CLIMB_HEADER_Y + 1;
 const CLIMB_STATS_Y: u16 = CLIMB_INFO_Y + 1;
 
-const CURSOR_Y: u16 = CLIMB_STATS_Y + 1;
+const QWERTY_NAME: &str = "Qwerty Score: ";
+const QWERTY_LEN: usize = QWERTY_NAME.len();
+const QWERTY_NUM_X: u16 = QWERTY_LEN as u16;
+const QWERTY_Y: u16 = CLIMB_STATS_Y + 2;
+
+const DVORAK_NAME: &str = "Dvorak Score: ";
+const DVORAK_LEN: usize = DVORAK_NAME.len();
+const DVORAK_NUM_X: u16 = DVORAK_LEN as u16;
+const DVORAK_Y: u16 = QWERTY_Y + 1;
+
+const CURSOR_Y: u16 = DVORAK_Y + 1;
 
 // TODO: Need a better solution for preventing typing while running
 // TODO: For the format numbers, get the correct amounts at compile time. This will also help
@@ -96,6 +106,12 @@ pub fn draw_initial(pop: &Population) -> io::Result<()> {
     stdout().queue(Print(" ".repeat(155)))?;
     stdout().queue(MoveTo(0, CLIMB_STATS_Y))?;
     stdout().queue(Print(" ".repeat(155)))?;
+
+    stdout().queue(MoveTo(0, QWERTY_Y))?;
+    stdout().queue(Print(QWERTY_NAME))?;
+    stdout().queue(MoveTo(0, DVORAK_Y))?;
+    stdout().queue(Print(DVORAK_NAME))?;
+
     stdout().queue(MoveTo(0, CURSOR_Y))?;
 
     stdout().flush()?;
@@ -107,6 +123,28 @@ pub fn update_iter(iter: usize) -> io::Result<()> {
     stdout().queue(SavePosition)?;
     stdout().queue(MoveTo(ITER_NUM_X, ITER_Y))?;
     stdout().queue(Print(format!("{:05}", iter)))?;
+    stdout().queue(RestorePosition)?;
+
+    stdout().flush()?;
+
+    return Ok(());
+}
+
+pub fn update_qwerty(score: f64) -> io::Result<()> {
+    stdout().queue(SavePosition)?;
+    stdout().queue(MoveTo(QWERTY_NUM_X, QWERTY_Y))?;
+    stdout().queue(Print(format!("{:05}", score)))?;
+    stdout().queue(RestorePosition)?;
+
+    stdout().flush()?;
+
+    return Ok(());
+}
+
+pub fn update_dvorak(score: f64) -> io::Result<()> {
+    stdout().queue(SavePosition)?;
+    stdout().queue(MoveTo(DVORAK_NUM_X, DVORAK_Y))?;
+    stdout().queue(Print(format!("{:05}", score)))?;
     stdout().queue(RestorePosition)?;
 
     stdout().flush()?;

@@ -27,6 +27,9 @@ const MAX_ELITES: usize = 2;
 const MIN_MUTATION: usize = 0;
 const MAX_MUTATION: usize = 3;
 
+const MIN_SCORE_DECAY: f64 = 0.9;
+const MAX_SCORE_DECAY: f64 = 0.998;
+
 // TODO: Implement the hyper-heuristic idea. Includes:
 // - Weighted avg for swap table
 // - Temperature goal (0.05 - 0.15)
@@ -45,6 +48,7 @@ pub struct Population {
     elite_cnt: usize,
     mutation: usize,
     swap_table: SwapTable,
+    score_decay: f64,
     generation: usize,
     top_score: f64,
     total_climbs: usize,
@@ -88,6 +92,8 @@ impl Population {
             climbers.push(keyboard);
         }
 
+        let score_decay = rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY);
+
         return Self {
             id: id_in,
             rng,
@@ -99,6 +105,7 @@ impl Population {
             elite_cnt,
             mutation,
             swap_table: SwapTable::new(),
+            score_decay,
             generation: 0,
             top_score: 0.0,
             total_climbs: 0,
@@ -118,7 +125,7 @@ impl Population {
                 break;
             }
 
-            self.population.push(c.clone());
+            self.population.push(c.kb_clone());
         }
 
         // If the new climber_cnt is <= the old one, that number should be moved. If the new
@@ -227,11 +234,8 @@ impl Population {
             );
             update_climb_info(&climb_info)?;
 
-            // self.climbers[i] =
-            //     hill_climb(&mut self.rng, &self.climbers[i], iter, &mut self.swap_table);
-
-            // Because climb_kbs borrows self as &mut, we can't double-borrow. Clone the kb instead
-            self.climbers[i] = self.climb_kb(self.climbers[i].clone());
+            // Because climb_kbs borrows self as &mut, we can't double-borrow. Clone instead
+            self.climbers[i] = self.climb_kb(self.climbers[i].kb_clone());
 
             if self.climbers[i].get_score() > self.top_score {
                 self.top_score = self.climbers[i].get_score();
@@ -260,10 +264,9 @@ impl Population {
         let mut kb = keyboard;
 
         for i in 1..=100000 {
-            let mut climb_kb = kb.clone();
+            let mut climb_kb = kb.kb_clone();
             climb_kb.table_swap(&mut self.rng, &self.swap_table);
             climb_kb.eval();
-            // climb_kb.check_table_swap(&mut self.swap_table);
             self.update_from_swap(climb_kb.get_last_swap_info());
 
             let this_improvement = (climb_kb.get_score() - kb.get_score()).max(0.0);
@@ -301,6 +304,12 @@ impl Population {
         return kb;
     }
 
+    fn update_climb_decay(&mut self, iter: usize) {
+        const CLAMP_VALUE: f64 = 0.999_999_999_999_999;
+
+        self.climb_decay = (1.0 - (1.0 / iter as f64)).min(CLAMP_VALUE);
+    }
+
     fn update_from_swap(&mut self, swap_info: (Slot, Key, Slot, Key, f64)) {
         let last_slot_a = swap_info.0;
         let last_key_a = swap_info.1;
@@ -309,54 +318,22 @@ impl Population {
         let score_diff = swap_info.4;
 
         self.swap_table
-            .update_score(last_slot_a, last_key_a, score_diff);
+            .update_score(last_slot_a, last_key_a, score_diff, self.score_decay);
         self.swap_table
-            .update_score(last_slot_b, last_key_b, score_diff);
-    }
-
-    fn update_climb_decay(&mut self, iter: usize) {
-        const CLAMP_VALUE: f64 = 0.999_999_999_999_999;
-
-        self.climb_decay = (1.0 - (1.0 / iter as f64)).min(CLAMP_VALUE);
+            .update_score(last_slot_b, last_key_b, score_diff, self.score_decay);
     }
 
     pub fn get_id(&self) -> usize {
         return self.id;
     }
 
-    pub fn get_pop_cnt(&self) -> usize {
-        return self.pop_cnt;
-    }
-
-    pub fn get_climb_cnt(&self) -> usize {
-        return self.climber_cnt;
-    }
-
-    pub fn get_elite_cnt(&self) -> usize {
-        return self.elite_cnt;
-    }
-
-    pub fn get_mutation(&self) -> usize {
-        return self.mutation;
-    }
-
     pub fn get_avg_climb_iter(&self) -> f64 {
         return self.avg_climb_iter;
     }
 
-    // TODO: Maybe don't need this. If you're creating an offspring maybe you would just create a
-    // new one with properties of the parent
-    // pub fn set_new_pop_cnt(&mut self, new_cnt: usize) {
-    //     self.pop_cnt = new_cnt;
-    //
-    //     if self.climber_cnt > self.pop_cnt {
-    //         self.climber_cnt = self.pop_cnt;
-    //     }
-    //
-    //     if self.elite_cnt > self.pop_cnt {
-    //         self.elite_cnt = self.pop_cnt;
-    //     }
-    // }
+    pub fn get_pop_cnt(&self) -> usize {
+        return self.pop_cnt;
+    }
 
     pub fn randomize_pop_cnt(&mut self) {
         self.pop_cnt = self.rng.random_range(MIN_POP..=MAX_POP);
@@ -369,6 +346,10 @@ impl Population {
             self.pop_cnt >= self.elite_cnt,
             "elite_cnt higher than pop_cnt in randomize_pop_cnt"
         );
+    }
+
+    pub fn get_climb_cnt(&self) -> usize {
+        return self.climber_cnt;
     }
 
     pub fn randomize_climber_cnt(&mut self) {
@@ -386,6 +367,10 @@ impl Population {
         );
     }
 
+    pub fn get_elite_cnt(&self) -> usize {
+        return self.elite_cnt;
+    }
+
     pub fn randomize_elite_cnt(&mut self) {
         self.elite_cnt = self.rng.random_range(MIN_ELITES..=MAX_ELITES);
         assert!(
@@ -399,8 +384,20 @@ impl Population {
         );
     }
 
+    pub fn get_mutation(&self) -> usize {
+        return self.mutation;
+    }
+
     pub fn randomize_mutation(&mut self) {
         self.mutation = self.rng.random_range(MIN_MUTATION..=MAX_MUTATION);
+    }
+
+    pub fn get_decay(&self) -> f64 {
+        return self.score_decay;
+    }
+
+    pub fn randomize_decay(&mut self) {
+        self.score_decay = self.rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY);
     }
 }
 
@@ -473,12 +470,12 @@ impl SwapTable {
         return self.swap_table[row][col][key].get_w_avg();
     }
 
-    pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64) {
+    pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64, decay: f64) {
         let row = slot.get_row();
         let col = slot.get_col();
         let mut score = self.swap_table[row][col][&key];
 
-        score.reweight_avg(new_score);
+        score.reweight_avg(new_score, decay);
         self.swap_table[row][col].insert(key, score);
     }
 }
@@ -487,7 +484,6 @@ impl SwapTable {
 pub struct SwapScore {
     w_avg: f64,
     weights: f64,
-    // decay: f64,
 }
 
 impl SwapScore {
@@ -498,20 +494,12 @@ impl SwapScore {
         };
     }
 
-    // fn create(decay: f64) -> Self {
-    //     return Self {
-    //         w_avg: 0.0,
-    //         weights: 0.0,
-    //         decay: 0.995_f64,
-    //     };
-    // }
-
     pub fn get_w_avg(&self) -> f64 {
         return self.w_avg;
     }
 
-    pub fn reweight_avg(&mut self, new_score: f64) {
-        self.weights *= 0.995_f64;
+    pub fn reweight_avg(&mut self, new_score: f64, decay: f64) {
+        self.weights *= decay;
         let inflated_avg = self.w_avg * self.weights;
         self.weights += 1.0_f64;
 

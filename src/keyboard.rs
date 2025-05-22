@@ -72,7 +72,7 @@ impl Finger {
 }
 
 // FUTURE: Valid_slots is a meta-population level construct
-#[derive(Clone)]
+// NOTE: Do not derive Clone, because that does not advance the keyboard's RNG state
 pub struct Keyboard {
     key_slots: BTreeMap<Slot, Key>,
     valid_slots: BTreeMap<Key, Vec<Slot>>,
@@ -127,6 +127,27 @@ impl Keyboard {
             is_elite: false,
             pos_iter: 0,
             last_score: 0.0,
+            last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+            last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
+        };
+    }
+
+    pub fn kb_clone(&self) -> Self {
+        return Self {
+            key_slots: self.key_slots.clone(),
+            valid_slots: self.valid_slots.clone(),
+            slot_ascii: self.slot_ascii.clone(),
+            last_slot_idx: None,
+            prev_slot_idx: None,
+            generation: self.generation,
+            id: self.id,
+            evaluated: self.evaluated,
+            score: self.score,
+            left_uses: 0.0,
+            right_uses: 0.0,
+            is_elite: self.is_elite,
+            pos_iter: self.pos_iter,
+            last_score: self.last_score,
             last_swap_a: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
             last_swap_b: (Slot::from_tuple((0, 0)), Key::from_tuple((0, 0))),
         };

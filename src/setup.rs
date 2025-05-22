@@ -70,6 +70,7 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
         population.randomize_climber_cnt();
         population.randomize_elite_cnt();
         population.randomize_mutation();
+        population.randomize_decay();
         update_pop_dsp(&population)?;
         population.refill_pop();
 

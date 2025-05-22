@@ -110,8 +110,10 @@ mod kb_builders;
 mod keyboard;
 mod macros;
 mod mapped_swap;
+mod meta_pop;
 mod population;
 mod setup;
+mod structs;
 mod utils;
 
 use std::{

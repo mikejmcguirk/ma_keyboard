@@ -14,18 +14,15 @@ use crate::keyboard::Keyboard;
 
 const OFFSET_Y: u16 = 1;
 
-const POP_NAME: &str = "Population: ";
-const POP_Y: u16 = OFFSET_Y;
-
-const CLIMB_NAME: &str = "Climber Count: ";
-// const CLIMB_LEN: usize = CLIMB_NAME.len();
-// const ITER_CLIMB_X: u16 = CLIMB_LEN as u16;
-const CLIMB_Y: u16 = POP_Y + 1;
+// const POP_STATS_NAME: &str = "Population Count: ";
+// const POP_STATS_LEN: usize = POP_STATS_NAME.len();
+// const POP_STATS_NUM_X: u16 = POP_STATS_LEN as u16;
+const POP_STATS_Y: u16 = OFFSET_Y;
 
 const AVG_NAME: &str = "Average Climber Score: ";
 const AVG_LEN: usize = AVG_NAME.len();
 const AVG_NUM_X: u16 = AVG_LEN as u16;
-const AVG_Y: u16 = POP_Y + 1;
+const AVG_Y: u16 = POP_STATS_Y + 1;
 
 const KB_HEADER_Y: u16 = AVG_Y + 2;
 const KB_INFO_Y: u16 = KB_HEADER_Y + 1;
@@ -62,13 +59,20 @@ const CURSOR_Y: u16 = DVORAK_Y + 1;
 
 // FUTURE: This probably all needs to be redone, but don't want to get deep into it until I know
 // what the outputs actually are
-pub fn draw_initial(pop: &Population) -> io::Result<()> {
+pub fn draw_initial(population: &Population) -> io::Result<()> {
+    let pop_id = format!("Population ID: {:02}, ", population.get_id());
+    let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
+    let mutation = format!("Mutation: {:01}, ", population.get_mutation());
+    let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
+    let climb_cnt = format!("Climbers: {:02}", population.get_climb_cnt());
+
     stdout().queue(Clear(ClearType::All))?;
 
-    stdout().queue(MoveTo(0, POP_Y))?;
-    stdout().queue(Print(format!("{}{:03}", POP_NAME, pop.get_pop_size())))?;
-    stdout().queue(MoveTo(0, CLIMB_Y))?;
-    stdout().queue(Print(format!("{}{:02}", CLIMB_NAME, pop.get_climb_cnt())))?;
+    stdout().queue(MoveTo(0, POP_STATS_Y))?;
+    stdout().queue(Print(format!(
+        "{}{}{}{}{}",
+        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt
+    )))?;
     stdout().queue(MoveTo(0, AVG_Y))?;
     stdout().queue(Print(format!("{} --", AVG_NAME,)))?;
 
@@ -104,6 +108,26 @@ pub fn update_iter(iter: usize) -> io::Result<()> {
     stdout().queue(SavePosition)?;
     stdout().queue(MoveTo(ITER_NUM_X, ITER_Y))?;
     stdout().queue(Print(format!("{:05}", iter)))?;
+    stdout().queue(RestorePosition)?;
+
+    stdout().flush()?;
+
+    return Ok(());
+}
+
+pub fn update_pop_dsp(population: &Population) -> io::Result<()> {
+    let pop_id = format!("Population ID: {:02}, ", population.get_id());
+    let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
+    let mutation = format!("Mutation: {:01}, ", population.get_mutation());
+    let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
+    let climb_cnt = format!("Climbers: {:02}", population.get_climb_cnt());
+
+    stdout().queue(SavePosition)?;
+    stdout().queue(MoveTo(0, POP_STATS_Y))?;
+    stdout().queue(Print(format!(
+        "{}{}{}{}{}",
+        pop_id, pop_cnt, mutation, elite_cnt, climb_cnt
+    )))?;
     stdout().queue(RestorePosition)?;
 
     stdout().flush()?;

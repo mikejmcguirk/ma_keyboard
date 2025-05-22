@@ -135,7 +135,12 @@ impl Keyboard {
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_qwerty_keys(&mut key_slots);
         let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
-        let slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &key_slots {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
 
         return Self {
             key_slots,
@@ -162,7 +167,12 @@ impl Keyboard {
         let valid_key_locs_sorted: Vec<(Key, Vec<Slot>)> = get_valid_key_locs_sorted();
         place_dvorak_keys(&mut key_slots);
         let valid_slots: BTreeMap<Key, Vec<Slot>> = valid_key_locs_sorted.into_iter().collect();
-        let slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+
+        let mut slot_ascii: Vec<Option<Slot>> = vec![None; ASCII_CNT];
+        for (slot, key) in &key_slots {
+            slot_ascii[usize::from(key.get_base())] = Some(*slot);
+            slot_ascii[usize::from(key.get_shift())] = Some(*slot);
+        }
 
         return Self {
             key_slots,

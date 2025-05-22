@@ -1,9 +1,9 @@
 extern crate alloc;
 
-use {alloc::collections::BTreeMap, core::cmp, std::fs::File};
+use {alloc::collections::BTreeMap, core::cmp};
 
 use {
-    anyhow::{Result, anyhow},
+    anyhow::Result,
     rand::{Rng as _, SeedableRng as _, rngs::SmallRng},
 };
 
@@ -11,135 +11,140 @@ use crate::{
     custom_err::CorpusErr,
     display::{update_avg, update_climb_info, update_eval, update_kb},
     keyboard::{Key, Keyboard, Slot},
-    keys, swappable_keys,
-    utils::write_log,
+    keys,
+    structs::IdSpawner,
+    swappable_keys,
 };
 
 swappable_keys!();
 
-const ELITE_CNT: usize = 1;
+const MIN_POP: usize = 20;
+const MAX_POP: usize = 50;
+const MIN_CLIMB_PCT: f64 = 0.1;
+const MAX_CLIMB_PCT: f64 = 0.5;
+const MIN_ELITES: usize = 1;
+const MAX_ELITES: usize = 2;
+
+const MIN_MUTATION: usize = 0;
+const MAX_MUTATION: usize = 3;
 
 // TODO: Implement the hyper-heuristic idea. Includes:
-// - Elite count (1-4)
-// - Cull count (1-4)
 // - Weighted avg for swap table
 // - Temperature goal (0.05 - 0.15)
-// - Climber count?
 // - Climb decay
 // - Climb improvement weight
+// - Probabalistic selection or tournament(usize)
+// - Variable population feels overly-complex but maybe
 pub struct Population {
+    id: usize,
     rng: SmallRng,
-    id: IdSpawner,
-    pop_size: usize,
+    id_spawner: IdSpawner,
+    pop_cnt: usize,
     population: Vec<Keyboard>,
     climber_cnt: usize,
     climbers: Vec<Keyboard>,
+    elite_cnt: usize,
+    mutation: usize,
     swap_table: SwapTable,
     generation: usize,
     top_score: f64,
 }
 
 impl Population {
+    // TODO: Need an method to re-roll population, climbers, and elites
     // FUTURE: Sloppy, but don't want to get into deep refactor without knowing how the
     // meta-population management will be handled
-    pub fn create(size: Option<usize>, log_handle: &mut File) -> Result<Self> {
-        const DEFAULT_POPULATION: usize = 100;
-        const DEFAULT_CLIMB_CNT: usize = 20;
-        const MIN_CLIMBERS: usize = 1;
-
+    // FUTURE: Could do bigger populations and/or more climbers after multi-threading
+    // FUTURE: Add an option to cull some bottom % of the population
+    // FUTURE: Add an option to do tournament mode for thinning population
+    pub fn create(id_in: usize) -> Self {
         let seed: [u8; 32] = rand::random();
-        let seed_string: String = format!("{seed:?}");
-        write_log(log_handle, &seed_string)?;
         let mut rng = SmallRng::from_seed(seed);
 
-        let mut id = IdSpawner::new();
+        let mut id_spawner = IdSpawner::new();
 
-        let pop_cnt: usize = size.unwrap_or(DEFAULT_POPULATION);
-        if pop_cnt == 0 {
-            return Err(anyhow!("Population size cannot be zero"));
-        }
-        let gen_pop: Vec<Keyboard> = Vec::with_capacity(pop_cnt);
+        let pop_cnt = rng.random_range(MIN_POP..=MAX_POP);
+        let climb_pct = rng.random_range(MIN_CLIMB_PCT..=MAX_CLIMB_PCT);
+        let climber_cnt = (pop_cnt as f64 * climb_pct).round() as usize;
+        let elite_cnt = rng.random_range(MIN_ELITES..=MAX_ELITES);
 
-        let climber_cnt: usize = DEFAULT_CLIMB_CNT;
-        if climber_cnt > pop_cnt {
-            return Err(anyhow!(
-                "Climbers {climber_cnt} cannot be greater than total population ({pop_cnt})"
-            ));
-        } else if climber_cnt < MIN_CLIMBERS {
-            return Err(anyhow!(
-                "Climbers {climber_cnt} less than the minimum ({MIN_CLIMBERS})"
-            ));
-        }
-        let mut climbers: Vec<Keyboard> = Vec::with_capacity(climber_cnt);
-
-        // Having multiple elites kills genetic diversity
-        let elite_cnt: usize = ELITE_CNT;
-        // Should be impossible to fail due to compile time constraints
-        debug_assert!(
+        assert!(
             elite_cnt <= climber_cnt,
             "Elite count {elite_cnt} is higher than climber count {climber_cnt}"
         );
 
-        // At the end of the last iteration, it is not necessary to mutate the climbers. Therefore,
-        // mutating climbers is done at the beginning of each iteration. Even though creating our
-        // initial population as climbers rather than general population is unintuitive, it lets us
-        // transition into the main loop logic without creating a special case for the first
-        // iteration
+        let population: Vec<Keyboard> = Vec::with_capacity(pop_cnt);
+        let mut climbers: Vec<Keyboard> = Vec::with_capacity(climber_cnt);
+
+        let mutation = rng.random_range(MIN_MUTATION..=MAX_MUTATION);
+
+        // New population members are created at the beginning of each iteration, so fill the
+        // climbers now
         for _ in 0..climber_cnt {
-            let mut keyboard = Keyboard::create_primo(id.get());
+            let mut keyboard = Keyboard::create_primo(id_spawner.get());
             keyboard.shuffle(&mut rng, SWAPPABLE_KEYS.len());
             climbers.push(keyboard);
         }
 
-        return Ok(Self {
+        return Self {
+            id: id_in,
             rng,
-            id,
-            pop_size: pop_cnt,
-            population: gen_pop,
+            id_spawner,
+            pop_cnt,
+            population,
             climber_cnt,
             climbers,
+            elite_cnt,
+            mutation,
             swap_table: SwapTable::new(),
             generation: 0,
             top_score: 0.0,
-        });
+        };
     }
 
     pub fn refill_pop(&mut self) {
         self.generation += 1;
 
-        debug_assert!(
-            self.climbers.len() <= self.climber_cnt,
-            "Current climbers {} is higher than the climber count {}",
-            self.climbers.len(),
-            self.climber_cnt
-        );
-
         self.population.clear();
-        for climber in &self.climbers {
-            self.population.push(climber.clone());
+        for c in &self.climbers {
+            let climbers_moved = self.population.len() == self.climber_cnt;
+            let pop_filled = self.population.len() == self.pop_cnt;
+            if climbers_moved || pop_filled {
+                break;
+            }
+
+            self.population.push(c.clone());
         }
 
-        let to_add = self.pop_size - self.climbers.len();
+        // If the new climber_cnt is <= the old one, that number should be moved. If the new
+        // climber_cnt is >=, all current climbers should be moved.
+        assert!(
+            self.population.len() == self.climber_cnt
+                || self.population.len() == self.climbers.len(),
+            "Not enough climbers moved in refill_pop"
+        );
+
+        let to_add = self.pop_cnt - self.population.len();
         for _ in 0..to_add {
             let new_kb = Keyboard::from_swap_table(
                 &mut self.rng,
                 &self.swap_table,
                 self.generation,
-                self.id.get(),
+                self.id_spawner.get(),
             );
             self.population.push(new_kb);
         }
 
         for p in self.population.iter_mut().filter(|p| return !p.is_elite()) {
-            p.shuffle(&mut self.rng, 2);
+            p.shuffle(&mut self.rng, self.mutation);
         }
 
         assert_eq!(
             self.population.len(),
-            self.pop_size,
+            self.pop_cnt,
             "Population {} does not match the population size {}",
             self.population.len(),
-            self.pop_size
+            self.pop_cnt
         );
     }
 
@@ -168,7 +173,8 @@ impl Population {
                 .unwrap_or(cmp::Ordering::Equal);
         });
 
-        self.climbers.extend(self.population.drain(..ELITE_CNT));
+        self.climbers
+            .extend(self.population.drain(..self.elite_cnt));
         let elite = self.climbers.first().expect("Elite climber not drained");
         if elite.get_score() > self.top_score {
             self.top_score = elite.get_score();
@@ -195,11 +201,11 @@ impl Population {
             }
         }
 
-        for climber in self.climbers.iter_mut().take(ELITE_CNT) {
+        for climber in self.climbers.iter_mut().take(self.elite_cnt) {
             climber.set_elite();
         }
 
-        for climber in self.climbers.iter_mut().skip(ELITE_CNT) {
+        for climber in self.climbers.iter_mut().skip(self.elite_cnt) {
             climber.unset_elite();
         }
 
@@ -239,30 +245,83 @@ impl Population {
         return Ok(());
     }
 
-    pub fn get_pop_size(&self) -> usize {
-        return self.pop_size;
+    pub fn get_id(&self) -> usize {
+        return self.id;
+    }
+
+    pub fn get_pop_cnt(&self) -> usize {
+        return self.pop_cnt;
     }
 
     pub fn get_climb_cnt(&self) -> usize {
         return self.climber_cnt;
     }
-}
 
-pub struct IdSpawner {
-    next_id: usize,
-}
-
-impl IdSpawner {
-    pub fn new() -> Self {
-        return Self { next_id: 0 };
+    pub fn get_elite_cnt(&self) -> usize {
+        return self.elite_cnt;
     }
 
-    // PERF: I want to return 0 as the first id but maybe this is an extravagance
-    pub fn get(&mut self) -> usize {
-        let to_return: usize = self.next_id;
-        self.next_id += 1;
+    pub fn get_mutation(&self) -> usize {
+        return self.mutation;
+    }
 
-        return to_return;
+    // TODO: Maybe don't need this. If you're creating an offspring maybe you would just create a
+    // new one with properties of the parent
+    // pub fn set_new_pop_cnt(&mut self, new_cnt: usize) {
+    //     self.pop_cnt = new_cnt;
+    //
+    //     if self.climber_cnt > self.pop_cnt {
+    //         self.climber_cnt = self.pop_cnt;
+    //     }
+    //
+    //     if self.elite_cnt > self.pop_cnt {
+    //         self.elite_cnt = self.pop_cnt;
+    //     }
+    // }
+
+    pub fn randomize_pop_cnt(&mut self) {
+        self.pop_cnt = self.rng.random_range(MIN_POP..=MAX_POP);
+
+        if self.climber_cnt > self.pop_cnt {
+            self.climber_cnt = self.pop_cnt;
+        }
+
+        assert!(
+            self.pop_cnt >= self.elite_cnt,
+            "elite_cnt higher than pop_cnt in randomize_pop_cnt"
+        );
+    }
+
+    pub fn randomize_climber_cnt(&mut self) {
+        let climb_pct = self.rng.random_range(MIN_CLIMB_PCT..=MAX_CLIMB_PCT);
+        self.climber_cnt = (self.pop_cnt as f64 * climb_pct).round() as usize;
+
+        assert!(
+            self.climber_cnt <= self.pop_cnt,
+            "Climber cnt higher than pop cnt in randomize_climber_cnt"
+        );
+
+        assert!(
+            self.climber_cnt >= self.elite_cnt,
+            "Climber cnt higher than elite_cnt in randomize_climber_cnt"
+        );
+    }
+
+    pub fn randomize_elite_cnt(&mut self) {
+        self.elite_cnt = self.rng.random_range(MIN_ELITES..=MAX_ELITES);
+        assert!(
+            self.elite_cnt <= self.pop_cnt,
+            "elite_cnt > pop_cnt in randomize_elite_cnt"
+        );
+
+        assert!(
+            self.climber_cnt >= self.elite_cnt,
+            "Climber cnt higher than elite_cnt in randomize_elite_cnt"
+        );
+    }
+
+    pub fn randomize_mutation(&mut self) {
+        self.mutation = self.rng.random_range(MIN_MUTATION..=MAX_MUTATION);
     }
 }
 

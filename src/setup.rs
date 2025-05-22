@@ -13,16 +13,15 @@ use {
 use anyhow::{Result, anyhow};
 
 use crate::{
-    display::{draw_initial, update_dvorak, update_iter, update_qwerty},
+    display::{draw_initial, update_dvorak, update_iter, update_pop_dsp, update_qwerty},
     keyboard::Keyboard,
     population::Population,
+    structs::IdSpawner,
+    utils::write_log,
 };
 
 // FUTURE: At some point I'll come up with a way to load key settings from a config rather than
 // having to edit the source code. A lot of things would then need error propagation
-// FUTURE: Will have to make a decision on how to do multi-threaded RNG. Single resource so I can
-// re-use the seed? Or multiple RNGs for performance? Also, do we put SmallRng in a refcell or use
-// threadRNG? Issue with threadRNG is - it's the slower version from what I understand
 // FUTURE: Keeping the setup naming for now. At some point we're going to add arg processing and then
 // it would make more sense to do that here and then break out actually running the training in its
 // own file
@@ -35,6 +34,9 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     const PROG_NAME: &str = "MA Keyboard Generator";
     // SAFETY: PROG_NAME is defined at compile time
     const NAME_DASHES: &str = unsafe { str::from_utf8_unchecked(&[b'='; PROG_NAME.len()]) };
+
+    let message = "Initializing...";
+    write_log(log_handle, &message)?;
 
     println!();
     println!("{NAME_DASHES}");
@@ -51,7 +53,8 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
     let corpus_dir = get_corpus_dir()?;
     let corpus = load_corpus(&corpus_dir)?;
 
-    let mut population = Population::create(None, log_handle)?;
+    let mut id_spawner = IdSpawner::new();
+    let mut population = Population::create(id_spawner.get());
 
     draw_initial(&population)?;
 
@@ -65,6 +68,11 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
 
     for iter in 1..=ITERATIONS {
         update_iter(iter)?;
+        population.randomize_pop_cnt();
+        population.randomize_climber_cnt();
+        population.randomize_elite_cnt();
+        population.randomize_mutation();
+        update_pop_dsp(&population)?;
         population.refill_pop();
 
         population.eval_gen_pop(&corpus)?;

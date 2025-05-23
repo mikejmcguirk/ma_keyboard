@@ -222,11 +222,12 @@ macro_rules! valid_locations {
             [(TOP_ROW, L_RING), (HOME_ROW, L_RING), (BOT_ROW, L_RING)];
         const X_INVALID: [(usize, usize); 3] =
             [(TOP_ROW, L_RING), (HOME_ROW, L_RING), (BOT_ROW, L_RING)];
-        const E_INVALID: [(usize, usize); 3] = [
-            (TOP_ROW, L_MIDDLE),
-            (HOME_ROW, L_MIDDLE),
-            (BOT_ROW, L_MIDDLE),
-        ];
+        // const E_INVALID: [(usize, usize); 3] = [
+        //     (TOP_ROW, L_MIDDLE),
+        //     (HOME_ROW, L_MIDDLE),
+        //     (BOT_ROW, L_MIDDLE),
+        // ];
+        const E_VALID: [(usize, usize); 2] = [(HOME_ROW, R_INDEX), (HOME_ROW, R_MIDDLE)];
         const D_INVALID: [(usize, usize); 3] = [
             (TOP_ROW, L_MIDDLE),
             (HOME_ROW, L_MIDDLE),
@@ -271,40 +272,44 @@ macro_rules! valid_locations {
             (HOME_ROW, R_MIDDLE),
             (BOT_ROW, R_MIDDLE),
         ];
-        const COMMA_INVALID: [(usize, usize); 6] = [
-            (TOP_ROW, R_PINKY),
-            (HOME_ROW, R_PINKY),
-            (BOT_ROW, R_PINKY),
-            (TOP_ROW, R_MIDDLE),
-            (HOME_ROW, R_MIDDLE),
-            (BOT_ROW, R_MIDDLE),
-        ];
+        // const COMMA_INVALID: [(usize, usize); 6] = [
+        //     (TOP_ROW, R_PINKY),
+        //     (HOME_ROW, R_PINKY),
+        //     (BOT_ROW, R_PINKY),
+        //     (TOP_ROW, R_MIDDLE),
+        //     (HOME_ROW, R_MIDDLE),
+        //     (BOT_ROW, R_MIDDLE),
+        // ];
+        const COMMA_VALID: [(usize, usize); 1] = [(TOP_ROW, L_PINKY)];
+        const PERIOD_VALID: [(usize, usize); 1] = [(TOP_ROW, L_RING)];
+        const QUOTE_VALID: [(usize, usize); 1] = [(TOP_ROW, R_EXT)];
+        const SEMICOLON_VALID: [(usize, usize); 1] = [(BOT_ROW, L_EXT)];
         const O_INVALID: [(usize, usize); 3] =
             [(TOP_ROW, R_RING), (HOME_ROW, R_RING), (BOT_ROW, R_RING)];
         const L_INVALID: [(usize, usize); 3] =
             [(TOP_ROW, R_RING), (HOME_ROW, R_RING), (BOT_ROW, R_RING)];
-        const PERIOD_INVALID: [(usize, usize); 6] = [
-            (TOP_ROW, L_PINKY),
-            (HOME_ROW, L_PINKY),
-            (BOT_ROW, L_PINKY),
-            (TOP_ROW, R_RING),
-            (HOME_ROW, R_RING),
-            (BOT_ROW, R_RING),
-        ];
+        // const PERIOD_INVALID: [(usize, usize); 6] = [
+        //     (TOP_ROW, L_PINKY),
+        //     (HOME_ROW, L_PINKY),
+        //     (BOT_ROW, L_PINKY),
+        //     (TOP_ROW, R_RING),
+        //     (HOME_ROW, R_RING),
+        //     (BOT_ROW, R_RING),
+        // ];
         const P_INVALID: [(usize, usize); 3] =
             [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
-        const SEMICOLON_INVALID: [(usize, usize); 3] =
-            [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
-        const QUOTE_INVALID: [(usize, usize); 3] =
-            [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
+        // const SEMICOLON_INVALID: [(usize, usize); 3] =
+        //     [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
+        // const QUOTE_INVALID: [(usize, usize); 3] =
+        //     [(TOP_ROW, R_PINKY), (HOME_ROW, R_PINKY), (BOT_ROW, R_PINKY)];
 
-        const DEFAULT_TOP_ROW: [(usize, usize); 10] = [
-            (TOP_ROW, L_PINKY),
-            (TOP_ROW, L_RING),
+        const DEFAULT_TOP_ROW: [(usize, usize); 7] = [
+            // (TOP_ROW, L_PINKY),
+            // (TOP_ROW, L_RING),
             (TOP_ROW, L_MIDDLE),
             (TOP_ROW, L_INDEX),
             (TOP_ROW, L_EXT),
-            (TOP_ROW, R_EXT),
+            // (TOP_ROW, R_EXT),
             (TOP_ROW, R_INDEX),
             (TOP_ROW, R_MIDDLE),
             (TOP_ROW, R_RING),
@@ -324,17 +329,30 @@ macro_rules! valid_locations {
             (HOME_ROW, R_PINKY),
         ];
 
-        const DEFAULT_BOT_ROW: [(usize, usize); 10] = [
+        const BASE_HOME_ROW: [(usize, usize); 8] = [
+            (HOME_ROW, L_PINKY),
+            (HOME_ROW, L_RING),
+            (HOME_ROW, L_MIDDLE),
+            (HOME_ROW, L_INDEX),
+            (HOME_ROW, R_INDEX),
+            (HOME_ROW, R_MIDDLE),
+            (HOME_ROW, R_RING),
+            (HOME_ROW, R_PINKY),
+        ];
+
+        const DEFAULT_BOT_ROW: [(usize, usize); 9] = [
             (BOT_ROW, L_PINKY),
             (BOT_ROW, L_RING),
             (BOT_ROW, L_MIDDLE),
             (BOT_ROW, L_INDEX),
-            (BOT_ROW, L_EXT),
+            // (BOT_ROW, L_EXT),
             (BOT_ROW, R_EXT),
             (BOT_ROW, R_INDEX),
             (BOT_ROW, R_MIDDLE),
             (BOT_ROW, R_RING),
             (BOT_ROW, R_PINKY),
         ];
+
+        const DEFAULT_MIDDLE: [(usize, usize); 2] = [(HOME_ROW, L_EXT), (HOME_ROW, R_EXT)];
     };
 }

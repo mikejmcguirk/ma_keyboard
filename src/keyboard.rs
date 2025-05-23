@@ -343,17 +343,17 @@ impl Keyboard {
                 break;
             }
 
-            debug_assert_ne!(
-                self.key_slots[&slot_a], key_a,
-                "ERROR: Key {:?} at {},{} not changed",
-                key_a, row_a, col_a
-            );
+            // debug_assert_ne!(
+            //     self.key_slots[&slot_a], key_a,
+            //     "ERROR: Key {:?} at {},{} not changed",
+            //     key_a, row_a, col_a
+            // );
         }
     }
 
     // FUTURE: Right now the kb swap functions and the swap map build explicitly exclude anything
     // outside the alpha area. This works until we want to start locking individual keys
-    pub fn table_swap(&mut self, swap_table: &SwapTable, k_temp: f64) {
+    pub fn table_swap(&mut self, swap_table: &SwapTable, k_temp: f64) -> bool {
         self.evaluated = false;
         self.last_score = self.score;
         self.score = 0.0_f64;
@@ -364,7 +364,7 @@ impl Keyboard {
             .filter(|&(slot, key)| {
                 let invalid_location = slot.get_row() < TOP_ROW || slot.get_col() > R_PINKY;
                 let static_key = self.valid_slots[key].len() == 1;
-                if invalid_location && static_key {
+                if invalid_location || static_key {
                     return false;
                 }
 
@@ -405,8 +405,14 @@ impl Keyboard {
             })
             .collect();
 
+        if base_b.is_empty() {
+            return false;
+        }
+
         let select_b = select_key(&mut self.rng, &mut base_b, k_temp);
         self.swap_keys(select_a.0, select_a.1, select_b.0, select_b.1);
+
+        return true;
     }
 
     fn swap_keys(&mut self, slot_a: Slot, key_a: Key, slot_b: Slot, key_b: Key) {

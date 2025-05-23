@@ -46,48 +46,116 @@ pub fn get_valid_key_locs_sorted() -> Vec<(Key, Vec<Slot>)> {
         (Key::from_tuple(BACKSLASH), make_slot_vec(&BACKSLASH_VALID)),
         (Key::from_tuple(NEWLINE), make_slot_vec(&NEWLINE_VALID)),
         // Alpha Area Keys
+        // (
+        //     Key::from_tuple(COMMA),
+        //     alpha_slots_tree(COMMA_INVALID.as_ref()),
+        // ),
+        (Key::from_tuple(COMMA), make_slot_vec(&COMMA_VALID)),
+        (Key::from_tuple(PERIOD), make_slot_vec(&PERIOD_VALID)),
+        (Key::from_tuple(SEMICOLON), make_slot_vec(&SEMICOLON_VALID)),
+        (Key::from_tuple(QUOTE), make_slot_vec(&QUOTE_VALID)),
+        // (
+        //     Key::from_tuple(PERIOD),
+        //     alpha_slots_tree(PERIOD_INVALID.as_ref()),
+        // ),
+        // (
+        //     Key::from_tuple(SEMICOLON),
+        //     alpha_slots_tree(SEMICOLON_INVALID.as_ref()),
+        // ),
+        // (
+        //     Key::from_tuple(QUOTE),
+        //     alpha_slots_tree(QUOTE_INVALID.as_ref()),
+        // ),
         (
-            Key::from_tuple(COMMA),
-            alpha_slots_tree(COMMA_INVALID.as_ref()),
+            Key::from_tuple(A),
+            alpha_slots_base_home_tree(A_INVALID.as_ref()),
         ),
         (
-            Key::from_tuple(PERIOD),
-            alpha_slots_tree(PERIOD_INVALID.as_ref()),
+            Key::from_tuple(B),
+            alpha_slots_nothome_tree(B_INVALID.as_ref()),
         ),
         (
-            Key::from_tuple(SEMICOLON),
-            alpha_slots_tree(SEMICOLON_INVALID.as_ref()),
+            Key::from_tuple(C),
+            alpha_slots_nothome_tree(C_INVALID.as_ref()),
         ),
         (
-            Key::from_tuple(QUOTE),
-            alpha_slots_tree(QUOTE_INVALID.as_ref()),
+            Key::from_tuple(D),
+            alpha_slots_nothome_tree(D_INVALID.as_ref()),
         ),
-        (Key::from_tuple(A), alpha_slots_tree(A_INVALID.as_ref())),
-        (Key::from_tuple(B), alpha_slots_tree(B_INVALID.as_ref())),
-        (Key::from_tuple(C), alpha_slots_tree(C_INVALID.as_ref())),
-        (Key::from_tuple(D), alpha_slots_tree(D_INVALID.as_ref())),
-        (Key::from_tuple(E), alpha_slots_tree(E_INVALID.as_ref())),
-        (Key::from_tuple(F), alpha_slots_tree(F_INVALID.as_ref())),
-        (Key::from_tuple(G), alpha_slots_tree(G_INVALID.as_ref())),
-        (Key::from_tuple(H), alpha_slots_tree(H_INVALID.as_ref())),
-        (Key::from_tuple(I), alpha_slots_tree(I_INVALID.as_ref())),
-        (Key::from_tuple(J), alpha_slots_tree(J_INVALID.as_ref())),
-        (Key::from_tuple(K), alpha_slots_tree(K_INVALID.as_ref())),
-        (Key::from_tuple(L), alpha_slots_tree(L_INVALID.as_ref())),
-        (Key::from_tuple(M), alpha_slots_tree(M_INVALID.as_ref())),
-        (Key::from_tuple(N), alpha_slots_tree(N_INVALID.as_ref())),
+        (Key::from_tuple(E), make_slot_vec(&E_VALID)),
+        // (Key::from_tuple(E), alpha_slots_tree(E_INVALID.as_ref())),
+        (
+            Key::from_tuple(F),
+            alpha_slots_nothome_tree(F_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(G),
+            alpha_slots_nothome_tree(G_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(H),
+            alpha_slots_nothome_tree(H_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(I),
+            alpha_slots_base_home_tree(I_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(J),
+            alpha_slots_nothome_tree(J_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(K),
+            alpha_slots_nothome_tree(K_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(L),
+            alpha_slots_base_home_tree(L_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(M),
+            alpha_slots_nothome_tree(M_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(N),
+            alpha_slots_base_home_tree(N_INVALID.as_ref()),
+        ),
         (Key::from_tuple(O), alpha_slots_tree(O_INVALID.as_ref())),
-        (Key::from_tuple(P), alpha_slots_tree(P_INVALID.as_ref())),
-        (Key::from_tuple(Q), alpha_slots_tree(Q_INVALID.as_ref())),
-        (Key::from_tuple(R), alpha_slots_tree(R_INVALID.as_ref())),
+        (
+            Key::from_tuple(P),
+            alpha_slots_nothome_tree(P_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(Q),
+            alpha_slots_nothome_tree(Q_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(R),
+            alpha_slots_base_home_tree(R_INVALID.as_ref()),
+        ),
         (Key::from_tuple(S), alpha_slots_tree(S_INVALID.as_ref())),
         (Key::from_tuple(T), alpha_slots_tree(T_INVALID.as_ref())),
         (Key::from_tuple(U), alpha_slots_tree(U_INVALID.as_ref())),
-        (Key::from_tuple(V), alpha_slots_tree(V_INVALID.as_ref())),
-        (Key::from_tuple(W), alpha_slots_tree(W_INVALID.as_ref())),
-        (Key::from_tuple(X), alpha_slots_tree(X_INVALID.as_ref())),
-        (Key::from_tuple(Y), alpha_slots_tree(Y_INVALID.as_ref())),
-        (Key::from_tuple(Z), alpha_slots_tree(Z_INVALID.as_ref())),
+        (
+            Key::from_tuple(V),
+            alpha_slots_nothome_tree(V_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(W),
+            alpha_slots_nothome_tree(W_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(X),
+            alpha_slots_nothome_tree(X_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(Y),
+            alpha_slots_nothome_tree(Y_INVALID.as_ref()),
+        ),
+        (
+            Key::from_tuple(Z),
+            alpha_slots_nothome_tree(Z_INVALID.as_ref()),
+        ),
     ];
 
     key_locs.sort_by(|a, b| {
@@ -116,6 +184,45 @@ fn alpha_slots_tree(exclusions: &[(usize, usize)]) -> Vec<Slot> {
     return slot_groups_flat;
 }
 
+// fn alpha_slots_home_tree(exclusions: &[(usize, usize)]) -> Vec<Slot> {
+//     let slot_groups = vec![home_row_tree()];
+//
+//     let mut slot_groups_flat: Vec<Slot> = slot_groups.into_iter().flatten().collect();
+//     let slot_exclusions: Vec<Slot> = exclusions
+//         .iter()
+//         .map(|x| return Slot::from_tuple(*x))
+//         .collect();
+//     slot_groups_flat.retain(|x| return !slot_exclusions.contains(x));
+//
+//     return slot_groups_flat;
+// }
+
+fn alpha_slots_base_home_tree(exclusions: &[(usize, usize)]) -> Vec<Slot> {
+    let slot_groups = vec![base_home_row_tree()];
+
+    let mut slot_groups_flat: Vec<Slot> = slot_groups.into_iter().flatten().collect();
+    let slot_exclusions: Vec<Slot> = exclusions
+        .iter()
+        .map(|x| return Slot::from_tuple(*x))
+        .collect();
+    slot_groups_flat.retain(|x| return !slot_exclusions.contains(x));
+
+    return slot_groups_flat;
+}
+
+fn alpha_slots_nothome_tree(exclusions: &[(usize, usize)]) -> Vec<Slot> {
+    let slot_groups = vec![top_row_tree(), middle_tree(), bottom_row_tree()];
+
+    let mut slot_groups_flat: Vec<Slot> = slot_groups.into_iter().flatten().collect();
+    let slot_exclusions: Vec<Slot> = exclusions
+        .iter()
+        .map(|x| return Slot::from_tuple(*x))
+        .collect();
+    slot_groups_flat.retain(|x| return !slot_exclusions.contains(x));
+
+    return slot_groups_flat;
+}
+
 // NOTE: Even though the functions below return constant arrays, leaving them wrapped in Vecs so
 // the function signatures don't have to be changed if the constants are changed
 
@@ -127,8 +234,16 @@ fn home_row_tree() -> Vec<Slot> {
     return make_slot_vec(&DEFAULT_HOME_ROW);
 }
 
+fn base_home_row_tree() -> Vec<Slot> {
+    return make_slot_vec(&BASE_HOME_ROW);
+}
+
 fn bottom_row_tree() -> Vec<Slot> {
     return make_slot_vec(&DEFAULT_BOT_ROW);
+}
+
+fn middle_tree() -> Vec<Slot> {
+    return make_slot_vec(&DEFAULT_MIDDLE);
 }
 
 fn make_slot_vec(input: &[(usize, usize)]) -> Vec<Slot> {

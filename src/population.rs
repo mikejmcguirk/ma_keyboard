@@ -360,9 +360,10 @@ impl Population {
 
         for i in 1..=100_000 {
             let mut climb_kb = kb.kb_clone();
-            climb_kb.table_swap(&self.swap_table, self.k_temp);
-            climb_kb.eval();
-            self.update_from_swap(climb_kb.get_last_swap_info());
+            if climb_kb.table_swap(&self.swap_table, self.k_temp) {
+                climb_kb.eval();
+                self.update_from_swap(climb_kb.get_last_swap_info());
+            }
 
             let this_improvement = (climb_kb.get_score() - kb.get_score()).max(0.0);
             avg_improvement = get_new_avg(this_improvement, avg_improvement, i);

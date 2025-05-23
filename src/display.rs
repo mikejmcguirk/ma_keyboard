@@ -140,7 +140,7 @@ pub fn update_iter(iter: usize) -> io::Result<()> {
 }
 
 pub fn update_best_pop_dsp(population: &Population) -> io::Result<()> {
-    let pop_id = format!("Population ID: {:02}, ", population.get_id());
+    let pop_id = format!("Population ID: {:05}, ", population.get_id());
     let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
@@ -163,7 +163,7 @@ pub fn update_best_pop_dsp(population: &Population) -> io::Result<()> {
 }
 
 pub fn update_cur_pop_dsp(population: &Population) -> io::Result<()> {
-    let pop_id = format!("Population ID: {:02}, ", population.get_id());
+    let pop_id = format!("Population ID: {:05}, ", population.get_id());
     let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());

@@ -198,18 +198,18 @@ impl Population {
             .fold(0.0_f64, |acc, p| return acc + p.get_score());
         assert!(full_pop_score > 0.0, "Parent populations not evaluated");
 
-        // let mut elites: Vec<Keyboard> = Vec::new();
-        // let mut i = 0;
-        // while i < population.len() {
-        //     if !population[i].is_elite() {
-        //         i += 1;
-        //         continue;
-        //     }
-        //
-        //     elites.push(population.swap_remove(i));
-        // }
+        let mut elites: Vec<Keyboard> = Vec::new();
+        let mut i = 0;
+        while i < population.len() {
+            if !population[i].is_elite() {
+                i += 1;
+                continue;
+            }
 
-        while population.len() > (pop_cnt / 2) && !population.is_empty() {
+            elites.push(population.swap_remove(i));
+        }
+
+        while population.len() > (pop_cnt / 2) - elites.len() && !population.is_empty() {
             let mut checked_score: f64 = 0.0;
             let r = rng.random_range(0.0_f64..=full_pop_score);
 
@@ -224,7 +224,7 @@ impl Population {
             }
         }
 
-        // population.append(&mut elites);
+        population.append(&mut elites);
         population.sort_by(|a, b| {
             return b
                 .get_score()
@@ -235,6 +235,7 @@ impl Population {
         let mut top_score = 0.0;
         for p in population.iter_mut().take(elite_cnt) {
             p.set_elite();
+            // p.unset_elite();
             top_score = p.get_score();
         }
 
@@ -276,11 +277,19 @@ impl Population {
                     let weight_a = swap_score_a.get_weights();
                     let weight_b = swap_score_b.get_weights();
 
-                    let new_score = (score_a * top_a_pct) + (score_b * top_b_pct);
-                    let new_weight = (weight_a * top_a_pct) + (weight_b * top_b_pct);
+                    if rng.random_range(0.0..=1.0) >= top_a_pct {
+                        let new_score = score_a;
+                        let new_weight = weight_a;
 
-                    let new_swap_score = SwapScore::from_values(new_score, new_weight);
-                    swap_table.replace_score(j, k, key, new_swap_score);
+                        let new_swap_score = SwapScore::from_values(new_score, new_weight);
+                        swap_table.replace_score(j, k, key, new_swap_score);
+                    } else {
+                        let new_score = score_b;
+                        let new_weight = weight_b;
+
+                        let new_swap_score = SwapScore::from_values(new_score, new_weight);
+                        swap_table.replace_score(j, k, key, new_swap_score);
+                    }
                 }
             }
         }

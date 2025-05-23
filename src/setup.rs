@@ -12,10 +12,9 @@ use anyhow::Result;
 
 use crate::{
     corpus::initialize_corpus,
-    display::{initial_dsp, update_dvorak, update_iter, update_pop_dsp, update_qwerty},
+    display::{initial_dsp, update_dvorak, update_iter, update_qwerty},
     keyboard::Keyboard,
-    population::Population,
-    structs::IdSpawner,
+    meta_pop::MetaPopulation,
     utils::write_log,
 };
 
@@ -49,12 +48,10 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
         return Ok(exit_code);
     }
 
+    initial_dsp()?;
     initialize_corpus()?;
 
-    let mut id_spawner = IdSpawner::new();
-    let mut population = Population::create(id_spawner.get());
-
-    initial_dsp(&population)?;
+    let mut meta_population = MetaPopulation::create();
 
     let mut qwerty = Keyboard::create_qwerty();
     qwerty.eval();
@@ -66,18 +63,9 @@ pub fn setup(log_handle: &mut File, log_dir: &Path) -> Result<ExitCode> {
 
     for iter in 1..=ITERATIONS {
         update_iter(iter)?;
-        population.randomize_pop_cnt();
-        population.randomize_climber_cnt();
-        population.randomize_elite_cnt();
-        population.randomize_mutation();
-        population.randomize_decay();
-        population.randomize_k_temp();
-        update_pop_dsp(&population)?;
-        population.refill_pop();
-
-        population.eval_gen_pop()?;
-        population.setup_climbers()?;
-        population.climb_kbs(iter)?;
+        meta_population.run_generation()?;
+        meta_population.purge();
+        meta_population.reproduce();
     }
 
     println!();

@@ -8,7 +8,7 @@ use {
 };
 
 use crate::{
-    display::{update_avg, update_climb_info, update_eval_dsp, update_kb},
+    display::{update_climb_info, update_cur_avg, update_eval_dsp},
     keyboard::Keyboard,
     keys,
     structs::{IdSpawner, Key, Slot},
@@ -30,10 +30,14 @@ const MAX_MUTATION: usize = 3;
 const MIN_SCORE_DECAY: f64 = 0.9;
 const MAX_SCORE_DECAY: f64 = 0.998;
 
-const K_TEMP_MIN: f64 = -31.162_892_36;
-const K_TEMP_MAX: f64 = -6.107_632_992;
+const MIN_K_TEMP: f64 = -31.162_892_36;
+const MAX_K_TEMP: f64 = -6.107_632_992;
 
+// TODO: Need to redo having population and climbers in One Vec. Causing problems juggling where
+// the population is at any given time. Results in hacks about when certain parts of the process
+// are run
 // FUTURE: Consider letting populations engage in tournament selection
+// FUTURE: Generation should be meta-population controlled
 pub struct Population {
     id: usize,
     rng: SmallRng,
@@ -52,10 +56,12 @@ pub struct Population {
     total_climbs: usize,
     avg_climb_iter: f64,
     climb_decay: f64,
+    is_elite: bool,
 }
 
+// NOTE: In order to avoid issues with high-scoring keyboards being accidently lost, the code is
+// hyper-vigilant about setting and checking elite status
 impl Population {
-    // TODO: Need an method to re-roll population, climbers, and elites
     // FUTURE: Sloppy, but don't want to get into deep refactor without knowing how the
     // meta-population management will be handled
     // FUTURE: Could do bigger populations and/or more climbers after multi-threading
@@ -89,7 +95,8 @@ impl Population {
             keyboard.shuffle(SWAPPABLE_KEYS.len());
             climbers.push(keyboard);
         }
-        let k_temp = rng.random_range(K_TEMP_MIN..=K_TEMP_MAX);
+
+        let k_temp = rng.random_range(MIN_K_TEMP..=MAX_K_TEMP);
 
         let score_decay = rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY);
 
@@ -111,17 +118,295 @@ impl Population {
             total_climbs: 0,
             avg_climb_iter: 0.0,
             climb_decay: 0.0,
+            is_elite: false,
         };
     }
 
-    pub fn refill_pop(&mut self) {
-        self.generation += 1;
+    // FUTURE: Worth experimenting with weighted averaging for some parameters, particularly
+    // continuous ones
+    pub fn from_parents(parent_a: &Population, parent_b: &Population, id_in: usize) -> Self {
+        let seed: [u8; 32] = rand::random();
+        let mut rng = SmallRng::from_seed(seed);
 
-        self.population.clear();
+        let id_spawner = IdSpawner::new();
+
+        let top_a = parent_a.get_top_score();
+        let top_b = parent_b.get_top_score();
+        let total_top = top_a + top_b;
+        let top_a_pct = top_a / total_top;
+        let top_b_pct = top_b / total_top;
+
+        let pop_cnt = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_POP..=MAX_POP)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_pop_cnt()
+        } else {
+            parent_b.get_pop_cnt()
+        };
+
+        let climb_pct = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_CLIMB_PCT..=MAX_CLIMB_PCT)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_climb_pct()
+        } else {
+            parent_b.get_climb_pct()
+        };
+
+        let mut climber_cnt = (pop_cnt as f64 * climb_pct).round() as usize;
+
+        let elite_cnt = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_ELITES..=MAX_ELITES)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_elite_cnt()
+        } else {
+            parent_b.get_elite_cnt()
+        };
+
+        // TODO: Need to fuzz this more seeing weirdly low climber counts and odd shifting in elite
+        // counts
+        if climber_cnt < elite_cnt {
+            climber_cnt = elite_cnt;
+        }
+
+        assert!(
+            pop_cnt >= climber_cnt,
+            "Climbers {climber_cnt} greater than population {pop_cnt} in from_parents"
+        );
+
+        let pop_a: &[Keyboard] = parent_a.get_population();
+        let pop_b: &[Keyboard] = parent_b.get_population();
+        let mut population: Vec<Keyboard> = Vec::with_capacity(pop_a.len() + pop_b.len());
+        population.extend(
+            pop_a
+                .iter()
+                .chain(pop_b.iter())
+                .map(|k| return k.kb_clone()),
+        );
+
+        // let top_score = top_a.max(top_b);
+        // let mut top_elite_score: f64 = population
+        //     .iter()
+        //     .fold(0.0, |acc, p| return acc.max(p.get_score()));
+        // debug_assert_eq!(
+        //     top_elite_score, top_score,
+        //     "Elite lost when bringing in population in create_child. Top a: {}, Top b: {}",
+        //     top_a, top_b
+        // );
+
+        let mut full_pop_score = population
+            .iter()
+            .fold(0.0_f64, |acc, p| return acc + p.get_score());
+        assert!(full_pop_score > 0.0, "Parent populations not evaluated");
+
+        // let mut elites: Vec<Keyboard> = Vec::new();
+        // let mut i = 0;
+        // while i < population.len() {
+        //     if !population[i].is_elite() {
+        //         i += 1;
+        //         continue;
+        //     }
+        //
+        //     elites.push(population.swap_remove(i));
+        // }
+
+        while population.len() > (pop_cnt / 2) && !population.is_empty() {
+            let mut checked_score: f64 = 0.0;
+            let r = rng.random_range(0.0_f64..=full_pop_score);
+
+            for (j, kb) in population.iter().enumerate() {
+                checked_score += kb.get_score();
+                if checked_score >= r {
+                    full_pop_score -= kb.get_score();
+                    population.swap_remove(j);
+
+                    break;
+                }
+            }
+        }
+
+        // population.append(&mut elites);
+        population.sort_by(|a, b| {
+            return b
+                .get_score()
+                .partial_cmp(&a.get_score())
+                .unwrap_or(cmp::Ordering::Equal);
+        });
+
+        let mut top_score = 0.0;
+        for p in population.iter_mut().take(elite_cnt) {
+            p.set_elite();
+            top_score = p.get_score();
+        }
+
+        for p in population.iter_mut().skip(elite_cnt) {
+            p.unset_elite();
+        }
+
+        // println!("child population {}, cnt{}", population.len(), pop_cnt);
+
+        // Do we keep elites here? Basically the same elite is propagating to every population
+        // top_elite_score = population
+        //     .iter()
+        //     .fold(0.0, |acc, p| return acc.max(p.get_score()));
+        // debug_assert_eq!(
+        //     top_elite_score, top_score,
+        //     "Elite lost after filtering population in create_child"
+        // );
+
+        let mutation = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_MUTATION..=MAX_MUTATION)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_mutation()
+        } else {
+            parent_b.get_mutation()
+        };
+
+        let mut swap_table = SwapTable::new();
+
+        for j in 0_usize..4_usize {
+            for k in 0_usize..10_usize {
+                for key_tuple in &SWAPPABLE_KEYS {
+                    let key = Key::from_tuple(*key_tuple);
+
+                    let swap_score_a = parent_a.get_swap_score(j, k, key);
+                    let swap_score_b = parent_b.get_swap_score(j, k, key);
+
+                    let score_a = swap_score_a.get_w_avg();
+                    let score_b = swap_score_b.get_w_avg();
+                    let weight_a = swap_score_a.get_weights();
+                    let weight_b = swap_score_b.get_weights();
+
+                    let new_score = (score_a * top_a_pct) + (score_b * top_b_pct);
+                    let new_weight = (weight_a * top_a_pct) + (weight_b * top_b_pct);
+
+                    let new_swap_score = SwapScore::from_values(new_score, new_weight);
+                    swap_table.replace_score(j, k, key, new_swap_score);
+                }
+            }
+        }
+
+        let k_temp = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_K_TEMP..=MAX_K_TEMP)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_k_temp()
+        } else {
+            parent_b.get_k_temp()
+        };
+
+        let score_decay = if rng.random_range(0..10) == 0 {
+            rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY)
+        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
+            parent_a.get_score_decay()
+        } else {
+            parent_b.get_score_decay()
+        };
+
+        let generation = parent_a.get_generation().max(parent_b.get_generation());
+
+        let avg_climb_iter_a = parent_a.get_avg_climb_iter();
+        let avg_climb_iter_b = parent_b.get_avg_climb_iter();
+        let total_climbs_a = parent_a.get_total_climbs();
+        let total_climbs_b = parent_b.get_total_climbs();
+
+        let avg_climb_iter;
+        let total_climbs;
+        if avg_climb_iter_a > avg_climb_iter_b {
+            avg_climb_iter = avg_climb_iter_a;
+            total_climbs = total_climbs_a;
+        } else {
+            avg_climb_iter = avg_climb_iter_b;
+            total_climbs = total_climbs_b;
+        }
+
+        let climb_decay_a = parent_a.get_climb_decay();
+        let climb_decay_b = parent_b.get_climb_decay();
+        let climb_decay = (climb_decay_a * top_a_pct) + (climb_decay_b * top_b_pct);
+
+        return Self {
+            id: id_in,
+            rng,
+            id_spawner,
+            pop_cnt,
+            population,
+            climber_cnt,
+            climbers: Vec::new(),
+            elite_cnt,
+            mutation,
+            swap_table,
+            k_temp,
+            score_decay,
+            generation,
+            top_score,
+            total_climbs,
+            avg_climb_iter,
+            climb_decay,
+            is_elite: false,
+        };
+    }
+
+    pub fn refill_pop(&mut self, iter: usize) {
+        self.generation += 1;
+        // self.population.clear();
+
+        // assert_eq!(
+        //     self.climbers[0].get_score(),
+        //     self.top_score,
+        //     "Elites lost at the start of refill_pop"
+        // );
+
+        // debug_assert!(
+        //     !self.climbers.is_empty(),
+        //     "Climbers empty at the start of refill_pop"
+        // );
+
+        // let elite_cnt: usize = self.climbers.iter().fold(0, |acc, c| {
+        //     if c.is_elite() {
+        //         return acc + 1;
+        //     } else {
+        //         return acc;
+        //     }
+        // });
+        // let elite_cnt: usize = self.population.iter().fold(0, |acc, c| {
+        //     if c.is_elite() {
+        //         return acc + 1;
+        //     } else {
+        //         return acc;
+        //     }
+        // });
+        // println!("refill elites: {elite_cnt}, iter: {iter}");
+        // debug_assert!(
+        //     elite_cnt > 1,
+        //     "No elites in climbers at the start of refill_pop"
+        // );
+
+        let mut i = 0;
+        while i < self.climbers.len() {
+            if !self.climbers[i].is_elite() {
+                i += 1;
+                continue;
+            }
+
+            self.population.push(self.climbers.swap_remove(i));
+        }
+
+        // assert_eq!(
+        //     self.population[0].get_score(),
+        //     self.top_score,
+        //     "Elites not moved into gen pop. climber length: {}",
+        //     self.climbers.len()
+        // );
+
+        debug_assert!(
+            self.population.len() < self.pop_cnt,
+            "Population already too big after moving elites len {}, cnt{}",
+            self.population.len(),
+            self.pop_cnt
+        );
+
         for c in &self.climbers {
             let climbers_moved = self.population.len() == self.climber_cnt;
             let pop_filled = self.population.len() == self.pop_cnt;
-            if climbers_moved || pop_filled {
+            if climbers_moved || pop_filled || c.is_elite() {
                 break;
             }
 
@@ -130,11 +415,11 @@ impl Population {
 
         // If the new climber_cnt is <= the old one, that number should be moved. If the new
         // climber_cnt is >=, all current climbers should be moved.
-        assert!(
-            self.population.len() == self.climber_cnt
-                || self.population.len() == self.climbers.len(),
-            "Not enough climbers moved in refill_pop"
-        );
+        // assert!(
+        //     self.population.len() == self.climber_cnt
+        //         || self.population.len() == self.climbers.len(),
+        //     "Not enough climbers moved in refill_pop"
+        // );
 
         let to_add = self.pop_cnt - self.population.len();
         for _ in 0..to_add {
@@ -151,17 +436,33 @@ impl Population {
             p.shuffle(self.mutation);
         }
 
-        assert_eq!(
+        debug_assert_eq!(
             self.population.len(),
             self.pop_cnt,
             "Population {} does not match the population size {}",
             self.population.len(),
             self.pop_cnt
         );
+
+        // assert_eq!(
+        //     self.climbers[0].get_score(),
+        //     self.top_score,
+        //     "Elite lost in refill_pop"
+        // );
     }
 
     // TODO: Is it intuitive that this would return an error?
     pub fn eval_gen_pop(&mut self) -> Result<()> {
+        self.population.sort_by(|a, b| {
+            return b
+                .get_score()
+                .partial_cmp(&a.get_score())
+                .unwrap_or(cmp::Ordering::Equal);
+        });
+        assert!(
+            self.population[0].get_score() >= self.top_score,
+            "Elite lost at the start of eval_gen_pop"
+        );
         for (i, kb) in self.population.iter_mut().enumerate() {
             let display_num = i.checked_add(1).expect("Population has too many to count");
             update_eval_dsp(display_num)?;
@@ -169,12 +470,6 @@ impl Population {
             kb.eval();
         }
 
-        update_eval_dsp(0)?;
-        return Ok(());
-    }
-
-    pub fn setup_climbers(&mut self) -> Result<()> {
-        self.climbers.clear();
         self.population.sort_by(|a, b| {
             return b
                 .get_score()
@@ -182,13 +477,43 @@ impl Population {
                 .unwrap_or(cmp::Ordering::Equal);
         });
 
-        self.climbers
-            .extend(self.population.drain(..self.elite_cnt));
-        let elite = self.climbers.first().expect("Elite climber not drained");
-        if elite.get_score() > self.top_score {
-            self.top_score = elite.get_score();
-            update_kb(elite)?;
+        for p in self.population.iter_mut().take(self.elite_cnt) {
+            p.set_elite();
         }
+
+        for p in self.population.iter_mut().skip(self.elite_cnt) {
+            p.unset_elite();
+        }
+
+        for p in self.population.iter() {
+            if p.get_score() > self.top_score {
+                self.top_score = p.get_score();
+            }
+        }
+
+        assert_eq!(
+            self.population[0].get_score(),
+            self.top_score,
+            "Elite lost in eval_gen_pop"
+        );
+
+        update_eval_dsp(0)?;
+        return Ok(());
+    }
+
+    pub fn setup_climbers(&mut self) -> Result<()> {
+        self.climbers.clear();
+
+        let mut i = 0;
+        while i < self.population.len() {
+            if !self.population[i].is_elite() {
+                i += 1;
+                continue;
+            }
+
+            self.climbers.push(self.population.swap_remove(i));
+        }
+        let climbers_at_elite_moves = self.climbers.len();
 
         let mut population_score = self
             .population
@@ -199,24 +524,33 @@ impl Population {
             let mut checked_score: f64 = 0.0;
             let r = self.rng.random_range(0.0_f64..=population_score);
 
-            for (i, kb) in self.population.iter_mut().enumerate() {
+            for (j, kb) in self.population.iter_mut().enumerate() {
                 checked_score += kb.get_score();
                 if checked_score >= r {
                     population_score -= kb.get_score();
-                    self.climbers.extend(self.population.drain(i..=i));
+                    self.climbers.push(self.population.swap_remove(j));
 
                     break;
                 }
             }
         }
 
-        for climber in self.climbers.iter_mut().take(self.elite_cnt) {
-            climber.set_elite();
-        }
+        debug_assert!(
+            self.climbers.len() > 0,
+            "Climbers is zero in setup_climbers. Population {}, population size {}, Climb cnt {}",
+            self.population.len(),
+            self.pop_cnt,
+            self.climber_cnt,
+        );
 
-        for climber in self.climbers.iter_mut().skip(self.elite_cnt) {
-            climber.unset_elite();
-        }
+        debug_assert_eq!(
+            self.climbers.len(),
+            self.climber_cnt,
+            "Incorrect number of climbers. Pop len {}, Pop Cnt {}, elites {}",
+            self.population.len(),
+            self.pop_cnt,
+            climbers_at_elite_moves,
+        );
 
         return Ok(());
     }
@@ -235,18 +569,47 @@ impl Population {
             update_climb_info(&climb_info)?;
 
             // Because climb_kbs borrows self as &mut, we can't double-borrow. Clone instead
-            self.climbers[i] = self.climb_kb(self.climbers[i].kb_clone());
-
-            if self.climbers[i].get_score() > self.top_score {
-                self.top_score = self.climbers[i].get_score();
-                update_kb(&self.climbers[i])?;
-            }
+            self.climbers[i] = self.climb_kb(self.climbers[i].kb_clone(), iter);
 
             climber_score += self.climbers[i].get_score();
         }
 
         let avg_climber_score = climber_score / self.climbers.len() as f64;
-        update_avg(avg_climber_score)?;
+        update_cur_avg(avg_climber_score)?;
+
+        self.climbers.sort_by(|a, b| {
+            return b
+                .get_score()
+                .partial_cmp(&a.get_score())
+                .unwrap_or(cmp::Ordering::Equal);
+        });
+
+        if self.climbers[0].get_score() >= self.top_score {
+            self.top_score = self.climbers[0].get_score();
+        }
+
+        for climber in self.climbers.iter_mut().take(self.elite_cnt) {
+            climber.set_elite();
+        }
+
+        for climber in self.climbers.iter_mut().skip(self.elite_cnt) {
+            climber.unset_elite();
+        }
+
+        assert_eq!(
+            self.climbers[0].get_score(),
+            self.top_score,
+            "Elite lost in climb_kbs"
+        );
+
+        self.population.clear();
+        self.population.append(&mut self.climbers);
+        self.population.sort_by(|a, b| {
+            return b
+                .get_score()
+                .partial_cmp(&a.get_score())
+                .unwrap_or(cmp::Ordering::Equal);
+        });
 
         return Ok(());
     }
@@ -255,7 +618,7 @@ impl Population {
     // bigger changes less frequently. This causes the decay to continue for about as many
     // iterations as it would if doing only one step, but fewer improvements will be found, causing
     // the improvement at the end of the hill climbing step to be lower
-    fn climb_kb(&mut self, keyboard: Keyboard) -> Keyboard {
+    fn climb_kb(&mut self, keyboard: Keyboard, iter: usize) -> Keyboard {
         let mut last_improvement: f64 = 0.0;
         let mut avg_improvement: f64 = 0.0;
         let mut weighted_avg: f64 = 0.0;
@@ -323,6 +686,31 @@ impl Population {
             .update_score(last_slot_b, last_key_b, score_diff, self.score_decay);
     }
 
+    pub fn get_top_score(&self) -> f64 {
+        return self.top_score;
+    }
+
+    pub fn get_best_kb(&self) -> &Keyboard {
+        if self.population[0].get_score() == self.get_top_score() {
+            return &self.population[0];
+        } else {
+            println!(
+                "id: {}, top score self: {}, climbers: {:?}, population: {:?}",
+                self.id,
+                self.get_top_score(),
+                self.climbers
+                    .iter()
+                    .map(|c| return c.get_score())
+                    .collect::<Vec<f64>>(),
+                self.population
+                    .iter()
+                    .map(|c| return c.get_score())
+                    .collect::<Vec<f64>>(),
+            );
+            panic!("Neither climbers nor population contain the best score in index zero");
+        }
+    }
+
     pub fn get_id(&self) -> usize {
         return self.id;
     }
@@ -352,6 +740,10 @@ impl Population {
         return self.climber_cnt;
     }
 
+    pub fn get_climb_pct(&self) -> f64 {
+        return self.climber_cnt as f64 / self.pop_cnt as f64;
+    }
+
     pub fn randomize_climber_cnt(&mut self) {
         let climb_pct = self.rng.random_range(MIN_CLIMB_PCT..=MAX_CLIMB_PCT);
         self.climber_cnt = (self.pop_cnt as f64 * climb_pct).round() as usize;
@@ -363,7 +755,7 @@ impl Population {
 
         assert!(
             self.climber_cnt >= self.elite_cnt,
-            "Climber cnt higher than elite_cnt in randomize_climber_cnt"
+            "Elite cnt higher than climber_cnt in randomize_climber_cnt"
         );
     }
 
@@ -384,6 +776,14 @@ impl Population {
         );
     }
 
+    pub fn get_generation(&self) -> usize {
+        return self.generation;
+    }
+
+    fn get_population(&self) -> &[Keyboard] {
+        return &self.population;
+    }
+
     pub fn get_mutation(&self) -> usize {
         return self.mutation;
     }
@@ -392,7 +792,7 @@ impl Population {
         self.mutation = self.rng.random_range(MIN_MUTATION..=MAX_MUTATION);
     }
 
-    pub fn get_decay(&self) -> f64 {
+    pub fn get_score_decay(&self) -> f64 {
         return self.score_decay;
     }
 
@@ -405,7 +805,31 @@ impl Population {
     }
 
     pub fn randomize_k_temp(&mut self) {
-        self.k_temp = self.rng.random_range(K_TEMP_MIN..=K_TEMP_MAX);
+        self.k_temp = self.rng.random_range(MIN_K_TEMP..=MAX_K_TEMP);
+    }
+
+    fn get_swap_score(&self, row: usize, col: usize, key: Key) -> SwapScore {
+        return self.swap_table.get_swap_score(row, col, key);
+    }
+
+    pub fn get_total_climbs(&self) -> usize {
+        return self.total_climbs;
+    }
+
+    fn get_climb_decay(&self) -> f64 {
+        return self.climb_decay;
+    }
+
+    pub fn set_elite(&mut self) {
+        self.is_elite = true;
+    }
+
+    pub fn unset_elite(&mut self) {
+        self.is_elite = false;
+    }
+
+    pub fn is_elite(&self) -> bool {
+        return self.is_elite;
     }
 }
 
@@ -478,6 +902,10 @@ impl SwapTable {
         return self.swap_table[row][col][key].get_w_avg();
     }
 
+    fn get_swap_score(&self, row: usize, col: usize, key: Key) -> SwapScore {
+        return self.swap_table[row][col][&key];
+    }
+
     pub fn update_score(&mut self, slot: Slot, key: Key, new_score: f64, decay: f64) {
         let row = slot.get_row();
         let col = slot.get_col();
@@ -485,6 +913,10 @@ impl SwapTable {
 
         score.reweight_avg(new_score, decay);
         self.swap_table[row][col].insert(key, score);
+    }
+
+    fn replace_score(&mut self, row: usize, col: usize, key: Key, new_score: SwapScore) {
+        self.swap_table[row][col].insert(key, new_score);
     }
 }
 
@@ -502,7 +934,18 @@ impl SwapScore {
         };
     }
 
+    fn from_values(score: f64, weight: f64) -> Self {
+        return Self {
+            w_avg: score,
+            weights: weight,
+        };
+    }
+
     pub fn get_w_avg(&self) -> f64 {
+        return self.w_avg;
+    }
+
+    fn get_weights(&self) -> f64 {
         return self.w_avg;
     }
 

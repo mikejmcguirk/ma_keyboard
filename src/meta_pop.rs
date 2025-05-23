@@ -22,16 +22,6 @@ pub struct MetaPopulation {
     to_remove: usize,
 }
 
-// TODO: Start preparing for meta
-// - Move all structs to holding their own RNG. More memory + managing re-seeding, but better
-// positions us for multi-threading + avoids moving references up and down the call stack. For the
-// kbs, re-create the kb_copy method with a re-seed, and disable cloning to clean up any clones
-// - For logging, log some debug message in setup and remove those calls from Population. I don't
-// know what I want to do logging for, so no need to do it speculatively. File accessing is
-// touchier than RNG because I think you need to lock it to use it. Multi-threading issue
-// - See population for specifics there
-// - No user-level edits for population management or meta-population management. All has to be
-// correct at compile time
 impl MetaPopulation {
     pub fn create() -> Self {
         let seed: [u8; 32] = rand::random();
@@ -71,12 +61,12 @@ impl MetaPopulation {
         for p in self.collection.iter_mut() {
             update_cur_pop_dsp(p)?;
 
-            p.refill_pop(self.generation);
+            p.refill_pop();
             p.eval_gen_pop()?;
-            p.setup_climbers()?;
+            p.filter_climbers()?;
             p.climb_kbs(self.generation)?;
 
-            if p.get_top_score() > self.top_score {
+            if p.get_top_score() >= self.top_score {
                 self.top_score = p.get_top_score();
                 update_best_pop_dsp(p)?;
                 update_best_kb(p.get_best_kb())?;

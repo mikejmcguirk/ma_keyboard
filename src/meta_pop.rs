@@ -40,7 +40,7 @@ impl MetaPopulation {
 
         let generation = 0;
 
-        let top_score = 0.0;
+        let top_score: f64 = 0.0;
 
         return Self {
             rng,
@@ -55,15 +55,15 @@ impl MetaPopulation {
     }
 
     pub fn run_generation(&mut self) -> Result<()> {
-        debug_assert!(self.collection.len() > 0, "len zero in run_generation");
+        debug_assert!(!self.collection.is_empty(), "len zero in run_generation");
         self.generation += 1;
 
-        for p in self.collection.iter_mut() {
+        for p in &mut self.collection {
             update_cur_pop_dsp(p)?;
 
             p.refill_pop();
             p.eval_gen_pop()?;
-            p.filter_climbers()?;
+            p.filter_climbers();
             p.climb_kbs(self.generation)?;
 
             if p.get_top_score() >= self.top_score {
@@ -162,7 +162,7 @@ impl MetaPopulation {
             parents.push(self.collection.swap_remove(a));
             let mut b = self.collection.len();
 
-            checked_score = 0.0;
+            checked_score = 0.0_f64;
             let r_b = self.rng.random_range(0.0_f64..=total_top_score);
 
             for (i, p) in self.collection.iter_mut().enumerate() {

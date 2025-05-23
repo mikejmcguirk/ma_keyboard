@@ -11,32 +11,34 @@ use crate::{
     display::{update_climb_info, update_cur_avg, update_eval_dsp},
     keyboard::Keyboard,
     keys,
+    pop_helpers::{
+        avg_climb_iter_from_parents, climb_cnt_from_parents, k_temp_from_parents,
+        mutation_from_parents, new_pop_from_parents, pop_cnt_from_parents,
+        score_decay_from_parents, swap_table_from_parents,
+    },
     structs::{IdSpawner, Key, Slot},
     swappable_keys,
 };
 
 swappable_keys!();
 
-const MIN_POP: usize = 20;
-const MAX_POP: usize = 100;
-const MIN_CLIMB_PCT: f64 = 0.1;
-const MAX_CLIMB_PCT: f64 = 0.4;
-const ELITE_CNT: usize = 1;
+pub const MIN_POP: usize = 20;
+pub const MAX_POP: usize = 100;
+pub const MIN_CLIMB_PCT: f64 = 0.1;
+pub const MAX_CLIMB_PCT: f64 = 0.4;
+pub const ELITE_CNT: usize = 1;
 
-const MIN_MUTATION: usize = 0;
-const MAX_MUTATION: usize = 3;
+pub const MIN_MUTATION: usize = 0;
+pub const MAX_MUTATION: usize = 3;
 
-const MIN_SCORE_DECAY: f64 = 0.9;
-const MAX_SCORE_DECAY: f64 = 0.998;
+pub const MIN_SCORE_DECAY: f64 = 0.9;
+pub const MAX_SCORE_DECAY: f64 = 0.998;
 
-const MIN_K_TEMP: f64 = -31.162_892_36;
-const MAX_K_TEMP: f64 = -6.107_632_992;
+pub const MIN_K_TEMP: f64 = -31.162_892_36;
+pub const MAX_K_TEMP: f64 = -6.107_632_992;
 
-const MUTATION_RATE: f64 = 0.05;
+pub const MUTATION_RATE: f64 = 0.05;
 
-// TODO: Need to redo having population and climbers in One Vec. Causing problems juggling where
-// the population is at any given time. Results in hacks about when certain parts of the process
-// are run
 // FUTURE: Consider letting populations engage in tournament selection
 // FUTURE: Generation should be meta-population controlled
 pub struct Population {
@@ -133,181 +135,20 @@ impl Population {
 
         let total_top = top_a + top_b;
         let top_a_pct = top_a / total_top;
-        let top_b_pct = top_b / total_top;
 
-        let pop_cnt = if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-            rng.random_range(MIN_POP..=MAX_POP)
-        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
-            parent_a.get_pop_cnt()
-        } else {
-            parent_b.get_pop_cnt()
-        };
+        let pop_cnt = pop_cnt_from_parents(&mut rng, parent_a, parent_b, top_a_pct);
+        let climber_cnt = climb_cnt_from_parents(&mut rng, parent_a, parent_b, top_a_pct, pop_cnt);
+        let mutation = mutation_from_parents(&mut rng, parent_a, parent_b, top_a_pct);
 
-        let climb_pct = if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-            rng.random_range(MIN_CLIMB_PCT..=MAX_CLIMB_PCT)
-        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
-            parent_a.get_climb_pct()
-        } else {
-            parent_b.get_climb_pct()
-        };
+        let population = new_pop_from_parents(&mut rng, parent_a, parent_b, pop_cnt, top_score);
+        let swap_table = swap_table_from_parents(&mut rng, parent_a, parent_b, top_a_pct);
 
-        let mut climber_cnt = (pop_cnt as f64 * climb_pct).round() as usize;
-        let elite_cnt = ELITE_CNT;
-        if climber_cnt < elite_cnt {
-            climber_cnt = elite_cnt;
-        }
-
-        assert!(
-            pop_cnt >= climber_cnt,
-            "Climbers {climber_cnt} greater than population {pop_cnt} in from_parents"
-        );
-
-        let pop_a: &[Keyboard] = parent_a.get_population();
-        let pop_b: &[Keyboard] = parent_b.get_population();
-        let mut population: Vec<Keyboard> = Vec::with_capacity(pop_a.len() + pop_b.len());
-        population.extend(
-            pop_a
-                .iter()
-                .chain(pop_b.iter())
-                .map(|k| return k.kb_clone()),
-        );
-
-        let mut elites: Vec<Keyboard> = Vec::new();
-        let mut i = 0;
-        while i < population.len() {
-            if !population[i].is_elite() {
-                i += 1;
-                continue;
-            }
-
-            elites.push(population.swap_remove(i));
-        }
-
-        let mut full_pop_score = population
-            .iter()
-            .fold(0.0_f64, |acc, p| return acc + p.get_score());
-        debug_assert!(full_pop_score > 0.0, "Parent populations not evaluated");
-
-        while population.len() > (pop_cnt / 4) - elites.len() && !population.is_empty() {
-            let mut checked_score: f64 = 0.0;
-            let r = rng.random_range(0.0_f64..=full_pop_score);
-
-            for (j, kb) in population.iter().enumerate() {
-                checked_score += kb.get_score();
-                if checked_score >= r {
-                    full_pop_score -= kb.get_score();
-                    population.swap_remove(j);
-
-                    break;
-                }
-            }
-        }
-
-        population.append(&mut elites);
-        population.sort_by(|a, b| {
-            return b
-                .get_score()
-                .partial_cmp(&a.get_score())
-                .unwrap_or(cmp::Ordering::Equal);
-        });
-
-        for p in population.iter_mut().take(elite_cnt) {
-            p.set_elite();
-        }
-
-        for p in population.iter_mut().skip(elite_cnt) {
-            p.unset_elite();
-        }
-
-        let top_elite_score: f64 = population
-            .iter()
-            .fold(0.0, |acc, p| return acc.max(p.get_score()));
-        debug_assert_eq!(
-            top_elite_score, top_score,
-            "Elite lost after filtering population in create_child"
-        );
-
-        let mutation = if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-            rng.random_range(MIN_MUTATION..=MAX_MUTATION)
-        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
-            parent_a.get_mutation()
-        } else {
-            parent_b.get_mutation()
-        };
-
-        let mut swap_table = SwapTable::new();
-
-        for j in 0_usize..4_usize {
-            for k in 0_usize..10_usize {
-                for key_tuple in &SWAPPABLE_KEYS {
-                    let key = Key::from_tuple(*key_tuple);
-
-                    if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-                        swap_table.replace_score(j, k, key, SwapScore::new());
-                        continue;
-                    }
-
-                    let swap_score_a = parent_a.get_swap_score(j, k, key);
-                    let swap_score_b = parent_b.get_swap_score(j, k, key);
-
-                    let score_a = swap_score_a.get_w_avg();
-                    let score_b = swap_score_b.get_w_avg();
-                    let weight_a = swap_score_a.get_weights();
-                    let weight_b = swap_score_b.get_weights();
-
-                    if rng.random_range(0.0..=1.0) >= top_a_pct {
-                        let new_score = score_a;
-                        let new_weight = weight_a;
-
-                        let new_swap_score = SwapScore::from_values(new_score, new_weight);
-                        swap_table.replace_score(j, k, key, new_swap_score);
-                    } else {
-                        let new_score = score_b;
-                        let new_weight = weight_b;
-
-                        let new_swap_score = SwapScore::from_values(new_score, new_weight);
-                        swap_table.replace_score(j, k, key, new_swap_score);
-                    }
-                }
-            }
-        }
-
-        let k_temp = if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-            rng.random_range(MIN_K_TEMP..=MAX_K_TEMP)
-        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
-            parent_a.get_k_temp()
-        } else {
-            parent_b.get_k_temp()
-        };
-
-        let score_decay = if rng.random_range(0.0..=1.0) <= MUTATION_RATE {
-            rng.random_range(MIN_SCORE_DECAY..=MAX_SCORE_DECAY)
-        } else if rng.random_range(0.0..=1.0) <= top_a_pct {
-            parent_a.get_score_decay()
-        } else {
-            parent_b.get_score_decay()
-        };
+        let k_temp = k_temp_from_parents(&mut rng, parent_a, parent_b, top_a_pct);
+        let score_decay = score_decay_from_parents(&mut rng, parent_a, parent_b, top_a_pct);
 
         let generation = parent_a.get_generation().max(parent_b.get_generation());
 
-        let avg_climb_iter_a = parent_a.get_avg_climb_iter();
-        let avg_climb_iter_b = parent_b.get_avg_climb_iter();
-        let total_climbs_a = parent_a.get_total_climbs();
-        let total_climbs_b = parent_b.get_total_climbs();
-
-        let avg_climb_iter;
-        let total_climbs;
-        if avg_climb_iter_a > avg_climb_iter_b {
-            avg_climb_iter = avg_climb_iter_a;
-            total_climbs = total_climbs_a;
-        } else {
-            avg_climb_iter = avg_climb_iter_b;
-            total_climbs = total_climbs_b;
-        }
-
-        let climb_decay_a = parent_a.get_climb_decay();
-        let climb_decay_b = parent_b.get_climb_decay();
-        let climb_decay = (climb_decay_a * top_a_pct) + (climb_decay_b * top_b_pct);
+        let (avg_climb_iter, total_climbs) = avg_climb_iter_from_parents(parent_a, parent_b);
 
         return Self {
             id: id_in,
@@ -316,7 +157,7 @@ impl Population {
             pop_cnt,
             population,
             climber_cnt,
-            elite_cnt,
+            elite_cnt: ELITE_CNT,
             mutation,
             swap_table,
             k_temp,
@@ -325,7 +166,7 @@ impl Population {
             top_score,
             total_climbs,
             avg_climb_iter,
-            climb_decay,
+            climb_decay: 0.0,
             is_elite: false,
         };
     }
@@ -387,7 +228,7 @@ impl Population {
             p.unset_elite();
         }
 
-        for p in self.population.iter() {
+        for p in &self.population {
             if p.get_score() > self.top_score {
                 self.top_score = p.get_score();
             }
@@ -403,7 +244,7 @@ impl Population {
         return Ok(());
     }
 
-    pub fn filter_climbers(&mut self) -> Result<()> {
+    pub fn filter_climbers(&mut self) {
         let mut climbers: Vec<Keyboard> = Vec::new();
 
         let mut i = 0;
@@ -454,8 +295,6 @@ impl Population {
 
         self.population.clear();
         self.population.append(&mut climbers);
-
-        return Ok(());
     }
 
     pub fn climb_kbs(&mut self, iter: usize) -> Result<()> {
@@ -519,7 +358,7 @@ impl Population {
 
         let mut kb = keyboard;
 
-        for i in 1..=100000 {
+        for i in 1..=100_000 {
             let mut climb_kb = kb.kb_clone();
             climb_kb.table_swap(&self.swap_table, self.k_temp);
             climb_kb.eval();
@@ -531,8 +370,6 @@ impl Population {
             let improvement_delta = this_improvement - last_improvement;
             last_improvement = this_improvement;
 
-            // TODO: This should be a population setting. I think you can do the weights as an
-            // enum
             let this_weight = get_weight(improvement_delta);
             sum_weights *= self.climb_decay;
             let inflated_w_avg = weighted_avg * sum_weights;
@@ -628,7 +465,7 @@ impl Population {
         return self.generation;
     }
 
-    fn get_population(&self) -> &[Keyboard] {
+    pub fn get_population(&self) -> &[Keyboard] {
         return &self.population;
     }
 
@@ -644,16 +481,12 @@ impl Population {
         return self.k_temp;
     }
 
-    fn get_swap_score(&self, row: usize, col: usize, key: Key) -> SwapScore {
+    pub fn get_swap_score(&self, row: usize, col: usize, key: Key) -> SwapScore {
         return self.swap_table.get_swap_score(row, col, key);
     }
 
     pub fn get_total_climbs(&self) -> usize {
         return self.total_climbs;
-    }
-
-    fn get_climb_decay(&self) -> f64 {
-        return self.climb_decay;
     }
 
     pub fn set_elite(&mut self) {
@@ -701,7 +534,7 @@ impl SwapTable {
     // FUTURE: Obvious issue here is we have the number row in the swap table even though we don't
     // want to use it. You could only build three rows in the table and subtract from the value of
     // the slot in get_score, but that feels like a hack
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut swap_table: Vec<Vec<BTreeMap<Key, SwapScore>>> = Vec::new();
 
         for _ in 0_usize..4_usize {
@@ -751,7 +584,7 @@ impl SwapTable {
         self.swap_table[row][col].insert(key, score);
     }
 
-    fn replace_score(&mut self, row: usize, col: usize, key: Key, new_score: SwapScore) {
+    pub fn replace_score(&mut self, row: usize, col: usize, key: Key, new_score: SwapScore) {
         self.swap_table[row][col].insert(key, new_score);
     }
 }
@@ -770,7 +603,7 @@ impl SwapScore {
         };
     }
 
-    fn from_values(score: f64, weight: f64) -> Self {
+    pub fn from_values(score: f64, weight: f64) -> Self {
         return Self {
             w_avg: score,
             weights: weight,
@@ -781,7 +614,7 @@ impl SwapScore {
         return self.w_avg;
     }
 
-    fn get_weights(&self) -> f64 {
+    pub fn get_weights(&self) -> f64 {
         return self.w_avg;
     }
 

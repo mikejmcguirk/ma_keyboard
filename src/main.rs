@@ -111,6 +111,7 @@ mod keyboard;
 mod macros;
 mod mapped_swap;
 mod meta_pop;
+mod pop_helpers;
 mod population;
 mod setup;
 mod structs;

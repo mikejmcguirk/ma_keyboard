@@ -70,14 +70,14 @@ const CURSOR_Y: u16 = DVORAK_Y + 1;
 // FUTURE: This probably all needs to be redone, but don't want to get deep into it until I know
 // what the outputs actually are
 pub fn initial_dsp() -> io::Result<()> {
-    let pop_id = format!("Population ID: {:02}, ", 0);
-    let pop_cnt = format!("Population Count: {:02}, ", 0);
-    let mutation = format!("Mutation: {:01}, ", 0);
-    let elite_cnt = format!("Elites: {:01}, ", 0);
-    let climb_cnt = format!("Climbers: {:02}, ", 0);
-    let k_temp = format!("K Temp: {:07.04}, ", 0);
-    let score_decay = format!("Decay: {:05.03}, ", 0);
-    let avg_climb_iter = format!("Avg. Climb Iter: {:09.02}", 0);
+    let pop_id = format!("Population ID: {:02}, ", 0_usize);
+    let pop_cnt = format!("Population Count: {:03}, ", 0_usize);
+    let mutation = format!("Mutation: {:01}, ", 0_usize);
+    let elite_cnt = format!("Elites: {:01}, ", 0_usize);
+    let climb_cnt = format!("Climbers: {:02}, ", 0_usize);
+    let k_temp = format!("K Temp: {:07.04}, ", 0_f64);
+    let score_decay = format!("Decay: {:05.03}, ", 0_f64);
+    let avg_climb_iter = format!("Avg. Climb Iter: {:09.02}", 0_f64);
 
     stdout().queue(Clear(ClearType::All))?;
 
@@ -141,7 +141,7 @@ pub fn update_iter(iter: usize) -> io::Result<()> {
 
 pub fn update_best_pop_dsp(population: &Population) -> io::Result<()> {
     let pop_id = format!("Population ID: {:05}, ", population.get_id());
-    let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
+    let pop_cnt = format!("Population Count: {:03}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
     let climb_cnt = format!("Climbers: {:02}, ", population.get_climb_cnt());
@@ -164,7 +164,7 @@ pub fn update_best_pop_dsp(population: &Population) -> io::Result<()> {
 
 pub fn update_cur_pop_dsp(population: &Population) -> io::Result<()> {
     let pop_id = format!("Population ID: {:05}, ", population.get_id());
-    let pop_cnt = format!("Population Count: {:02}, ", population.get_pop_cnt());
+    let pop_cnt = format!("Population Count: {:03}, ", population.get_pop_cnt());
     let mutation = format!("Mutation: {:01}, ", population.get_mutation());
     let elite_cnt = format!("Elites: {:01}, ", population.get_elite_cnt());
     let climb_cnt = format!("Climbers: {:02}, ", population.get_climb_cnt());

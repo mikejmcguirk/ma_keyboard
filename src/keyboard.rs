@@ -72,7 +72,6 @@ impl Finger {
     }
 }
 
-// FUTURE: Should also take origin population
 // FUTURE: Valid_slots is a meta-population level construct
 // NOTE: Do not derive Clone, because that does not advance the keyboard's RNG state
 pub struct Keyboard {
@@ -313,7 +312,7 @@ impl Keyboard {
     /// - The swap key does not have any valid slots
     pub fn shuffle(&mut self, cnt: usize) {
         self.evaluated = false;
-        self.score = 0.0;
+        self.score = 0.0_f64;
 
         for _ in 0..cnt {
             let row_a = self.rng.random_range(TOP_ROW..=BOT_ROW);
@@ -357,7 +356,7 @@ impl Keyboard {
     pub fn table_swap(&mut self, swap_table: &SwapTable, k_temp: f64) {
         self.evaluated = false;
         self.last_score = self.score;
-        self.score = 0.0;
+        self.score = 0.0_f64;
 
         let mut base_a: Vec<(Slot, Key, f64)> = self
             .key_slots

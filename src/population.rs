@@ -302,7 +302,7 @@ impl Population {
         self.update_climb_decay(iter);
 
         for i in 0..self.population.len() {
-            let climb_info: String = format!(
+            let climb_info = format!(
                 "Keyboard: {:02}, Generation: {:05}, ID: {:07}",
                 i.checked_add(1).expect("Too many climbers in climb_kbs"),
                 self.population[i].get_generation(),

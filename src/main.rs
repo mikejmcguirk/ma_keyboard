@@ -51,7 +51,6 @@
 #![allow(clippy::manual_assert)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::manual_string_new)]
-#![allow(clippy::match_on_vec_items)]
 #![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_assert_message)]
 #![allow(clippy::missing_asserts_for_indexing)]
@@ -119,6 +118,7 @@ mod utils;
 
 use std::{
     env,
+    fmt::format,
     fs::{self, File, OpenOptions},
     path::{Path, PathBuf},
     process::ExitCode,

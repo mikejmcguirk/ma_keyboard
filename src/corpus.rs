@@ -1,6 +1,6 @@
 use std::{
     env,
-    fs::{self, ReadDir},
+    fs::{self},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -47,7 +47,7 @@ fn get_corpus_dir() -> Result<PathBuf> {
 
 // FUTURE: Will need to be updated with typing and weights for entries
 fn load_corpus(corpus_dir: &PathBuf) -> Result<Vec<String>> {
-    let corpus_content: ReadDir = match fs::read_dir(corpus_dir) {
+    let corpus_content = match fs::read_dir(corpus_dir) {
         Ok(dir) => dir,
         Err(e) => {
             let err_string = format!("Unable to open {} -- {}", corpus_dir.display(), e);
